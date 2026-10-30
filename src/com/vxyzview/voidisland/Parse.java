@@ -80,6 +80,16 @@ final class Parse {
         return h > 0 ? String.format(Locale.US, "%d:%02d:%02d", h, m, sec) : String.format(Locale.US, "%d:%02d", m, sec);
     }
 
+    /** Wall-clock text for the island's idle pill: "1:05" (12 h) or "13:05" (24 h). Hours never get a leading zero. */
+    static String timeOfDay(int hour24, int minute, boolean use24) {
+        int h = hour24 % 24;
+        if (!use24) {
+            if (h == 0) h = 12;
+            else if (h > 12) h -= 12;
+        }
+        return String.format(Locale.US, "%d:%02d", h, minute);
+    }
+
     static String initial(CharSequence name) {
         if (name == null) return "?";
         for (int i = 0; i < name.length(); i++) {

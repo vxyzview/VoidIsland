@@ -73,6 +73,13 @@ public class Check {
         ok(!ShadeMatch.panel("Volume", "android.widget.FrameLayout"), "shade: volume is not the shade");
         ok(!ShadeMatch.panel("Power menu", "android.widget.LinearLayout"), "shade: power menu is not the shade");
         ok(!ShadeMatch.panel("Lock screen.", "android.widget.FrameLayout"), "shade: lock screen is not the shade");
+        // --- Parse: idle wall clock (icon + text on an empty island)
+        ok("1:05".equals(Parse.timeOfDay(1, 5, false)), "time 12h: 01 -> 1:05");
+        ok("12:07".equals(Parse.timeOfDay(0, 7, false)), "time 12h: 00 -> 12:07");
+        ok("13:07".equals(Parse.timeOfDay(13, 7, true)), "time 24h: 13 -> 13:07");
+        ok("3:03".equals(Parse.timeOfDay(15, 3, false)), "time 12h: 15 -> 3:03");
+        ok("23:59".equals(Parse.timeOfDay(23, 59, true)), "time 24h: 23:59");
+
         System.out.println(fails == 0 ? "ALL CHECKS PASSED" : (fails + " FAILED"));
         System.exit(fails == 0 ? 0 : 1);
     }

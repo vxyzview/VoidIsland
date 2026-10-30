@@ -10,6 +10,7 @@ import android.media.session.MediaController;
 import android.media.session.PlaybackState;
 import android.os.SystemClock;
 import android.text.TextUtils;
+import android.text.format.DateFormat;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -18,6 +19,8 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+
+import java.util.Calendar;
 
 /** Builds the views for every kind of island content. Compact = the little pill, expanded = the card. */
 final class Cards {
@@ -148,6 +151,16 @@ final class Cards {
         return Parse.clock(e.countDown ? e.when - now : now - e.when);
     }
 
+    /** The idle pill's clock text: "1:05" (12 h) or "13:05" (24 h), following the system setting. */
+    static String clockText(boolean use24) {
+        Calendar cal = Calendar.getInstance();
+        return Parse.timeOfDay(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), use24);
+    }
+
+    private static CharSequence dateText() {
+        return DateFormat.format("EEE, MMM d", System.currentTimeMillis());
+    }
+
     static long position(IslandEvent e) {
         long p = e.posMs;
         if (e.playing) {
@@ -259,6 +272,15 @@ final class Cards {
                 out.addView(eq, fl(Math.round(g * 0.9f), Math.round(g * 0.75f), Gravity.END | side, m));
                 break;
             }
+            case IslandEvent.CLOCK: {
+                final boolean use24 = DateFormat.is24HourFormat(c);
+                out.addView(new IconView(c, IconView.CLOCK, acc(e)), fl(g, g, Gravity.START | side, m));
+                final TextView t = tv(c, clockText(use24), 13f, WHITE, true);
+                t.setFontFeatureSettings("tnum");
+                out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
+                e.tC = new Runnable() { @Override public void run() { t.setText(clockText(use24)); } };
+                break;
+            }
             default: {
                 if (e.icon != null) {
                     RoundImage ri = new RoundImage(c);
@@ -291,6 +313,7 @@ final class Cards {
             case IslandEvent.CHARGE: return charge(c, e);
             case IslandEvent.PROGRESS: return progress(c, e);
             case IslandEvent.TIMER: return timer(c, e);
+            case IslandEvent.CLOCK: return clockCard(c, e);
             case IslandEvent.SYSTEM: return system(c, e);
             default: return notif(c, e);
         }
@@ -505,6 +528,31 @@ final class Cards {
                 bar.setFrac(Math.max(0, e.progress) / 100f);
                 return true;
             }
+        };
+        return root;
+    }
+
+    private static View clockCard(final Context c, final IslandEvent e) {
+        final boolean use24 = DateFormat.is24HourFormat(c);
+        LinearLayout root = col(c);
+        root.setGravity(Gravity.CENTER);
+        root.setPadding(px(c), py(c) + dp(c, 6), px(c), py(c) + dp(c, 8));
+        final TextView time = tv(c, clockText(use24), 36f, WHITE, true);
+        time.setFontFeatureSettings("tnum");
+        time.setGravity(Gravity.CENTER);
+        final TextView date = tv(c, dateText(), 13f, SUB, false);
+        date.setGravity(Gravity.CENTER);
+        date.setPadding(0, dp(c, 2), 0, 0);
+        root.addView(time);
+        root.addView(date);
+        e.tE = new Runnable() {
+            @Override public void run() {
+                time.setText(clockText(use24));
+                date.setText(dateText());
+            }
+        };
+        e.uE = new IslandEvent.Updater() {
+            @Override public boolean update() { e.tE.run(); return true; }
         };
         return root;
     }

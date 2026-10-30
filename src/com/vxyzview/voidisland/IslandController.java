@@ -46,6 +46,9 @@ final class IslandController implements IslandView.Host {
     private boolean landscape;
     private float cutCx = Float.NaN, cutCy = Float.NaN;
 
+    /** Synthetic event shown while nothing else is on the island (icon + time). */
+    private final IslandEvent clock = new IslandEvent("clock", IslandEvent.CLOCK);
+
     private final LinkedHashMap<String, IslandEvent> live = new LinkedHashMap<String, IslandEvent>();
     private final ArrayDeque<IslandEvent> queue = new ArrayDeque<IslandEvent>();
     private IslandEvent popup, userExpanded, shown;
@@ -74,6 +77,7 @@ final class IslandController implements IslandView.Host {
     IslandController(AccessibilityService svc) {
         this.svc = svc;
         this.d = svc.getResources().getDisplayMetrics().density;
+        clock.priority = -1;   // the idle clock loses to everything real (real events go up to 100+)
     }
 
     private int dp(float v) { return Math.round(v * d); }
@@ -134,6 +138,7 @@ final class IslandController implements IslandView.Host {
             throw e;
         }
         attached = true;
+        live.put(clock.key, clock);   // the idle clock lives in the map so expand/swipe treat it like any other pill
         locked = isLocked();
         view.post(new Runnable() {
             @Override public void run() { readCutout(); position(); updateLayout(); }
@@ -291,6 +296,7 @@ final class IslandController implements IslandView.Host {
             case IslandEvent.CHARGE: return Prefs.b(svc, Prefs.K_CHG, true);
             case IslandEvent.SYSTEM: return Prefs.b(svc, Prefs.K_SYS, true) || "toast".equals(e.key);
             case IslandEvent.PREVIEW: return true;
+            case IslandEvent.CLOCK: return Prefs.b(svc, Prefs.K_CLOCK, true);
             default: return Prefs.b(svc, Prefs.K_NOTIF, true);
         }
     }

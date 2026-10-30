@@ -425,6 +425,7 @@ public final class MainActivity extends Activity {
 
         LinearLayout sh = m.card(p, "What it shows");
         m.toggle(sh, "Island enabled", null, Prefs.K_ON, true, null);
+        m.toggle(sh, "Clock when idle", "Show the time on an empty island", Prefs.K_CLOCK, true, null);
         m.toggle(sh, "Music & media", "Album art, seek bar, controls", Prefs.K_MEDIA, true, null);
         m.toggle(sh, "Calls", "Answer and decline from the island", Prefs.K_CALL, true, null);
         m.toggle(sh, "Payments", "Payment and transfer confirmations", Prefs.K_PAY, true, null);

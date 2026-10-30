@@ -12,7 +12,8 @@ final class Prefs {
     // behaviour
     static final String K_ON = "on", K_MEDIA = "f_media", K_NOTIF = "f_notif", K_CALL = "f_call", K_PAY = "f_pay",
         K_CHG = "f_chg", K_SYS = "f_sys", K_TOAST = "f_toast", K_LAND = "hide_land", K_INAPP = "hide_inapp",
-        K_HAPTIC = "haptic", K_DUR = "dur", K_BLOCK = "blocked", K_QS = "qs", K_LOCK = "lock_show", K_POKE = "poke";
+        K_HAPTIC = "haptic", K_DUR = "dur", K_BLOCK = "blocked", K_QS = "qs", K_LOCK = "lock_show", K_POKE = "poke",
+        K_CLOCK = "f_clock";
     // shape + size
     static final String K_SHAPE = "shape", K_CW = "c_w", K_CH = "c_h", K_CR = "c_r", K_CPAD = "c_pad", K_GLYPH = "glyph",
         K_EW = "e_w", K_ER = "e_r", K_PADX = "pad_x", K_PADY = "pad_y", K_TS = "t_scale";

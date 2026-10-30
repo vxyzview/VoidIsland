@@ -6,7 +6,7 @@ import android.media.session.MediaController;
 
 /** One thing the island can show (a call, a song, a payment, a toast...). Plain data + the hooks its views register. */
 final class IslandEvent {
-    static final int MEDIA = 0, CALL = 1, NAV = 2, TIMER = 3, PROGRESS = 4, PAYMENT = 5, CHARGE = 6, NOTIF = 7, SYSTEM = 8, PREVIEW = 9;
+    static final int MEDIA = 0, CALL = 1, NAV = 2, TIMER = 3, PROGRESS = 4, PAYMENT = 5, CHARGE = 6, NOTIF = 7, SYSTEM = 8, PREVIEW = 9, CLOCK = 10;
 
     interface Updater { /** @return false if the views must be rebuilt instead */ boolean update(); }
 
