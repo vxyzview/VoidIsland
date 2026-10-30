@@ -300,29 +300,27 @@ public final class MainActivity extends Activity {
         sd.setPadding(0, dp(12), 0, 0);
         sh.addView(sd);
 
-        LinearLayout sz = m.card(p, "Size");
-        m.slider(sz, "Pill width", Prefs.K_CW, 80, 300, 150, 1, unit(" dp"), after(false));
-        m.slider(sz, "Pill height", Prefs.K_CH, 20, 64, 32, 1, unit(" dp"), after(false));
-        if (s.shape != Style.PILL) m.slider(sz, s.shape == Style.NOTCH ? "Notch corner radius" : "Pill corner radius", Prefs.K_CR, 0, 40, 16, 1, unit(" dp"), after(false));
-        m.slider(sz, "Card width", Prefs.K_EW, 220, 440, 340, 1, unit(" dp"), after(true));
-        m.slider(sz, "Card corner radius", Prefs.K_ER, 0, 60, 38, 1, unit(" dp"), after(true));
+        LinearLayout cp = m.card(p, "Compact pill");
+        m.slider(cp, "Pill width", Prefs.K_CW, 80, 300, 150, 1, unit(" dp"), after(false));
+        m.slider(cp, "Pill height", Prefs.K_CH, 20, 64, 32, 1, unit(" dp"), after(false));
+        if (s.shape != Style.PILL) m.slider(cp, s.shape == Style.NOTCH ? "Notch corner radius" : "Pill corner radius", Prefs.K_CR, 0, 40, 16, 1, unit(" dp"), after(false));
+        m.slider(cp, "Pill padding", Prefs.K_CPAD, 0, 24, 9, 1, unit(" dp"), after(false));
+        m.slider(cp, "Icon size", Prefs.K_GLYPH, 50, 130, 100, 1, unit("%"), after(false));
+        if (s.shape != Style.NOTCH) m.slider(cp, "Top margin", Prefs.K_Y, -30, 80, 0, 1, unit(" dp"), after(false));
+        m.slider(cp, "Horizontal position", Prefs.K_X, -200, 200, 0, 1, unit(" dp"), after(false));
 
-        LinearLayout mg = m.card(p, "Margins");
-        if (s.shape != Style.NOTCH) m.slider(mg, "Top margin", Prefs.K_Y, -30, 80, 0, 1, unit(" dp"), after(false));
-        m.slider(mg, "Horizontal position", Prefs.K_X, -200, 200, 0, 1, unit(" dp"), after(false));
+        LinearLayout ec = m.card(p, "Expanded card");
+        m.slider(ec, "Card width", Prefs.K_EW, 220, 440, 340, 1, unit(" dp"), after(true));
+        m.slider(ec, "Card corner radius", Prefs.K_ER, 0, 60, 38, 1, unit(" dp"), after(true));
         if (s.shape != Style.NOTCH) {
-            m.slider(mg, "Card drop (gap below the pill)", Prefs.K_DROP, -1, 60, -1, 1, new M3.Fmt() {
+            m.slider(ec, "Card drop (gap below the pill)", Prefs.K_DROP, -1, 60, -1, 1, new M3.Fmt() {
                 @Override public String f(int v) { return v < 0 ? "Auto" : v + " dp"; }
             }, after(true));
         }
-        m.slider(mg, "Side margin of the card", Prefs.K_SIDE, 12, 60, 12, 1, unit(" dp"), after(true));
-
-        LinearLayout pd = m.card(p, "Padding & text");
-        m.slider(pd, "Pill padding", Prefs.K_CPAD, 0, 24, 9, 1, unit(" dp"), after(false));
-        m.slider(pd, "Icon size", Prefs.K_GLYPH, 50, 130, 100, 1, unit("%"), after(false));
-        m.slider(pd, "Card padding, sides", Prefs.K_PADX, 6, 36, 20, 1, unit(" dp"), after(true));
-        m.slider(pd, "Card padding, top & bottom", Prefs.K_PADY, 6, 32, 16, 1, unit(" dp"), after(true));
-        m.slider(pd, "Text size", Prefs.K_TS, 70, 140, 100, 1, unit("%"), after(true));
+        m.slider(ec, "Side margin", Prefs.K_SIDE, 12, 60, 12, 1, unit(" dp"), after(true));
+        m.slider(ec, "Padding, sides", Prefs.K_PADX, 6, 36, 20, 1, unit(" dp"), after(true));
+        m.slider(ec, "Padding, top & bottom", Prefs.K_PADY, 6, 32, 16, 1, unit(" dp"), after(true));
+        m.slider(ec, "Text size", Prefs.K_TS, 70, 140, 100, 1, unit("%"), after(true));
 
         LinearLayout co = m.card(p, "Colors");
         co.addView(label("Island color"));
