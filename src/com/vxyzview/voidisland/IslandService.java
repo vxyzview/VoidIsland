@@ -9,6 +9,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Parcelable;
+import android.provider.Settings;
 import android.view.accessibility.AccessibilityEvent;
 
 /**
@@ -22,6 +23,7 @@ public final class IslandService extends AccessibilityService {
     private IslandController ctl;
     private SystemEvents sys;
     private String fg = "";
+    private String ime = "";   // the current keyboard's package: never counts as "an app is open"
     private final Handler h = new Handler(Looper.getMainLooper());
     private final Runnable shadeTimeout = new Runnable() {
         @Override public void run() { Bus.shade(false); } // safety net: never stay hidden forever if a "closed" event was missed
@@ -42,6 +44,13 @@ public final class IslandService extends AccessibilityService {
             Bus.attach(ctl);
             sys = new SystemEvents(this);
             sys.start();
+            try {
+                String im = Settings.Secure.getString(getContentResolver(), Settings.Secure.DEFAULT_INPUT_METHOD);
+                if (im != null) {
+                    int slash = im.indexOf('/');
+                    ime = slash >= 0 ? im.substring(0, slash) : im;
+                }
+            } catch (Throwable t) { /* no IME info: keyboards may tick the foreground, harmless */ }
             Prefs.sp(this).registerOnSharedPreferenceChangeListener(prefs);
         } catch (Throwable t) {
             // a broken overlay must never crash the accessibility service
@@ -66,7 +75,12 @@ public final class IslandService extends AccessibilityService {
                 String cls = cn == null ? "" : cn.toString();
                 if (pk.equals(SYSUI)) { onSystemUi(ev, cls); return; }
                 // real activities only: skip our own windows, keyboards, dialogs and popups
-                if (pk.equals(getPackageName()) || pk.equals("android") || cls.startsWith("android.")) return;
+                if (pk.equals(getPackageName())) {
+                    // our own screens behave like the home screen so the island (and the Try-it demos) stay alive
+                    if (!fg.isEmpty()) { fg = ""; ctl.clearForeground(); }
+                    return;
+                }
+                if (pk.equals(ime) || pk.equals("android") || cls.startsWith("android.")) return;
                 if (Bus.shadeOpen) shade(false); // another app's window changed, so the panel must be closed
                 if (!pk.equals(fg)) { fg = pk; ctl.setForeground(pk); }
                 break;

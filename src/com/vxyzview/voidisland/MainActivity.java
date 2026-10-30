@@ -434,6 +434,7 @@ public final class MainActivity extends Activity {
 
         LinearLayout ru = m.card(p, "Rules");
         m.toggle(ru, "Hide in landscape", null, Prefs.K_LAND, true, null);
+        m.toggle(ru, "Hide in apps", "The island auto-hides while any app is open and returns on the home screen", Prefs.K_HIDEAPP, true, null);
         m.toggle(ru, "Hide music & call pill inside their own app", null, Prefs.K_INAPP, true, null);
         m.toggle(ru, "Show on lock screen", "Only when the island is above the status bar", Prefs.K_LOCK, false, null);
         m.toggle(ru, "Haptic feedback", null, Prefs.K_HAPTIC, true, null);

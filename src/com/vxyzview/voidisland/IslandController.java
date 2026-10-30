@@ -3,6 +3,9 @@ package com.vxyzview.voidisland;
 import android.accessibilityservice.AccessibilityService;
 import android.app.KeyguardManager;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.content.res.Configuration;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
@@ -45,6 +48,9 @@ final class IslandController implements IslandView.Host {
     private int screenW, screenH;
     private boolean landscape;
     private float cutCx = Float.NaN, cutCy = Float.NaN;
+
+    private String homePkg = "";   // the launcher: the one "app" the island stays visible in
+    private boolean appOpen;       // true while a real app (not launcher, not keyboard) is in the foreground
 
     /** Synthetic event shown while nothing else is on the island (icon + time). */
     private final IslandEvent clock = new IslandEvent("clock", IslandEvent.CLOCK);
@@ -90,7 +96,19 @@ final class IslandController implements IslandView.Host {
         if (attached) return;
         style = Style.load(svc);
         layerApp = wantApp(style);
+        readHome();
         attachWindow();
+    }
+
+    /** Which package owns the home screen (launcher). Everything else being foreground counts as "an app is open". */
+    private void readHome() {
+        try {
+            ResolveInfo r = svc.getPackageManager().resolveActivity(
+                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY);
+            homePkg = r == null || r.activityInfo == null ? "" : r.activityInfo.packageName;
+        } catch (Throwable t) {
+            homePkg = ""; // detection failed: never treat an unknown window as "an app is open"
+        }
     }
 
     private boolean wantApp(Style s) {
@@ -352,6 +370,16 @@ final class IslandController implements IslandView.Host {
     void setForeground(String pkg) {
         if (pkg == null || pkg.equals(fg)) return;
         fg = pkg;
+        boolean nowApp = homePkg.length() > 0 && fg.length() > 0 && !fg.equals(homePkg);
+        if (nowApp != appOpen) appOpen = nowApp;
+        evaluate();
+    }
+
+    /** Our own screens (settings, demos) act like the home screen: the island stays alive while VoidIsland is open. */
+    void clearForeground() {
+        if (fg.isEmpty() && !appOpen) return;
+        fg = "";
+        if (appOpen) appOpen = false;
         evaluate();
     }
 
@@ -379,6 +407,7 @@ final class IslandController implements IslandView.Host {
 
     private boolean suppressed() {
         if (!Prefs.b(svc, Prefs.K_ON, true)) return true;
+        if (Prefs.b(svc, Prefs.K_HIDEAPP, true) && appOpen) return true;  // island hides itself while an app is open
         if (landscape && Prefs.b(svc, Prefs.K_LAND, true)) return true;
         if (!layerApp) {
             if (locked && !style.lockShow) return true;                      // above-status-bar layer would draw over the lock screen
