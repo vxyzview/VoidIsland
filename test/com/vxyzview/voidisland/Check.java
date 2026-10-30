@@ -1,0 +1,79 @@
+package com.vxyzview.voidisland;
+
+public class Check {
+    static int fails = 0;
+    static void ok(boolean c, String m) { if (!c) { fails++; System.out.println("FAIL: " + m); } else System.out.println("ok:   " + m); }
+
+    public static void main(String[] a) {
+        // --- Spring: expanding width 150 -> 340 should overshoot slightly, settle < 0.9s, never explode
+        Spring s = new Spring(); s.snap(150f); s.eps = 0.3f; s.tune(330f, 0.60f); s.to(340f);
+        float peak = 0, t = 0; int frames = 0;
+        while (s.step(1f / 60f) && frames < 600) { frames++; t += 1f / 60f; peak = Math.max(peak, s.value); }
+        System.out.printf("expand: settled in %.2fs (%d frames), peak %.1f%n", t, frames, peak);
+        ok(peak > 340f && peak < 340f + 0.14f * 190f, "expand overshoots a little (bounce) but < 14%");
+        ok(t < 0.95f, "expand settles under 0.95s");
+        ok(s.value == 340f, "expand lands exactly on target");
+
+        // collapse should be snappier, small bounce
+        Spring c = new Spring(); c.snap(340f); c.tune(420f, 0.80f); c.to(150f);
+        float low = 1e9f; t = 0; frames = 0;
+        while (c.step(1f / 60f) && frames < 600) { frames++; t += 1f / 60f; low = Math.min(low, c.value); }
+        System.out.printf("collapse: settled in %.2fs, trough %.1f%n", t, low);
+        ok(t < 0.8f && low > 150f - 0.05f * 190f, "collapse settles < 0.8s, bounce < 5%");
+
+        // stability with a janky 50ms frame
+        Spring j = new Spring(); j.snap(0f); j.tune(430f, 0.8f); j.to(100f);
+        int n = 0; while (j.step(0.05f) && n < 200) n++;
+        ok(j.value == 100f && n < 60, "stable with 50ms frame hitches");
+
+        // --- Parse
+        ok("Rp 25.000".equals(Parse.amount("Pembayaran Rp 25.000 berhasil.")), "amount: Rp 25.000");
+        ok("$12.50".equals(Parse.amount("You paid $12.50 at Starbucks")), "amount: $12.50");
+        ok(Parse.amount("form 12 submitted") == null, "amount: 'form 12' is not money");
+        ok("Rp125.000,00".equals(Parse.amount("Transfer Rp125.000,00 ke Budi.")), "amount: Rp125.000,00");
+        ok(Parse.isPayment("id.dana", "DANA", "Pembayaran berhasil Rp 18.500"), "payment: DANA");
+        ok(Parse.isPayment("com.google.android.apps.walletnfcrel", "Google Wallet", "Paid $4.20 at Blue Bottle"), "payment: Google Wallet");
+        ok(!Parse.isPayment("com.whatsapp", "Budi", "see you at 5, bring 20 bucks"), "payment: chat is not payment");
+        ok(!Parse.isPayment("com.news.app", "Markets", "Dollar steady at $1.08 in late trade"), "payment: news with $ is not payment");
+        ok(Parse.isFailure("Payment failed"), "failure word");
+        ok(Parse.isIncoming("Anda menerima Rp 50.000 dari Sari"), "incoming word");
+        ok(Parse.actionKind("Decline") == -1 && Parse.actionKind("Answer") == 1 && Parse.actionKind("Tolak") == -1 && Parse.actionKind("Jawab") == 1, "call button kinds");
+        ok(Parse.actionKind("Send message") == 0 && Parse.actionKind("End call") == -1 && Parse.actionKind("Hang up") == -1 && Parse.actionKind("Speaker") == 0, "call button kinds: 'Send' is not 'End'");
+        ok("1:05".equals(Parse.clock(65000)) && "1:01:01".equals(Parse.clock(3661000)) && "0:00".equals(Parse.clock(-5)), "clock format");
+        ok("B".equals(Parse.initial("  budi")), "initial");
+
+        // --- Col
+        ok(Col.alpha(0xFF336699, 0.5f) == 0x80336699, "Col.alpha");
+        ok(Col.mix(0xFF000000, 0xFFFFFFFF, 0.5f) == 0xFF808080, "Col.mix midpoint");
+        ok(Col.onColor(0xFF000000) == 0xFFFFFFFF && Col.onColor(0xFFF2F2F7) == 0xFF111114, "Col.onColor contrast");
+        ok(Col.onColor(0xFF0B1B3A) == 0xFFFFFFFF, "Col.onColor navy -> white text");
+
+        // --- Geo: pill / box / notch
+        float[] g = new float[5];
+        ok(Geo.radius(Geo.PILL, Geo.COMPACT, 32f, 16f, 38f, 32f) == 16f, "pill compact = fully round");
+        ok(Geo.radius(Geo.PILL, Geo.EXPANDED, 120f, 16f, 38f, 32f) == 38f, "pill expanded uses card radius");
+        ok(Geo.radius(Geo.PILL, Geo.EXPANDED, 50f, 16f, 38f, 32f) == 25f, "pill expanded never exceeds half height");
+        ok(Geo.radius(Geo.BOX, Geo.COMPACT, 32f, 10f, 22f, 32f) == 10f, "box compact uses own radius");
+        ok(Geo.radius(Geo.BOX, Geo.COMPACT, 12f, 30f, 22f, 32f) == 6f, "box radius clamps to half height");
+        ok(Geo.radius(Geo.NOTCH, Geo.COMPACT, 28f, 14f, 28f, 32f) == 14f, "notch compact bottom radius");
+        ok(Geo.radius(Geo.PILL, Geo.HIDDEN, 32f, 16f, 38f, 30f) == 15f, "hidden = dot");
+        Geo.surface(Geo.PILL, 400f, 150f, 0f, 32f, 16f, g);
+        ok(g[0] == 125f && g[2] == 275f && g[1] == 0f && g[3] == 32f && g[4] == 16f, "pill rect centred in window");
+        Geo.surface(Geo.NOTCH, 400f, 130f, 0f, 28f, 14f, g);
+        ok(g[1] == -14f && g[3] == 28f && g[4] == 14f, "notch pushed up so top corners are off-screen");
+        ok(g[4] * 2f <= g[3] - g[1], "notch radius fits its height");
+        Geo.surface(Geo.BOX, 400f, 20f, 0f, 100f, 38f, g);
+        ok(g[4] == 10f, "box radius clamps to half the width");
+
+        // --- ShadeMatch
+        ok(ShadeMatch.panel("Notification shade.", "android.widget.FrameLayout"), "shade: en notification shade");
+        ok(ShadeMatch.panel("Quick settings.", ""), "shade: en quick settings");
+        ok(ShadeMatch.panel("", "com.android.systemui.statusbar.phone.NotificationPanelView"), "shade: legacy class name");
+        ok(ShadeMatch.panel("Setelan cepat", ""), "shade: id quick settings");
+        ok(!ShadeMatch.panel("Volume", "android.widget.FrameLayout"), "shade: volume is not the shade");
+        ok(!ShadeMatch.panel("Power menu", "android.widget.LinearLayout"), "shade: power menu is not the shade");
+        ok(!ShadeMatch.panel("Lock screen.", "android.widget.FrameLayout"), "shade: lock screen is not the shade");
+        System.out.println(fails == 0 ? "ALL CHECKS PASSED" : (fails + " FAILED"));
+        System.exit(fails == 0 ? 0 : 1);
+    }
+}

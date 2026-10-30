@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VoidIsland</string>
+    <string name="a11y_desc">Draws the VoidIsland pill, notices which app is open and when Quick Settings open or close. It does not read what is on the screens of other apps.</string>
+</resources>

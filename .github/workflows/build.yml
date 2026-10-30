@@ -1,0 +1,112 @@
+name: Build APK
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'stable = regular Release; beta/alpha = pre-release'
+        required: true
+        default: beta
+        type: choice
+        options: [beta, alpha, stable]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history: tags + commit count for versionCode
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Android SDK pieces
+        run: |
+          SDKM="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
+          yes | "$SDKM" --sdk_root="$ANDROID_HOME" "platforms;android-34" "build-tools;34.0.0" >/dev/null
+
+      - name: Restore signing key
+        env:
+          SIGNING_KEYSTORE: ${{ secrets.SIGNING_KEYSTORE }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE" ]; then
+            echo "$SIGNING_KEYSTORE" | base64 -d > void.jks
+            echo "Signing with the keystore from repository secrets."
+          else
+            echo "::warning::SIGNING_KEYSTORE secret is not set -> a FRESH throwaway key will be generated for this build. Users of other builds will need to uninstall first."
+          fi
+
+      - name: Work out version
+        run: |
+          set -e
+          # Tag push (v1.2 or v1.2-beta.1 / v1.2-alpha.1): name comes from the tag.
+          # Manual run: version comes from the latest tag.
+          #   beta/alpha  -> latest-tag + channel + timestamp (e.g. 1.1-beta.2510310042)
+          #   stable      -> next patch after the latest tag (1.1 -> 1.2, 1.2.3 -> 1.2.4)
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            CHANNEL="${{ inputs.channel }}"
+            LAST="$(git describe --tags --abbrev=0 2>/dev/null || echo '')"
+            BASE="$(printf '%s' "${LAST:-v1.1}" | sed -e 's/^v//' -e 's/-.*$//')"
+            if [ "$CHANNEL" = "stable" ]; then
+              if printf '%s' "$BASE" | grep -q '\.'; then
+                MAJMIN="${BASE%.*}"; PATCH="${BASE##*.}"
+              else
+                MAJMIN="$BASE"; PATCH="0"
+              fi
+              VERSION="${MAJMIN}.$(( PATCH + 1 ))"
+            else
+              VERSION="${BASE}-${CHANNEL}.$(date +%y%m%d%H%M)"
+            fi
+          fi
+          # any suffix (alpha/beta/rc) -> pre-release
+          case "$VERSION" in *-*) PRE=1 ;; *) PRE=0 ;; esac
+          # versionCode: monotonic build number, +10 per commit, pre-releases 5 points below
+          BUILD="$(git rev-list --count HEAD)"
+          if [ "$PRE" = "1" ]; then VCODE=$(( BUILD * 10 - 5 )); else VCODE=$(( BUILD * 10 )); fi
+          [ "$VCODE" -ge 1 ] || VCODE=1
+          {
+            echo "VERSION=$VERSION"
+            echo "APK=VoidIsland-$VERSION"
+            echo "VERSIONCODE=$VCODE"
+            echo "PRE=$PRE"
+          } >> "$GITHUB_ENV"
+          echo "::notice::$( [ "$PRE" = "1" ] && echo pre-release || echo stable ) -> VoidIsland-$VERSION (versionCode $VCODE)"
+
+      - name: Build (javac, dx, aapt, zipalign, apksigner)
+        run: ./build.sh "$APK" "$VERSION" "$VERSIONCODE"
+
+      - name: Unit checks
+        run: |
+          javac -d out/test -cp out/classes $(find test -name '*.java')
+          java -cp out/test:out/classes com.vxyzview.voidisland.Check
+
+      - name: Verify APK signature
+        run: "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "out/$APK.apk"
+
+      - name: Publish to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FLAGS=""
+          if [ "$PRE" = "1" ]; then FLAGS="--prerelease"; fi
+          TAG="v$VERSION"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then TAG="${GITHUB_REF_NAME}"; fi
+          echo "release tag: $TAG (pre-release: $PRE)"
+          gh release create "$TAG" "out/$APK.apk" --title "$APK" --generate-notes $FLAGS
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK }}
+          path: out/*.apk
+          if-no-files-found: error
