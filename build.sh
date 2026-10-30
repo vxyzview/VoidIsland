@@ -46,8 +46,7 @@ if [ "${DEXER##*/}" = dx ]; then
     "$DEXER" --dex --min-sdk-version=26 --output=out/classes.dex out/classes
 else
     echo "[2/6] dex (d8)";
-    jar cf out/classes.jar -C out/classes .
-    "$DEXER" --release --min-api 26 --lib "$AJ" --output out out/classes.jar
+    "$DEXER" --release --min-api 26 --lib "$AJ" --output out $(find out/classes -name '*.class')
 fi
 echo "[3/6] aapt";    "$AAPT" package -f -M AndroidManifest.xml -S res -I "$AJ" --min-sdk-version 26 --target-sdk-version 33 --version-code "$VCODE" --version-name "$VER" -F out/unsigned.apk
 echo "[4/6] add dex"; (cd out && "$AAPT" add -f unsigned.apk classes.dex >/dev/null)
