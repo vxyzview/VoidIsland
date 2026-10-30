@@ -425,6 +425,7 @@ public final class MainActivity extends Activity {
         m.toggle(sh, "Island enabled", null, Prefs.K_ON, true, null);
         m.toggle(sh, "Clock when idle", "Show the time on an empty island", Prefs.K_CLOCK, true, null);
         m.toggle(sh, "Music & media", "Album art, seek bar, controls", Prefs.K_MEDIA, true, null);
+        m.toggle(sh, "Music lyrics", "The current line of the playing song on the music card (from LRCLIB)", Prefs.K_LYRICS, true, null);
         m.toggle(sh, "Calls", "Answer and decline from the island", Prefs.K_CALL, true, null);
         m.toggle(sh, "Payments", "Payment and transfer confirmations", Prefs.K_PAY, true, null);
         m.toggle(sh, "Notifications", "Banners, downloads, timers, maps", Prefs.K_NOTIF, true, null);
@@ -434,7 +435,7 @@ public final class MainActivity extends Activity {
 
         LinearLayout ru = m.card(p, "Rules");
         m.toggle(ru, "Hide in landscape", null, Prefs.K_LAND, true, null);
-        m.toggle(ru, "Hide in apps", "The island auto-hides while any app is open and returns on the home screen", Prefs.K_HIDEAPP, true, null);
+        m.toggle(ru, "Hide idle clock in apps", "While an app is open only the clock pill hides — banners, music and timers keep showing", Prefs.K_HIDEAPP, true, null);
         m.toggle(ru, "Hide music & call pill inside their own app", null, Prefs.K_INAPP, true, null);
         m.toggle(ru, "Show on lock screen", "Only when the island is above the status bar", Prefs.K_LOCK, false, null);
         m.toggle(ru, "Haptic feedback", null, Prefs.K_HAPTIC, true, null);

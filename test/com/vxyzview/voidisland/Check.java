@@ -80,6 +80,27 @@ public class Check {
         ok("3:03".equals(Parse.timeOfDay(15, 3, false)), "time 12h: 15 -> 3:03");
         ok("23:59".equals(Parse.timeOfDay(23, 59, true)), "time 24h: 23:59");
 
+        // --- Lyrics: LRC/plain parsing and line lookup (the music card's lyrics row)
+        Lyrics.Loaded s0 = Lyrics.parse("[ti:Demo]\n[offset:0]\n[00:01.00]First\n[00:10.50]Second\n[00:30]Third\n", null);
+        ok(s0 != null && s0.synced, "lyrics: LRC body parsed as synced tags skipped");
+        ok(s0.textAt(900, 0) == null, "lyrics: nothing before the first stamp");
+        ok("First".equals(s0.textAt(1500, 0)), "lyrics: first line at 1.5 s");
+        ok("Second".equals(s0.textAt(10500, 0)), "lyrics: second line at 10.5 s");
+        ok("Second".equals(s0.textAt(29000, 0)), "lyrics: line holds until the next stamp");
+        ok("Third".equals(s0.textAt(31000, 0)), "lyrics: [mm:ss] stamp without fraction");
+        Lyrics.Loaded d0 = Lyrics.parse("[00:30.00]Late first\n[00:05.00][00:12.00]Doubled\n", null);
+        ok("Doubled".equals(d0.textAt(6000, 0)), "lyrics: double stamp at 6 s");
+        ok("Doubled".equals(d0.textAt(13000, 0)), "lyrics: second stamp same line at 13 s");
+        ok("Late first".equals(d0.textAt(31000, 0)), "lyrics: out-of-order rows sorted");
+        ok(Lyrics.parse("[by:x]\n[re:y]\n", null) == null, "lyrics: tag-only body rejected");
+        Lyrics.Loaded p0 = Lyrics.parse(null, "Alpha\n\nBeta\n");
+        ok(p0 != null && !p0.synced && p0.line.length == 2, "lyrics: plain text, blank lines dropped");
+        ok("Alpha".equals(p0.textAt(0, 100000)), "lyrics: plain line at 0%");
+        ok("Beta".equals(p0.textAt(60000, 100000)), "lyrics: plain line follows song progress");
+        ok(p0.textAt(5000, 0) == null, "lyrics: plain text needs the song duration");
+        Lyrics.remember("Who", "Does", p0);
+        ok(Lyrics.cached("who", "does") == p0, "lyrics: cache lookup ignores case");
+
         System.out.println(fails == 0 ? "ALL CHECKS PASSED" : (fails + " FAILED"));
         System.exit(fails == 0 ? 0 : 1);
     }

@@ -314,7 +314,7 @@ final class IslandController implements IslandView.Host {
             case IslandEvent.CHARGE: return Prefs.b(svc, Prefs.K_CHG, true);
             case IslandEvent.SYSTEM: return Prefs.b(svc, Prefs.K_SYS, true) || "toast".equals(e.key);
             case IslandEvent.PREVIEW: return true;
-            case IslandEvent.CLOCK: return Prefs.b(svc, Prefs.K_CLOCK, true);
+            case IslandEvent.CLOCK: return Prefs.b(svc, Prefs.K_CLOCK, true) && !(Prefs.b(svc, Prefs.K_HIDEAPP, true) && appOpen);
             default: return Prefs.b(svc, Prefs.K_NOTIF, true);
         }
     }
@@ -407,7 +407,6 @@ final class IslandController implements IslandView.Host {
 
     private boolean suppressed() {
         if (!Prefs.b(svc, Prefs.K_ON, true)) return true;
-        if (Prefs.b(svc, Prefs.K_HIDEAPP, true) && appOpen) return true;  // island hides itself while an app is open
         if (landscape && Prefs.b(svc, Prefs.K_LAND, true)) return true;
         if (!layerApp) {
             if (locked && !style.lockShow) return true;                      // above-status-bar layer would draw over the lock screen
@@ -518,7 +517,7 @@ final class IslandController implements IslandView.Host {
     /** Swipe sideways on the pill to flip between simultaneous live activities. */
     private void cycle(int dir) {
         List<IslandEvent> l = new ArrayList<IslandEvent>();
-        for (IslandEvent e : live.values()) if (!hiddenBySource(e) && allowed(e)) l.add(e);
+        for (IslandEvent e : live.values()) if (e != clock && !hiddenBySource(e) && allowed(e)) l.add(e);
         if (l.size() < 2) return;
         int i = Math.max(0, l.indexOf(shown));
         pinnedKey = l.get((i + dir + l.size()) % l.size()).key;

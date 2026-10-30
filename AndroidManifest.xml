@@ -12,6 +12,9 @@
     <!-- Only used to read the name of a connecting Bluetooth device (optional, Android 12+). -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- Music lyrics are fetched from lrclib.net (open API, no account, no key). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />

@@ -8,6 +8,8 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.session.MediaController;
 import android.media.session.PlaybackState;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.text.TextUtils;
 import android.text.format.DateFormat;
@@ -20,7 +22,15 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.util.Calendar;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 /** Builds the views for every kind of island content. Compact = the little pill, expanded = the card. */
 final class Cards {
@@ -600,6 +610,11 @@ final class Cards {
         top.addView(eq, lp(dp(c, 22), dp(c, 20)));
         root.addView(top);
 
+        final TextView lyr = tv(c, "", 14f, SUB, false);
+        lyr.setPadding(0, dp(c, 4), 0, 0);
+        lyr.setVisibility(View.INVISIBLE);   // kept reserved (never GONE): the card's height is measured once
+        root.addView(lyr, lpw(ViewGroup.LayoutParams.MATCH_PARENT, WRAP, 1f));
+
         LinearLayout sr = row(c);
         sr.setPadding(0, dp(c, 14), 0, 0);
         final TextView el = tv(c, "0:00", 11.5f, SUB, false);
@@ -636,6 +651,38 @@ final class Cards {
         ctl.addView(next, lp(dp(c, 64), dp(c, 52)));
         root.addView(ctl);
 
+        final String[] lkey = {""};          // the song the lyrics row is currently about (track|artist|durS)
+        final Lyrics.Loaded[] lnow = {null};
+        final Runnable showLyric = new Runnable() {
+            @Override public void run() {
+                Lyrics.Loaded l = lnow[0];
+                if (l == null) { lyr.setVisibility(View.INVISIBLE); return; }
+                String line = l.textAt(position(e), e.durMs);
+                if (line == null) { lyr.setText(""); lyr.setVisibility(View.INVISIBLE); }
+                else { lyr.setText(line); lyr.setVisibility(View.VISIBLE); }
+            }
+        };
+        final Runnable reloadLyrics = new Runnable() {
+            @Override public void run() {
+                if (!Prefs.b(c, Prefs.K_LYRICS, true)) { lnow[0] = null; lkey[0] = ""; showLyric.run(); return; }
+                final String track = e.title == null ? "" : e.title.toString().trim();
+                final String artist = e.text == null ? "" : e.text.toString().trim();
+                if (track.length() == 0) { lnow[0] = null; lkey[0] = ""; showLyric.run(); return; }
+                final String key = track + "|" + artist + "|" + (e.durMs / 1000);
+                if (key.equals(lkey[0])) return;   // already attempted this exact song (nothing was found)
+                lkey[0] = key;
+                lyricsFetch(track, artist, e.durMs / 1000, new GotLyrics() {
+                    @Override public void got(String t0, String a0, Lyrics.Loaded l) {
+                        if (l != null) Lyrics.remember(t0, a0, l);
+                        String n0 = e.title == null ? "" : e.title.toString().trim();
+                        String n1 = e.text == null ? "" : e.text.toString().trim();
+                        if (!n0.equals(t0) || !n1.equals(a0)) return;   // the song changed while we were fetching
+                        lnow[0] = l;
+                        showLyric.run();
+                    }
+                });
+            }
+        };
         e.tE = new Runnable() {
             @Override public void run() {
                 long dur = e.durMs, pos = position(e);
@@ -646,6 +693,7 @@ final class Cards {
                 } else {
                     seek.setFrac(0f);
                 }
+                showLyric.run();
             }
         };
         e.uE = new IslandEvent.Updater() {
@@ -661,10 +709,100 @@ final class Cards {
                 el.setVisibility(can ? View.VISIBLE : View.INVISIBLE);
                 rem.setVisibility(can ? View.VISIBLE : View.INVISIBLE);
                 e.tE.run();
+                reloadLyrics.run();
                 return true;
             }
         };
         e.uE.update();
         return root;
+    }
+
+    // ---------------------------------------------------------------- lyrics fetch (LRCLIB)
+
+    /** Callback for {@link #lyricsFetch}: always called on the main thread (even on an instant cache hit). */
+    interface GotLyrics { void got(String track, String artist, Lyrics.Loaded l); }
+
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+
+    /** Cache-first lyrics for the playing song; slow network work sits on a daemon thread, results land on main. */
+    static void lyricsFetch(final String track, final String artist, final long durS, final GotLyrics done) {
+        Lyrics.Loaded hit = Lyrics.cached(track, artist);
+        if (hit != null) { done.got(track, artist, hit); return; }
+        Thread t = new Thread(new Runnable() {
+            @Override public void run() {
+                final Lyrics.Loaded l = lyricsNet(track, artist, durS);
+                MAIN.post(new Runnable() {
+                    @Override public void run() { done.got(track, artist, l); }
+                });
+            }
+        }, "vi-lyrics");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** LRCLIB (no key): /api/get first, then /api/search picking the entry whose duration fits best. */
+    private static Lyrics.Loaded lyricsNet(String track, String artist, long durS) {
+        JSONObject best = null;
+        try {
+            String q = "https://lrclib.net/api/get?track_name=" + URLEncoder.encode(track, "UTF-8")
+                + (artist.length() > 0 ? "&artist_name=" + URLEncoder.encode(artist, "UTF-8") : "")
+                + (durS > 0 ? "&duration=" + durS : "");
+            best = httpJson(q);   // null = no exact record (404) or a busy-server 503 — the search fallback still runs
+        } catch (Throwable t) { /* fall through to search */ }
+        if (best == null) {
+            try {
+                String q = "https://lrclib.net/api/search?track_name=" + URLEncoder.encode(track, "UTF-8")
+                    + (artist.length() > 0 ? "&artist_name=" + URLEncoder.encode(artist, "UTF-8") : "");
+                JSONArray arr = httpArray(q);
+                if (arr != null) {
+                    int ai = -1, score = -1000000;
+                    for (int i = 0; i < arr.length(); i++) {
+                        JSONObject o = arr.optJSONObject(i);
+                        if (o == null) continue;
+                        String s0 = o.optString("syncedLyrics", ""), p0 = o.optString("plainLyrics", "");
+                        if (s0.length() == 0 && p0.length() == 0) continue;
+                        int sc = (s0.length() > 0 ? 500 : 0) + (p0.length() > 0 ? 1 : 0);
+                        double d = o.optDouble("duration", 0);
+                        if (durS > 0 && Math.abs(d - durS) <= 2) sc += 200;
+                        if (sc > score) { score = sc; ai = i; }
+                    }
+                    if (ai >= 0) best = arr.optJSONObject(ai);
+                }
+            } catch (Throwable t) { /* offline or rate-limited: no lyrics this round, no caching of failures */ }
+        }
+        if (best == null) return null;
+        String s0 = best.optString("syncedLyrics", ""), p0 = best.optString("plainLyrics", "");
+        return Lyrics.parse(s0.length() > 0 ? s0 : null, p0.length() > 0 ? p0 : null);
+    }
+
+    private static JSONObject httpJson(String url) {
+        String b = httpText(url);
+        try { return b == null ? null : new JSONObject(b); } catch (Throwable t) { return null; }
+    }
+
+    private static JSONArray httpArray(String url) {
+        String b = httpText(url);
+        try { return b == null ? null : new JSONArray(b); } catch (Throwable t) { return null; }
+    }
+
+    private static String httpText(String url) {
+        HttpURLConnection con = null;
+        try {
+            con = (HttpURLConnection) new URL(url).openConnection();
+            con.setConnectTimeout(5000);
+            con.setReadTimeout(6000);
+            con.setRequestProperty("User-Agent", "VoidIsland/1.1 (https://github.com/vxyzview/VoidIsland)");
+            if (con.getResponseCode() != 200) return null;
+            BufferedReader r = new BufferedReader(new InputStreamReader(con.getInputStream(), "UTF-8"));
+            StringBuilder b = new StringBuilder();
+            char[] buf = new char[8192];
+            for (int n; (n = r.read(buf)) > 0;) b.append(buf, 0, n);
+            r.close();
+            return b.length() > 0 ? b.toString() : null;
+        } catch (Throwable t) {
+            return null;
+        } finally {
+            if (con != null) try { con.disconnect(); } catch (Throwable ignored) {}
+        }
     }
 }
