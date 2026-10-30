@@ -27,7 +27,15 @@ find_tool() { # prints the first candidate that exists as an executable or on PA
 }
 missing() { echo "error: $1 not found (looked in $BT and PATH)" >&2; exit 1; }
 
-DEXER=$(find_tool "$BT/d8" "$BT/dx" d8 dx) || missing "d8/dx"
+DEXER=""
+if [ -x "$BT/dx" ]; then DEXER="$BT/dx"; fi
+if [ -z "$DEXER" ] && [ -n "$ANDROID_HOME" ]; then
+    for d in $(ls -1d "$ANDROID_HOME"/build-tools/*/ 2>/dev/null | sort -Vr); do
+        if [ -x "${d}d8" ]; then DEXER="${d}d8"; break; fi
+    done
+fi
+if [ -z "$DEXER" ]; then DEXER=$(find_tool "$BT/d8" d8 dx) || DEXER=""; fi
+[ -n "$DEXER" ] || missing "d8/dx"
 AAPT=$(find_tool "$BT/aapt" aapt)          || missing "aapt"
 ZIP=$(find_tool "$BT/zipalign" zipalign)   || missing "zipalign"
 SIGN=$(find_tool "$BT/apksigner" apksigner) || missing "apksigner"

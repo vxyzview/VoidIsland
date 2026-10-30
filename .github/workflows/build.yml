@@ -31,7 +31,7 @@ jobs:
       - name: Install Android SDK pieces
         run: |
           SDKM="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
-          yes | "$SDKM" --sdk_root="$ANDROID_HOME" "platforms;android-34" "build-tools;34.0.0" >/dev/null
+          yes | "$SDKM" --sdk_root="$ANDROID_HOME" "platforms;android-34" "build-tools;34.0.0" "build-tools;35.0.0" >/dev/null
 
       - name: Restore signing key
         env:
