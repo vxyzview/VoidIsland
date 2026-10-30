@@ -91,7 +91,8 @@ jobs:
           java -cp out/test:out/classes com.vxyzview.voidisland.Check
 
       - name: Verify APK signature
-        run: "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "out/$APK.apk"
+        run: |
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs "out/$APK.apk"
 
       - name: Publish to GitHub Releases
         env:
