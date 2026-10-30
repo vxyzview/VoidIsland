@@ -9,7 +9,7 @@ Then enable both accessibility services VoidIsland asks for, so it can see notif
 
 ## Building yourself
 
-Local build needs an `android.jar` (API 34) at `libs/android-34.jar`, a JDK, and `aapt` + `dx` + `apksigner` + `zipalign`, then:
+Local build needs an `android.jar` (API 34) at `libs/android-34.jar`, a JDK, and `aapt` + `d8` (or `dx`) + `apksigner` + `zipalign`, then:
 
 ```sh
 ./build.sh
