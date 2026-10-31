@@ -50,7 +50,12 @@ final class MediaTracker {
     private Bitmap artBmp;
     private int accent = Color.WHITE;
 
-    private final Runnable refresh = new Runnable() { @Override public void run() { refreshNow(); } };
+    private final Runnable refresh = new Runnable() {
+        @Override public void run() {
+            // a media session can vanish between two calls (null playback state...): skip this round, never crash the process
+            try { refreshNow(); } catch (Throwable t) { /* the next session callback refreshes again */ }
+        }
+    };
     private boolean expiring, gaveUp;
     private final Runnable expire = new Runnable() {
         @Override public void run() { expiring = false; gaveUp = true; Bus.remove("media"); }

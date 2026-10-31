@@ -41,6 +41,9 @@ public final class MainActivity extends Activity {
     private static final String S_PAGE = "page", S_Y = "ys", S_PREVIEW = "pv";
 
     private final Handler h = new Handler(Looper.getMainLooper());
+    /** Everything the Try-it demos schedule for later (music timeout, download steps, preview): "Clear demos" cancels it all at once. */
+    private final Handler dh = new Handler(Looper.getMainLooper());
+    private static final String[] DEMO_KEYS = {"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "toast", "preview"};
     private M3 m;
     private M3.Nav nav;
     private ScrollView scroll;
@@ -674,8 +677,8 @@ public final class MainActivity extends Activity {
         e.text = "Looking good.";
         e.icon = Img.appIcon(this, getPackageName());
         Bus.post(e);
-        h.removeCallbacks(rmPreview);
-        h.postDelayed(rmPreview, 1700);
+        dh.removeCallbacks(rmPreview);
+        dh.postDelayed(rmPreview, 1700);
     }
 
     private Bitmap demoArt() {
@@ -711,7 +714,7 @@ public final class MainActivity extends Activity {
             e.actions = PlaybackState.ACTION_SEEK_TO;
             Bus.post(e);
             Bus.expand("media");
-            h.postDelayed(new Runnable() { @Override public void run() { Bus.remove("media"); } }, 30000);
+            dh.postDelayed(new Runnable() { @Override public void run() { Bus.remove("media"); } }, 30000);
         } else if ("c".equals(code)) {
             IslandEvent e = ev("call", IslandEvent.CALL);
             e.live = true; e.popup = true; e.incoming = true; e.priority = 100;
@@ -768,16 +771,16 @@ public final class MainActivity extends Activity {
         e.live = true; e.priority = 50; e.title = "void-island-v2.apk"; e.text = "Downloading"; e.progress = pct; e.accent = Cards.GREEN;
         Bus.post(e);
         if (pct >= 100) {
-            h.postDelayed(new Runnable() { @Override public void run() { Bus.remove("p:demo"); } }, 900);
+            dh.postDelayed(new Runnable() { @Override public void run() { Bus.remove("p:demo"); } }, 900);
         } else {
-            h.postDelayed(new Runnable() { @Override public void run() { if (Bus.active()) download(Math.min(100, pct + 5)); } }, 280);
+            dh.postDelayed(new Runnable() { @Override public void run() { if (Bus.active()) download(Math.min(100, pct + 5)); } }, 280);
         }
     }
 
     private void clearDemos() {
-        h.removeCallbacks(rmPreview);
-        for (String k : new String[]{"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "toast", "preview"}) {
-            try { Bus.remove(k); } catch (Throwable t) { /* keep clearing the rest; never take the app (and the island) down */ }
-        }
+        // 1) stop the demos' own pending steps first, or e.g. the download loop would put its card straight back
+        dh.removeCallbacksAndMessages(null);
+        // 2) take every demo away in ONE step; the island rebuilds itself to a clean idle state (see IslandController.clear)
+        try { Bus.clear(DEMO_KEYS); } catch (Throwable t) { /* never take the app (and the island) down */ }
     }
 }

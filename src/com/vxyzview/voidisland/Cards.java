@@ -965,12 +965,17 @@ final class Cards {
         try {
             NET.execute(new Runnable() {
                 @Override public void run() {
-                    final Lyrics.Loaded l = lyricsNet(track, artist, durS);
+                    // An exception on this worker thread would kill the whole process (and with it the accessibility service).
+                    Lyrics.Loaded found = null;
+                    try { found = lyricsNet(track, artist, durS); } catch (Throwable t) { /* odd lyric sheet / network hiccup: no lyrics */ }
+                    final Lyrics.Loaded l = found;
                     MAIN.post(new Runnable() {
                         @Override public void run() {
                             if (l == null) Lyrics.rememberMiss(track, artist, System.currentTimeMillis());
                             java.util.ArrayList<GotLyrics> all = INFLIGHT.remove(fk);
-                            if (all != null) for (GotLyrics g : all) g.got(track, artist, l);
+                            if (all != null) for (GotLyrics g : all) {
+                                try { g.got(track, artist, l); } catch (Throwable t) { /* that card is gone or broken: the rest still get their answer */ }
+                            }
                         }
                     });
                 }

@@ -383,7 +383,7 @@ final class LyricScroll extends View {
     private long lineStart, wait, scrollMs;
 
     private final Runnable frame = new Runnable() {
-        @Override public void run() { advance(); }
+        @Override public void run() { try { advance(); } catch (Throwable t) { /* a lyric hiccup must never take the island down */ } }
     };
 
     LyricScroll(Context c) {

@@ -13,6 +13,7 @@ import android.hardware.display.DisplayManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.view.Display;
@@ -43,7 +44,7 @@ final class IslandController implements IslandView.Host {
 
     private IslandView view;
     private WindowManager.LayoutParams lp;
-    private boolean attached, layerApp, shadeOpen, locked;
+    private boolean attached, layerApp, shadeOpen, locked, closed;
     private Style style = new Style();
     private int screenW, screenH;
     private boolean landscape;
@@ -69,23 +70,28 @@ final class IslandController implements IslandView.Host {
         @Override public void run() { userExpanded = null; evaluate(); }
     };
     private final Runnable applyRun = new Runnable() {
-        @Override public void run() { applyPrefs(); }
+        @Override public void run() { try { applyPrefs(); } catch (Throwable t) { fault(); } }
+    };
+    private final Runnable rebuildRun = new Runnable() {
+        @Override public void run() { rebuild(); }
     };
     private int tickMiss;   // consecutive ticks that found no ticker yet (content is still being swapped in)
     private final Runnable tick = new Runnable() {
         @Override public void run() {
-            IslandEvent e = shown;
-            if (e == null || shownMode == IslandView.HIDDEN) return;
-            Runnable t = shownMode == IslandView.COMPACT ? e.tC : e.tE;
-            if (t != null) {
-                tickMiss = 0;
-                t.run();
-                h.postDelayed(this, nextTick(e));
-            } else if (++tickMiss < 40) {
-                // The new content is installed after the window resize / cross-fade, so its ticker may not exist yet.
-                // Stopping here is what froze timers and stopwatches at their first value: keep waiting for it.
-                h.postDelayed(this, 100);
-            }
+            try {
+                IslandEvent e = shown;
+                if (e == null || shownMode == IslandView.HIDDEN) return;
+                Runnable t = shownMode == IslandView.COMPACT ? e.tC : e.tE;
+                if (t != null) {
+                    tickMiss = 0;
+                    t.run();
+                    h.postDelayed(this, nextTick(e));
+                } else if (++tickMiss < 40) {
+                    // The new content is installed after the window resize / cross-fade, so its ticker may not exist yet.
+                    // Stopping here is what froze timers and stopwatches at their first value: keep waiting for it.
+                    h.postDelayed(this, 100);
+                }
+            } catch (Throwable t) { fault(); }
         }
     };
 
@@ -191,6 +197,7 @@ final class IslandController implements IslandView.Host {
     }
 
     void detach() {
+        closed = true;   // never rebuild a controller the service has already let go of
         h.removeCallbacksAndMessages(null);
         if (attached) {
             try { wm.removeViewImmediate(view); } catch (Throwable t) { /* already gone */ }
@@ -213,6 +220,42 @@ final class IslandController implements IslandView.Host {
         } catch (Throwable t) {
             attached = false; // could not show the island at all; the service stays alive and will retry on the next settings change
         }
+    }
+
+    // ------------------------------------------------------------------ self-healing
+
+    private int faults;
+    private long faultAt;
+    private String faultKey = "";
+
+    @Override public void onFault() { fault(); }
+
+    /**
+     * Something threw while the island was building, animating or updating. The island lives in the same process as the
+     * accessibility service, so letting it escape would crash the process and switch the service off. Instead: remember
+     * what was on screen (an event that faults twice in a row is dropped, so one bad card can never wedge the island),
+     * then rebuild the overlay window from scratch. Bounded, so a permanent fault cannot spin.
+     */
+    private void fault() {
+        if (closed) return;
+        long now = SystemClock.uptimeMillis();
+        if (now - faultAt > 15000L) faults = 0;
+        faultAt = now;
+        IslandEvent bad = shown;
+        if (bad != null && bad != clock) {
+            if (bad.key.equals(faultKey)) drop(bad.key);
+            faultKey = bad.key;
+        }
+        if (++faults > 3) return;
+        h.removeCallbacks(rebuildRun);
+        h.post(rebuildRun);
+    }
+
+    /** Throws the overlay window away and builds a fresh one; nothing half-animated can survive this. Also retries a failed attach. */
+    private void rebuild() {
+        if (closed) return;
+        h.removeCallbacks(rebuildRun);
+        reattach(layerApp);
     }
 
     /**
@@ -384,7 +427,9 @@ final class IslandController implements IslandView.Host {
         return !suppressed();
     }
 
-    void remove(String key) {
+    /** Forget everything held under {@code key} (live map, popup, queue, pins) without touching the screen. */
+    private void drop(String key) {
+        if (clock.key.equals(key)) return;   // the idle clock is permanent
         IslandEvent old = live.remove(key);
         if (old != null) {
             if (userExpanded == old) userExpanded = null;
@@ -392,7 +437,23 @@ final class IslandController implements IslandView.Host {
         }
         if (popup != null && popup.key.equals(key)) { popup = null; h.removeCallbacks(popupEnd); }
         for (Iterator<IslandEvent> it = queue.iterator(); it.hasNext();) if (it.next().key.equals(key)) it.remove();
+    }
+
+    void remove(String key) {
+        drop(key);
         evaluate();
+    }
+
+    /**
+     * Remove several things in ONE step ("Clear demos"). Taking them away one by one meant a chain of overlapping
+     * morph / cross-fade transitions in a single frame; this drops them all, then rebuilds the overlay once so the island
+     * always lands on a clean idle state, whatever it was in the middle of.
+     */
+    void clear(String[] keys) {
+        for (String k : keys) drop(k);
+        if (popup == null) h.removeCallbacks(popupEnd);
+        if (userExpanded != null && live.get(userExpanded.key) != userExpanded) userExpanded = null;
+        rebuild();
     }
 
     void removeByNkey(String nkey, boolean liveOnly) {
@@ -466,6 +527,10 @@ final class IslandController implements IslandView.Host {
     }
 
     private void evaluate() {
+        try { evaluateNow(); } catch (Throwable t) { fault(); }
+    }
+
+    private void evaluateNow() {
         if (!attached) return;
         IslandEvent want = null;
         int mode = IslandView.HIDDEN;
@@ -522,19 +587,25 @@ final class IslandController implements IslandView.Host {
     }
 
     @Override public void onTap(int mode) {
-        IslandEvent e = shown;
-        if (e == null) return;
-        if (mode == IslandView.COMPACT) {
-            expandLive(e);
-        } else if (mode == IslandView.EXPANDED) {
-            Cards.open(svc, e);
-            if (e == popup) { popup = null; h.removeCallbacks(popupEnd); }
-            else if (e == userExpanded) userExpanded = null;
-            evaluate();
-        }
+        try {
+            IslandEvent e = shown;
+            if (e == null) return;
+            if (mode == IslandView.COMPACT) {
+                expandLive(e);
+            } else if (mode == IslandView.EXPANDED) {
+                Cards.open(svc, e);
+                if (e == popup) { popup = null; h.removeCallbacks(popupEnd); }
+                else if (e == userExpanded) userExpanded = null;
+                evaluate();
+            }
+        } catch (Throwable t) { fault(); }
     }
 
     @Override public void onSwipe(int dir) {
+        try { swipe(dir); } catch (Throwable t) { fault(); }
+    }
+
+    private void swipe(int dir) {
         IslandEvent e = shown;
         if (e == null) return;
         if (dir == 0) { // up: put it away

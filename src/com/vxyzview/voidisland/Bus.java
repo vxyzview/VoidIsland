@@ -31,6 +31,12 @@ final class Bus {
         pending.remove(key);
     }
 
+    /** Remove several keys at once and leave the island in a clean idle state (used by "Clear demos"). */
+    static void clear(String[] keys) {
+        for (String k : keys) pending.remove(k);
+        if (ctl != null) ctl.clear(keys);
+    }
+
     static void removeByNkey(String nkey, boolean liveOnly) {
         if (ctl != null) ctl.removeByNkey(nkey, liveOnly);
     }

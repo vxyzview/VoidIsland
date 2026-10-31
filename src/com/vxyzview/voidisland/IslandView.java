@@ -32,6 +32,8 @@ final class IslandView extends ViewGroup {
         /** 0 = up, 1 = down, 2 = left, 3 = right */
         void onSwipe(int dir);
         void onOutside();
+        /** Something threw inside the island's own animation / install code: rebuild the overlay instead of letting the process die. */
+        void onFault();
     }
 
     /** FrameLayout that never needs an off-screen buffer for alpha. */
@@ -58,6 +60,7 @@ final class IslandView extends ViewGroup {
     private int winW, winH;
     private boolean touchable;
     private Runnable pendingRun, pendingSwap;
+    private int gen;   // bumped by every present(): work queued by an older present() must never run after a newer one
     private int wantW, wantH;
     private boolean running;
     private long last;
@@ -70,25 +73,38 @@ final class IslandView extends ViewGroup {
 
     private final Runnable fallback = new Runnable() {
         @Override public void run() {
-            if (pendingRun != null) { Runnable r = pendingRun; pendingRun = null; r.run(); }
+            if (pendingRun != null) { Runnable r = pendingRun; pendingRun = null; guarded(r); }
         }
     };
 
     private final Choreographer.FrameCallback frame = new Choreographer.FrameCallback() {
         @Override public void doFrame(long nanos) {
-            float dt = last == 0 ? 1f / 60f : Math.min((nanos - last) / 1e9f, 0.05f);
-            last = nanos;
-            boolean act = stepAll(dt);
-            applyVisuals();
-            if (act) {
-                Choreographer.getInstance().postFrameCallback(this);
-            } else {
+            // This runs inside the process that also hosts the accessibility service: an exception that escapes here
+            // kills the process and Android switches the service off. Stop animating and let the controller rebuild instead.
+            try {
+                float dt = last == 0 ? 1f / 60f : Math.min((nanos - last) / 1e9f, 0.05f);
+                last = nanos;
+                boolean act = stepAll(dt);
+                applyVisuals();
+                if (act) {
+                    Choreographer.getInstance().postFrameCallback(this);
+                } else {
+                    running = false;
+                    last = 0;
+                    settled();
+                }
+            } catch (Throwable t) {
                 running = false;
                 last = 0;
-                settled();
+                host.onFault();
             }
         }
     };
+
+    /** Runs queued island work; a failure asks the controller for a clean rebuild rather than crashing the process. */
+    private void guarded(Runnable r) {
+        try { r.run(); } catch (Throwable t) { host.onFault(); }
+    }
 
     IslandView(Context c, Host host, float density) {
         super(c);
@@ -165,6 +181,7 @@ final class IslandView extends ViewGroup {
 
     /** @param fade false = replace content instantly and let the springs animate the surface to its new size (live restyling) */
     void present(final IslandEvent ev, final int m, boolean fade) {
+        final int g = ++gen;
         pendingRun = null;
         pendingSwap = null;
         // A swap-out (content fading to 0) may have been interrupted by this newer change. Its swap-in was just discarded,
@@ -186,6 +203,7 @@ final class IslandView extends ViewGroup {
         final boolean swapNeeded = fade && m == mode && ((m == COMPACT && cEv != null) || (m == EXPANDED && eEv != null));
         final Runnable install = new Runnable() {
             @Override public void run() {
+                if (g != gen) return;   // a newer present() replaced this one while it waited
                 if (m == EXPANDED) installExpanded(ev, ex, baseEW, exH);
                 else if (m == COMPACT) installCompact(ev);
                 retarget(m, tw, th);
@@ -195,8 +213,10 @@ final class IslandView extends ViewGroup {
         if (swapNeeded) {
             go = new Runnable() {
                 @Override public void run() {
+                    if (g != gen) return;
                     pendingSwap = new Runnable() {
                         @Override public void run() {
+                            if (g != gen) return;
                             install.run();
                             swap.tune(520f, 1f);
                             swap.to(1f);
@@ -404,7 +424,7 @@ final class IslandView extends ViewGroup {
             final Runnable r = pendingRun;
             pendingRun = null;
             removeCallbacks(fallback);
-            post(r);
+            post(new Runnable() { @Override public void run() { guarded(r); } });
         }
     }
 
