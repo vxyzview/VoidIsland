@@ -9,6 +9,12 @@ import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.os.SystemClock;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Chronometer;
+import android.widget.FrameLayout;
+import android.widget.RemoteViews;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -91,6 +97,52 @@ final class Classifier {
         return false;
     }
 
+    /** A chronometer read out of a notification's custom layout. */
+    private static final class Chrono {
+        long when;           // wall-clock base, like Notification.when
+        boolean countDown, running;
+    }
+
+    private static Chronometer findChrono(View v) {
+        if (v instanceof Chronometer) return (Chronometer) v;
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                Chronometer c = findChrono(g.getChildAt(i));
+                if (c != null) return c;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Many clock apps draw their stopwatch / timer with their own Chronometer inside a custom layout and never set the
+     * standard "show chronometer" flag, so the island used to miss them. Inflate the layout and read the base from it.
+     * Best effort: any failure just means "not a timer".
+     */
+    @SuppressWarnings("deprecation")
+    private static Chrono customChrono(Context c, Notification n) {
+        RemoteViews[] all = { n.contentView, n.bigContentView, n.headsUpContentView };
+        for (RemoteViews rv : all) {
+            if (rv == null) continue;
+            try {
+                Chronometer ch = findChrono(rv.apply(c, new FrameLayout(c)));
+                if (ch == null) continue;
+                Chrono k = new Chrono();
+                k.when = Parse.wallBase(ch.getBase(), SystemClock.elapsedRealtime(), System.currentTimeMillis());
+                k.countDown = ch.isCountDown();
+                k.running = true;
+                try {   // a paused stopwatch keeps its Chronometer but stops it; the flag is not public, so peek (assume running if hidden)
+                    java.lang.reflect.Field f = Chronometer.class.getDeclaredField("mStarted");
+                    f.setAccessible(true);
+                    k.running = f.getBoolean(ch);
+                } catch (Throwable t) { /* hidden: keep the assumption */ }
+                return k;
+            } catch (Throwable t) { /* layout from a package we can't inflate */ }
+        }
+        return null;
+    }
+
     private static boolean duplicate(String nkey, String sig) {
         long now = System.currentTimeMillis();
         Integer h = SEEN.get(nkey);
@@ -109,7 +161,7 @@ final class Classifier {
      */
     static IslandEvent from(Context c, String pkg, Notification n, String nkey, int importance, boolean initial) {
         if (pkg == null || n == null || c.getPackageName().equals(pkg)) return null;
-        if (Prefs.blocked(c).contains(pkg)) return null;
+        if (Prefs.has(c, Prefs.K_BLOCK, pkg)) return null;
         if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return null;
         Bundle x = n.extras != null ? n.extras : new Bundle();
         String cat = n.category;
@@ -117,8 +169,10 @@ final class Classifier {
 
         // Music is handled through its media session; just remember the artwork.
         if (Notification.CATEGORY_TRANSPORT.equals(cat) || x.containsKey(Notification.EXTRA_MEDIA_SESSION)) {
+            String sig = x.getCharSequence(Notification.EXTRA_TITLE) + "|" + x.getCharSequence(Notification.EXTRA_TEXT);
+            if (MediaTracker.artFresh(pkg, sig)) return null;   // same song: skip the icon decode + refresh
             Bitmap li = largeIcon(c, n);
-            if (li != null) MediaTracker.art(pkg, li);
+            if (li != null) MediaTracker.art(pkg, sig, li);
             return null;
         }
 
@@ -152,13 +206,20 @@ final class Classifier {
         }
 
         // ---- timers / stopwatches
-        if (chrono && ongoing) {
+        boolean timerLike = chrono && ongoing;
+        long tWhen = n.when;
+        boolean tCount = x.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN);
+        if (!chrono && ongoing && (Notification.CATEGORY_ALARM.equals(cat) || Parse.isClockApp(pkg))) {
+            Chrono k = customChrono(c, n);   // the clock app's own stopwatch / timer layout
+            if (k != null && k.running) { timerLike = true; tWhen = k.when; tCount = k.countDown; }
+        }
+        if (timerLike) {
             if (!Prefs.b(c, Prefs.K_NOTIF, true)) return null;
             IslandEvent e = new IslandEvent("t:" + nkey, IslandEvent.TIMER);
             e.live = true; e.priority = 80; e.pkg = pkg; e.appName = app;
             e.title = empty(title) ? app : title;
-            e.countDown = x.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN);
-            e.when = n.when;
+            e.countDown = tCount;
+            e.when = tWhen;
             e.contentIntent = n.contentIntent;
             actions(e, n);
             return e;

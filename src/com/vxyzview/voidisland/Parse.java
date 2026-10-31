@@ -77,7 +77,53 @@ final class Parse {
     static String clock(long ms) {
         if (ms < 0) ms = 0;
         long s = ms / 1000, h = s / 3600, m = (s % 3600) / 60, sec = s % 60;
-        return h > 0 ? String.format(Locale.US, "%d:%02d:%02d", h, m, sec) : String.format(Locale.US, "%d:%02d", m, sec);
+        StringBuilder b = new StringBuilder(8);   // hot path (every second): no Formatter
+        if (h > 0) b.append(h).append(':').append(m < 10 ? "0" : "");
+        b.append(m).append(':').append(sec < 10 ? "0" : "").append(sec);
+        return b.toString();
+    }
+
+    /** Milliseconds until a running chronometer's whole-second readout next changes (1..1000). */
+    static long nextSecondMs(long when, boolean countDown, long now) {
+        long ms = countDown ? when - now : now - when;
+        if (ms < 0) return 1000L;                       // already expired / not started: nothing to wake for soon
+        long wait = countDown ? (ms % 1000L) + 1L : 1000L - (ms % 1000L);
+        return Math.max(1L, Math.min(1000L, wait));
+    }
+
+    /** Milliseconds until the wall clock's minute changes (a few ms of margin so the text is never read early). */
+    static long nextMinuteMs(long now) {
+        return 60000L - (now % 60000L) + 20L;
+    }
+
+    /** What a running chronometer reads right now: time left (count-down) or time elapsed, from its wall-clock base. */
+    static long chronoMs(long when, boolean countDown, long now) {
+        long ms = countDown ? when - now : now - when;
+        return ms < 0 ? 0 : ms;
+    }
+
+    /** A Chronometer base (SystemClock.elapsedRealtime timeline) re-expressed on the wall clock the island's timers use. */
+    static long wallBase(long chronoBase, long elapsedNow, long wallNow) {
+        return wallNow - (elapsedNow - chronoBase);
+    }
+
+    /** True when two action-label lists read the same, so a pause/resume swap is noticed. */
+    static boolean sameLabels(String[] a, String[] b) {
+        if (a == b) return true;
+        if (a == null || b == null || a.length != b.length) return false;
+        for (int i = 0; i < a.length; i++) {
+            String x = a[i], y = b[i];
+            if (x == null ? y != null : !x.equals(y)) return false;
+        }
+        return true;
+    }
+
+    /** Clock apps (stopwatch / timer) whose notifications carry their own chronometer instead of the standard one. */
+    static boolean isClockApp(String pkg) {
+        if (pkg == null) return false;
+        String p = pkg.toLowerCase(Locale.ROOT);
+        return p.contains("deskclock") || p.contains("clockpackage") || p.contains("alarmclock")
+            || p.equals("com.android.bbkclock") || p.equals("com.miui.clock") || p.equals("com.google.android.apps.clock");
     }
 
     /** Wall-clock text for the island's idle pill: "1:05" (12 h) or "13:05" (24 h). Hours never get a leading zero. */

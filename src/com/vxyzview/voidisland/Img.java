@@ -71,9 +71,12 @@ final class Img {
     static int dominant(Bitmap b, int fb) {
         if (b == null) return fb;
         try {
-            Bitmap s = Bitmap.createScaledBitmap(scaled(b, 64), 12, 12, true);
+            Bitmap mid = scaled(b, 64);
+            Bitmap s = Bitmap.createScaledBitmap(mid, 12, 12, true);
             int[] px = new int[144];
             s.getPixels(px, 0, 12, 0, 0, 12, 12);
+            if (mid != b && mid != s) mid.recycle();   // temporaries only: never the caller's bitmap
+            if (s != b && s != mid) s.recycle();
             float[] hsv = new float[3];
             double sx = 0, sy = 0, wsum = 0, sat = 0, val = 0;
             for (int p : px) {

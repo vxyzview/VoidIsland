@@ -1,6 +1,8 @@
 package com.vxyzview.voidisland;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Lyrics text support for the music card: parse an LRC or plain-lyrics body, then look up the line
@@ -60,15 +62,38 @@ final class Lyrics {
         return o;
     }
 
-    private static final HashMap<String, Loaded> CACHE = new HashMap<String, Loaded>();
+    static final int CACHE_MAX = 40;
+    static final long MISS_TTL_MS = 120000L;   // a song with no lyrics (or a failed lookup) is not asked about again for 2 minutes
 
-    static Loaded cached(String track, String artist) { return CACHE.get(key(track, artist)); }
+    // least-recently-used: the songs you keep replaying stay, instead of everything being wiped at the cap
+    private static final LinkedHashMap<String, Loaded> CACHE = new LinkedHashMap<String, Loaded>(16, 0.75f, true) {
+        @Override protected boolean removeEldestEntry(Map.Entry<String, Loaded> eldest) { return size() > CACHE_MAX; }
+    };
+    private static final HashMap<String, Long> MISS = new HashMap<String, Long>();
 
-    static void remember(String track, String artist, Loaded l) {
+    static synchronized Loaded cached(String track, String artist) { return CACHE.get(key(track, artist)); }
+
+    static synchronized void remember(String track, String artist, Loaded l) {
         if (l == null) return;
-        if (CACHE.size() > 24) CACHE.clear();   // tiny cap; refetching a forgotten song is cheap
-        CACHE.put(key(track, artist), l);
+        String k = key(track, artist);
+        MISS.remove(k);
+        CACHE.put(k, l);
     }
+
+    /** Note that a lookup found nothing, so rebuilding the music card does not hit the network again straight away. */
+    static synchronized void rememberMiss(String track, String artist, long now) {
+        if (MISS.size() > 64) MISS.clear();
+        MISS.put(key(track, artist), now);
+    }
+
+    static synchronized boolean missedRecently(String track, String artist, long now) {
+        Long at = MISS.get(key(track, artist));
+        return at != null && now - at < MISS_TTL_MS;
+    }
+
+    static synchronized int cacheSize() { return CACHE.size(); }
+
+    static synchronized void clearAll() { CACHE.clear(); MISS.clear(); }
 
     private static String key(String track, String artist) {
         return (track == null ? "" : track.trim().toLowerCase()) + "|" + (artist == null ? "" : artist.trim().toLowerCase());

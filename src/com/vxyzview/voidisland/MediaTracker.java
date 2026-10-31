@@ -23,8 +23,16 @@ final class MediaTracker {
     private static final HashMap<String, Bitmap> ART = new HashMap<String, Bitmap>();
     private static MediaTracker inst;
 
-    static void art(String pkg, Bitmap b) {
+    private static final HashMap<String, String> ART_SIG = new HashMap<String, String>();
+
+    /** True when artwork for this exact track was already taken from {@code pkg}'s notification (players repost it every second or so). */
+    static boolean artFresh(String pkg, String sig) {
+        return sig.equals(ART_SIG.get(pkg)) && ART.get(pkg) != null;
+    }
+
+    static void art(String pkg, String sig, Bitmap b) {
         ART.put(pkg, b);
+        ART_SIG.put(pkg, sig);
         if (inst != null) inst.soon();
     }
 

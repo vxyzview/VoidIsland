@@ -142,6 +142,36 @@ public class Check {
         ok(!Rules.chatRepeat("wa|Ann", 70000L, 60000L), "rules: chat pops again after the window");
         ok("07:30".equals(Rules.hhmm(450)) && "00:00".equals(Rules.hhmm(1440)) && "23:30".equals(Rules.hhmm(-30)), "rules: clock text");
 
+        // --- Timers / stopwatches
+        ok(Parse.chronoMs(10000L, false, 75000L) == 65000L, "chrono: stopwatch counts up from its base");
+        ok(Parse.chronoMs(80000L, true, 75000L) == 5000L, "chrono: timer counts down to its end");
+        ok(Parse.chronoMs(80000L, true, 90000L) == 0L && Parse.chronoMs(80000L, false, 70000L) == 0L, "chrono: never negative");
+        ok(Parse.wallBase(100000L, 160000L, 1000000L) == 940000L, "chrono: elapsed-realtime base -> wall-clock base");
+        ok("1:05".equals(Parse.clock(Parse.chronoMs(Parse.wallBase(100000L, 165000L, 5000000L), false, 5000000L))), "chrono: custom stopwatch reads 1:05");
+        ok(Parse.sameLabels(new String[]{"Lap", "Pause"}, new String[]{"Lap", "Pause"}) && !Parse.sameLabels(new String[]{"Lap", "Pause"}, new String[]{"Lap", "Resume"}), "chrono: Pause -> Resume is noticed");
+        ok(!Parse.sameLabels(new String[]{"A"}, new String[]{"A", "B"}) && Parse.sameLabels(new String[0], new String[0]), "chrono: label lists of different length differ");
+        ok(Parse.isClockApp("com.google.android.deskclock") && Parse.isClockApp("com.sec.android.app.clockpackage") && Parse.isClockApp("com.coloros.alarmclock"), "chrono: known clock apps");
+        ok(!Parse.isClockApp("com.whatsapp") && !Parse.isClockApp(null), "chrono: other apps are not clock apps");
+
+        // --- Optimizations: formatter-free clock, exact wake-ups, lyric cache
+        ok("0:00".equals(Parse.clock(0)) && "0:09".equals(Parse.clock(9999)) && "10:05".equals(Parse.clock(605000)) && "1:00:00".equals(Parse.clock(3600000)) && "12:34:56".equals(Parse.clock(45296000)) && "1:05:07".equals(Parse.clock(3907000)), "opt: clock text without String.format");
+        ok(Parse.nextSecondMs(1000L, false, 5250L) == 750L && Parse.nextSecondMs(1000L, false, 5000L) == 1000L, "opt: stopwatch wakes at the next whole second");
+        ok(Parse.nextSecondMs(10000L, true, 5250L) == 751L && Parse.nextSecondMs(10000L, true, 9000L) == 1L, "opt: countdown wakes when its second drops");
+        ok(Parse.nextSecondMs(10000L, true, 12000L) == 1000L, "opt: expired countdown does not spin");
+        ok(Parse.nextMinuteMs(0L) == 60020L && Parse.nextMinuteMs(59999L) == 21L, "opt: idle clock sleeps until the minute turns");
+        for (int i = 0; i < 2000; i++) { long w = i * 37L, nw = w + i * 13L; long d = Parse.nextSecondMs(w, false, nw); if (d < 1 || d > 1000) { ok(false, "opt: wake delay always 1..1000"); break; } }
+        ok(Parse.clock(Parse.chronoMs(0L, false, 61000L + 400L)).equals(Parse.clock(Parse.chronoMs(0L, false, 61000L + Parse.nextSecondMs(0L, false, 61400L) - 1L))) && !Parse.clock(Parse.chronoMs(0L, false, 61400L)).equals(Parse.clock(Parse.chronoMs(0L, false, 61400L + Parse.nextSecondMs(0L, false, 61400L)))), "opt: text really changes at the wake-up, not before");
+        Lyrics.clearAll();
+        Lyrics.Loaded lo = Lyrics.parse("[00:01.00]a\n[00:02.00]b", null);
+        for (int i = 0; i < Lyrics.CACHE_MAX + 10; i++) { Lyrics.remember("song" + i, "x", lo); if (i == 5) Lyrics.cached("song0", "x"); Lyrics.cached("song0", "x"); }
+        ok(Lyrics.cacheSize() == Lyrics.CACHE_MAX, "opt: lyric cache is capped, not wiped");
+        ok(Lyrics.cached("song0", "x") != null && Lyrics.cached("song1", "x") == null, "opt: lyric cache keeps the song you replay, drops the oldest");
+        ok(!Lyrics.missedRecently("none", "y", 1000L), "opt: unknown song is not a known miss");
+        Lyrics.rememberMiss("none", "y", 1000L);
+        ok(Lyrics.missedRecently("none", "y", 1000L + Lyrics.MISS_TTL_MS - 1) && !Lyrics.missedRecently("none", "y", 1000L + Lyrics.MISS_TTL_MS), "opt: a miss is remembered for 2 minutes, then retried");
+        Lyrics.remember("none", "y", lo);
+        ok(!Lyrics.missedRecently("none", "y", 1001L), "opt: finding lyrics clears the miss");
+
         // --- Live activities: judged by the app
         ok(Live.kind("com.grabtaxi.passenger") == Live.RIDE && Live.kind("me.lyft.android") == Live.RIDE, "live: ride apps");
         ok(Live.kind("com.ubercab.eats") == Live.FOOD && Live.kind("com.ubercab") == Live.RIDE, "live: Uber Eats is food, Uber is a ride");

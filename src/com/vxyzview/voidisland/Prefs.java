@@ -28,8 +28,22 @@ final class Prefs {
     // motion
     static final String K_SPEED = "speed", K_BOUNCE = "bounce";
 
+    private static volatile SharedPreferences cached;
+
     static SharedPreferences sp(Context c) {
-        return c.getApplicationContext().getSharedPreferences("void_island", Context.MODE_PRIVATE);
+        SharedPreferences s = cached;
+        if (s == null) {
+            s = c.getApplicationContext().getSharedPreferences("void_island", Context.MODE_PRIVATE);
+            cached = s;
+        }
+        return s;
+    }
+
+    /** Membership test on a string-set pref without copying the set (hot path: runs for every notification). */
+    static boolean has(Context c, String key, String value) {
+        if (value == null) return false;
+        Set<String> s = sp(c).getStringSet(key, null);   // the live set: read only
+        return s != null && s.contains(value);
     }
 
     static boolean b(Context c, String k, boolean def) { return sp(c).getBoolean(k, def); }

@@ -156,9 +156,13 @@ final class Cards {
         } catch (Throwable t) { /* ignore */ }
     }
 
+    /** setText that does nothing when the text already reads the same (a no-op setText still re-measures the view). */
+    static void put(TextView t, String s) {
+        if (!s.contentEquals(t.getText())) t.setText(s);
+    }
+
     static String timerText(IslandEvent e) {
-        long now = System.currentTimeMillis();
-        return Parse.clock(e.countDown ? e.when - now : now - e.when);
+        return Parse.clock(Parse.chronoMs(e.when, e.countDown, System.currentTimeMillis()));
     }
 
     /** The idle pill's clock text: "1:05" (12 h) or "13:05" (24 h), following the system setting. */
@@ -266,7 +270,7 @@ final class Cards {
                     final TextView t = tv(c, timerText(e), 13f, GREEN, true);
                     t.setFontFeatureSettings("tnum");
                     out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
-                    e.tC = new Runnable() { @Override public void run() { t.setText(timerText(e)); } };
+                    e.tC = new Runnable() { @Override public void run() { put(t, timerText(e)); } };
                 }
                 break;
             }
@@ -275,7 +279,7 @@ final class Cards {
                 final TextView t = tv(c, timerText(e), 13f, ORANGE, true);
                 t.setFontFeatureSettings("tnum");
                 out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
-                e.tC = new Runnable() { @Override public void run() { t.setText(timerText(e)); } };
+                e.tC = new Runnable() { @Override public void run() { put(t, timerText(e)); } };
                 break;
             }
             case IslandEvent.NAV: {
@@ -335,7 +339,7 @@ final class Cards {
                 final TextView t = tv(c, clockText(use24), 13f, WHITE, true);
                 t.setFontFeatureSettings("tnum");
                 out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
-                e.tC = new Runnable() { @Override public void run() { t.setText(clockText(use24)); } };
+                e.tC = new Runnable() { @Override public void run() { put(t, clockText(use24)); } };
                 break;
             }
             default: {
@@ -461,7 +465,7 @@ final class Cards {
         if (time != null) {
             time.setFontFeatureSettings("tnum");
             top.addView(time);
-            e.tE = new Runnable() { @Override public void run() { time.setText(timerText(e)); } };
+            e.tE = new Runnable() { @Override public void run() { put(time, timerText(e)); } };
         }
         root.addView(top);
 
@@ -674,7 +678,7 @@ final class Cards {
         root.addView(date);
         e.tE = new Runnable() {
             @Override public void run() {
-                time.setText(clockText(use24));
+                put(time, clockText(use24));
                 date.setText(dateText());
             }
         };
@@ -699,9 +703,15 @@ final class Cards {
         top.addView(t, lpw(0, WRAP, 1f));
         root.addView(top);
         if (e.actLabels.length > 0) root.addView(actionsRow(c, e, 2));
-        e.tE = new Runnable() { @Override public void run() { time.setText(timerText(e)); } };
+        e.tE = new Runnable() { @Override public void run() { put(time, timerText(e)); } };
+        final String[] shownLabels = e.actLabels;
         e.uE = new IslandEvent.Updater() {
-            @Override public boolean update() { label.setText(e.title); return true; }
+            @Override public boolean update() {
+                if (!Parse.sameLabels(shownLabels, e.actLabels)) return false;   // Pause <-> Resume: rebuild the buttons
+                label.setText(e.title);
+                put(time, timerText(e));
+                return true;
+            }
         };
         return root;
     }
@@ -802,20 +812,42 @@ final class Cards {
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
+    /** Two daemon workers at most: skipping through songs queues lookups instead of spawning a thread (and two HTTP calls) each. */
+    private static final java.util.concurrent.ExecutorService NET = java.util.concurrent.Executors.newFixedThreadPool(2,
+        new java.util.concurrent.ThreadFactory() {
+            @Override public Thread newThread(Runnable r) { Thread t = new Thread(r, "vi-lyrics"); t.setDaemon(true); return t; }
+        });
+    /** Lookups already running, by song: a second view asking for the same song waits for that answer. Main thread only. */
+    private static final java.util.HashMap<String, java.util.ArrayList<GotLyrics>> INFLIGHT = new java.util.HashMap<String, java.util.ArrayList<GotLyrics>>();
+
     /** Cache-first lyrics for the playing song; slow network work sits on a daemon thread, results land on main. */
     static void lyricsFetch(final String track, final String artist, final long durS, final GotLyrics done) {
         Lyrics.Loaded hit = Lyrics.cached(track, artist);
         if (hit != null) { done.got(track, artist, hit); return; }
-        Thread t = new Thread(new Runnable() {
-            @Override public void run() {
-                final Lyrics.Loaded l = lyricsNet(track, artist, durS);
-                MAIN.post(new Runnable() {
-                    @Override public void run() { done.got(track, artist, l); }
-                });
-            }
-        }, "vi-lyrics");
-        t.setDaemon(true);
-        t.start();
+        if (Lyrics.missedRecently(track, artist, System.currentTimeMillis())) { done.got(track, artist, null); return; }
+        final String fk = track.toLowerCase() + "|" + artist.toLowerCase();
+        java.util.ArrayList<GotLyrics> waiting = INFLIGHT.get(fk);
+        if (waiting != null) { waiting.add(done); return; }
+        waiting = new java.util.ArrayList<GotLyrics>();
+        waiting.add(done);
+        INFLIGHT.put(fk, waiting);
+        try {
+            NET.execute(new Runnable() {
+                @Override public void run() {
+                    final Lyrics.Loaded l = lyricsNet(track, artist, durS);
+                    MAIN.post(new Runnable() {
+                        @Override public void run() {
+                            if (l == null) Lyrics.rememberMiss(track, artist, System.currentTimeMillis());
+                            java.util.ArrayList<GotLyrics> all = INFLIGHT.remove(fk);
+                            if (all != null) for (GotLyrics g : all) g.got(track, artist, l);
+                        }
+                    });
+                }
+            });
+        } catch (Throwable t) {
+            INFLIGHT.remove(fk);
+            done.got(track, artist, null);
+        }
     }
 
     /** The caller's small holders (key + loaded) plus the callback that should repaint its lyric row. */
@@ -897,7 +929,10 @@ final class Cards {
             BufferedReader r = new BufferedReader(new InputStreamReader(con.getInputStream(), "UTF-8"));
             StringBuilder b = new StringBuilder();
             char[] buf = new char[8192];
-            for (int n; (n = r.read(buf)) > 0;) b.append(buf, 0, n);
+            for (int n; (n = r.read(buf)) > 0;) {
+                b.append(buf, 0, n);
+                if (b.length() > 600000) return null;   // far bigger than any lyric sheet: don't buffer it
+            }
             r.close();
             return b.length() > 0 ? b.toString() : null;
         } catch (Throwable t) {

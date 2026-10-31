@@ -71,14 +71,40 @@ final class IslandController implements IslandView.Host {
     private final Runnable applyRun = new Runnable() {
         @Override public void run() { applyPrefs(); }
     };
+    private int tickMiss;   // consecutive ticks that found no ticker yet (content is still being swapped in)
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             IslandEvent e = shown;
-            if (e == null) return;
+            if (e == null || shownMode == IslandView.HIDDEN) return;
             Runnable t = shownMode == IslandView.COMPACT ? e.tC : e.tE;
-            if (t != null) { t.run(); h.postDelayed(this, 400); }
+            if (t != null) {
+                tickMiss = 0;
+                t.run();
+                h.postDelayed(this, nextTick(e));
+            } else if (++tickMiss < 40) {
+                // The new content is installed after the window resize / cross-fade, so its ticker may not exist yet.
+                // Stopping here is what froze timers and stopwatches at their first value: keep waiting for it.
+                h.postDelayed(this, 100);
+            }
         }
     };
+
+    /** When the shown text can next change: the idle clock once a minute, timers on the second, everything else as before. */
+    private long nextTick(IslandEvent e) {
+        long now = System.currentTimeMillis();
+        switch (e.type) {
+            case IslandEvent.CLOCK: return Parse.nextMinuteMs(now);
+            case IslandEvent.TIMER: return Parse.nextSecondMs(e.when, e.countDown, now) + 8L;
+            case IslandEvent.CALL: if (e.chrono && !e.incoming) return Parse.nextSecondMs(e.when, false, now) + 8L; return 1000L;
+            default: return 400L;   // music: lyric line / progress bar
+        }
+    }
+
+    private void startTick(long delay) {
+        tickMiss = 0;
+        h.removeCallbacks(tick);
+        h.postDelayed(tick, delay);
+    }
 
     IslandController(AccessibilityService svc) {
         this.svc = svc;
@@ -322,7 +348,7 @@ final class IslandController implements IslandView.Host {
 
     void post(IslandEvent e) {
         if (!attached) return;
-        if (!allowed(e) || (e.pkg != null && Prefs.blocked(svc).contains(e.pkg))) return;
+        if (!allowed(e) || Prefs.has(svc, Prefs.K_BLOCK, e.pkg)) return;
         if (e.type == IslandEvent.NOTIF && e.pkg != null && e.pkg.equals(fg)) return; // don't banner the app you're in
         if (e.live) {
             IslandEvent old = live.get(e.key);
@@ -455,7 +481,7 @@ final class IslandController implements IslandView.Host {
             if (want != null && want.dirty) {
                 want.dirty = false;
                 IslandEvent.Updater u = mode == IslandView.COMPACT ? want.uC : want.uE;
-                if (u == null || !u.update()) view.present(want, mode);
+                if (u == null || !u.update()) { view.present(want, mode); startTick(60); }   // rebuilt: pick the new ticker up
             }
             return;
         }
@@ -464,7 +490,7 @@ final class IslandController implements IslandView.Host {
         if (want != null) want.dirty = false;
         view.present(want, mode, !restyle);
         h.removeCallbacks(tick);
-        if (want != null) h.postDelayed(tick, 60);
+        if (want != null) startTick(60);
     }
 
     // ------------------------------------------------------------------ gestures
