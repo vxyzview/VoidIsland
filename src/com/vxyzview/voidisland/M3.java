@@ -37,45 +37,92 @@ final class M3 {
 
     final Context c;
     final float d;
-    final boolean dark;
+    /** 0 follow the system · 1 light · 2 dark · 3 AMOLED (pure black). */
+    static final int THEME_SYSTEM = 0, THEME_LIGHT = 1, THEME_DARK = 2, THEME_AMOLED = 3;
+    final int themeMode;
+    final boolean dark, amoled;
+
     final int primary, onPrimary, primaryContainer, onPrimaryContainer, secondaryContainer, onSecondaryContainer,
-        surface, container, containerHigh, onSurface, onSurfaceVariant, outline, outlineVariant, error;
+        tertiaryContainer, onTertiaryContainer, surface, surfaceLow, container, containerHigh, onSurface,
+        onSurfaceVariant, outline, outlineVariant, error, errorContainer, onErrorContainer;
 
     M3(Context c) {
         this.c = c;
         d = c.getResources().getDisplayMetrics().density;
-        dark = (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-        if (dark) {
-            primary = Pal.get(c, "accent1", 200, 0xFFD0BCFF);
-            onPrimary = Pal.get(c, "accent1", 800, 0xFF381E72);
-            primaryContainer = Pal.get(c, "accent1", 700, 0xFF4F378B);
-            onPrimaryContainer = Pal.get(c, "accent1", 100, 0xFFEADDFF);
-            secondaryContainer = Pal.get(c, "accent2", 700, 0xFF4A4458);
-            onSecondaryContainer = Pal.get(c, "accent2", 100, 0xFFE8DEF8);
-            surface = Pal.get(c, "neutral1", 900, 0xFF141218);
-            container = Pal.get(c, "neutral1", 800, 0xFF211F26);
-            containerHigh = Pal.get(c, "neutral1", 700, 0xFF2B2930);
-            onSurface = Pal.get(c, "neutral1", 100, 0xFFE6E0E9);
-            onSurfaceVariant = Pal.get(c, "neutral2", 200, 0xFFCAC4D0);
-            outline = Pal.get(c, "neutral2", 400, 0xFF938F99);
-            outlineVariant = Pal.get(c, "neutral2", 700, 0xFF49454F);
-            error = 0xFFF2B8B5;
-        } else {
-            primary = Pal.get(c, "accent1", 600, 0xFF6750A4);
-            onPrimary = Pal.get(c, "accent1", 0, 0xFFFFFFFF);
-            primaryContainer = Pal.get(c, "accent1", 100, 0xFFEADDFF);
-            onPrimaryContainer = Pal.get(c, "accent1", 900, 0xFF21005D);
-            secondaryContainer = Pal.get(c, "accent2", 100, 0xFFE8DEF8);
-            onSecondaryContainer = Pal.get(c, "accent2", 900, 0xFF1D192B);
-            surface = Pal.get(c, "neutral1", 10, 0xFFFEF7FF);
-            container = Pal.get(c, "neutral1", 50, 0xFFF3EDF7);
-            containerHigh = Pal.get(c, "neutral1", 100, 0xFFECE6F0);
-            onSurface = Pal.get(c, "neutral1", 900, 0xFF1D1B20);
-            onSurfaceVariant = Pal.get(c, "neutral2", 700, 0xFF49454F);
-            outline = Pal.get(c, "neutral2", 500, 0xFF79747E);
-            outlineVariant = Pal.get(c, "neutral2", 200, 0xFFCAC4D0);
-            error = 0xFFB3261E;
+        themeMode = Prefs.i(c, Prefs.K_THEME, THEME_SYSTEM);
+        boolean sysDark = (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        dark = themeMode == THEME_DARK || themeMode == THEME_AMOLED || (themeMode == THEME_SYSTEM && sysDark);
+        amoled = themeMode == THEME_AMOLED;
+
+        // Palette tones resolve per the mode we are *showing*, so pinning Light over a dark system
+        // still reads true light Material You tones (and vice versa) from the system palette.
+        Context pc = c;
+        if (dark != sysDark) {
+            try {
+                Configuration cfg = new Configuration(c.getResources().getConfiguration());
+                cfg.uiMode = (cfg.uiMode & ~Configuration.UI_MODE_NIGHT_MASK)
+                    | (dark ? Configuration.UI_MODE_NIGHT_YES : Configuration.UI_MODE_NIGHT_NO);
+                pc = c.createConfigurationContext(cfg);
+            } catch (Throwable t) { pc = c;   // falls back to the static scheme below
+            }
         }
+
+        int sSurface, sContainer, sContainerHigh, sOutlineVariant;
+        if (dark) {
+            primary = Pal.get(pc, "accent1", 200, 0xFFD0BCFF);
+            onPrimary = Pal.get(pc, "accent1", 800, 0xFF381E72);
+            primaryContainer = Pal.get(pc, "accent1", 700, 0xFF4F378B);
+            onPrimaryContainer = Pal.get(pc, "accent1", 100, 0xFFEADDFF);
+            secondaryContainer = Pal.get(pc, "accent2", 700, 0xFF4A4458);
+            onSecondaryContainer = Pal.get(pc, "accent2", 100, 0xFFE8DEF8);
+            tertiaryContainer = Pal.get(pc, "accent3", 700, 0xFF633B48);
+            onTertiaryContainer = Pal.get(pc, "accent3", 100, 0xFFFFD8E4);
+            sSurface = Pal.get(pc, "neutral1", 900, 0xFF141218);
+            sContainer = Pal.get(pc, "neutral1", 800, 0xFF211F26);
+            sContainerHigh = Pal.get(pc, "neutral1", 700, 0xFF2B2930);
+            onSurface = Pal.get(pc, "neutral1", 100, 0xFFE6E0E9);
+            onSurfaceVariant = Pal.get(pc, "neutral2", 200, 0xFFCAC4D0);
+            outline = Pal.get(pc, "neutral2", 400, 0xFF938F99);
+            sOutlineVariant = Pal.get(pc, "neutral2", 700, 0xFF49454F);
+            error = 0xFFF2B8B5;
+            errorContainer = 0xFF8C1D18;
+            onErrorContainer = 0xFFF2B8B5;
+        } else {
+            primary = Pal.get(pc, "accent1", 600, 0xFF6750A4);
+            onPrimary = Pal.get(pc, "accent1", 0, 0xFFFFFFFF);
+            primaryContainer = Pal.get(pc, "accent1", 100, 0xFFEADDFF);
+            onPrimaryContainer = Pal.get(pc, "accent1", 900, 0xFF21005D);
+            secondaryContainer = Pal.get(pc, "accent2", 100, 0xFFE8DEF8);
+            onSecondaryContainer = Pal.get(pc, "accent2", 900, 0xFF1D192B);
+            tertiaryContainer = Pal.get(pc, "accent3", 100, 0xFFFFD8E4);
+            onTertiaryContainer = Pal.get(pc, "accent3", 900, 0xFF31111D);
+            sSurface = Pal.get(pc, "neutral1", 10, 0xFFFEF7FF);
+            sContainer = Pal.get(pc, "neutral1", 50, 0xFFF3EDF7);
+            sContainerHigh = Pal.get(pc, "neutral1", 100, 0xFFECE6F0);
+            onSurface = Pal.get(pc, "neutral1", 900, 0xFF1D1B20);
+            onSurfaceVariant = Pal.get(pc, "neutral2", 700, 0xFF49454F);
+            outline = Pal.get(pc, "neutral2", 500, 0xFF79747E);
+            sOutlineVariant = Pal.get(pc, "neutral2", 200, 0xFFCAC4D0);
+            error = 0xFFB3261E;
+            errorContainer = 0xFFF9DEDC;
+            onErrorContainer = 0xFF410E0B;
+        }
+        // M3 elevation ladder: pages sit on surface, cards / the nav bar on surface-container,
+        // dialogs on surface-container-high. AMOLED pins the neutrals to true black so OLED pixels
+        // actually stay off; the accent containers keep their wallpaper colour, so the look stays Material You.
+        if (amoled) {
+            sSurface = 0xFF000000;
+            sContainer = 0xFF17181C;
+            sContainerHigh = 0xFF222328;
+            sOutlineVariant = 0xFF2D2F36;
+            surfaceLow = 0xFF0F0F12;
+        } else {
+            surfaceLow = Col.mix(sSurface, sContainer, 0.42f);
+        }
+        surface = sSurface;
+        container = sContainer;
+        containerHigh = sContainerHigh;
+        outlineVariant = sOutlineVariant;
     }
 
     int dp(float v) { return Math.round(v * d); }
@@ -133,12 +180,12 @@ final class M3 {
     /** Filled card with an optional small coloured heading. */
     LinearLayout card(LinearLayout parent, String heading) {
         LinearLayout k = col();
-        k.setBackground(shape(container, 28));
-        k.setPadding(dp(20), dp(18), dp(20), dp(18));
-        parent.addView(k, top(MATCH, WRAP, 12));
+        k.setBackground(shape(surfaceLow, 28));
+        k.setPadding(dp(20), dp(18), dp(20), dp(20));
+        parent.addView(k, top(MATCH, WRAP, 14));
         if (heading != null) {
-            TextView t = text(heading, 14f, true, primary);
-            t.setPadding(0, 0, 0, dp(8));
+            TextView t = text(heading, 15f, true, primary);
+            t.setPadding(0, 0, 0, dp(10));
             k.addView(t);
         }
         return k;
@@ -267,7 +314,7 @@ final class M3 {
                 boolean on = i == sel;
                 t[i].setBackgroundColor(on ? secondaryContainer : 0);
                 t[i].setTextColor(on ? onSecondaryContainer : onSurface);
-                t[i].setText(on ? "\u2713  " + labels[i] : labels[i]);
+                t[i].setText(labels[i]);
             }
         }
     }
@@ -277,7 +324,7 @@ final class M3 {
         LinearLayout box = new LinearLayout(c);
         box.setOrientation(LinearLayout.HORIZONTAL);
         GradientDrawable bg = shape(0, 20);
-        bg.setStroke(dp(1), outline);
+        bg.setStroke(dp(1), outlineVariant);
         box.setBackground(bg);
         box.setClipToOutline(true);
         box.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
@@ -285,7 +332,7 @@ final class M3 {
             final int idx = i;
             if (i > 0) {
                 View div = new View(c);
-                div.setBackgroundColor(outline);
+                div.setBackgroundColor(outlineVariant);
                 box.addView(div, lp(dp(1), MATCH));
             }
             TextView t = text(labels[i], 13.5f, true, onSurface);
@@ -305,15 +352,29 @@ final class M3 {
         return box;
     }
 
-    /** Small outlined chip. */
+    /** Small outlined pill chip. */
     TextView chip(String label, final Runnable r) {
         TextView t = text(label, 13.5f, true, onSurfaceVariant);
         t.setGravity(Gravity.CENTER);
         t.setMinHeight(dp(34));
         t.setPadding(dp(14), 0, dp(14), 0);
-        t.setBackground(ripple(0, 10, outline, onSurface));
+        t.setBackground(ripple(0, 17, outlineVariant, onSurface));
         t.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { r.run(); } });
         return t;
+    }
+
+    /** Tonal button with a leading glyph — M3's icon + label button, used for the Try-it demos. */
+    View richButton(int icon, String label, final Runnable r) {
+        LinearLayout b = row();
+        b.setGravity(Gravity.CENTER);
+        b.setPadding(dp(6), dp(13), dp(6), dp(13));
+        b.setBackground(ripple(secondaryContainer, 16, 0, onSecondaryContainer));
+        b.addView(new IconView(c, icon, onSecondaryContainer), lp(dp(18), dp(18)));
+        TextView t = text(label, 14f, true, onSecondaryContainer);
+        t.setPadding(dp(8), 0, 0, 0);
+        b.addView(t);
+        b.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { r.run(); } });
+        return b;
     }
 
     /** Material 3 navigation bar. */
@@ -342,7 +403,7 @@ final class M3 {
         final Nav nav = new Nav(labels.length);
         LinearLayout bar = new LinearLayout(c);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setBackgroundColor(container);
+        bar.setBackgroundColor(surfaceLow);
         bar.setPadding(dp(8), dp(12), dp(8), dp(16));
         for (int i = 0; i < labels.length; i++) {
             final int idx = i;

@@ -65,7 +65,7 @@ public final class MainActivity extends Activity {
         m = new M3(this);
         getWindow().setBackgroundDrawable(new ColorDrawable(m.surface));
         getWindow().setStatusBarColor(m.surface);
-        getWindow().setNavigationBarColor(m.container);
+        getWindow().setNavigationBarColor(m.surfaceLow);
         int f = View.SYSTEM_UI_FLAG_VISIBLE;
         if (!m.dark) f |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         getWindow().getDecorView().setSystemUiVisibility(f);
@@ -118,8 +118,8 @@ public final class MainActivity extends Activity {
     }
 
     private void header(LinearLayout parent, String title, String sub) {
-        TextView t = m.text(title, 34f, false, m.onSurface);
-        t.setPadding(dp(4), dp(18), 0, 0);
+        TextView t = m.text(title, 32f, false, m.onSurface);
+        t.setPadding(dp(4), dp(20), 0, 0);
         parent.addView(t);
         TextView s = m.text(sub, 14f, false, m.onSurfaceVariant);
         s.setPadding(dp(4), dp(6), 0, dp(4));
@@ -173,18 +173,31 @@ public final class MainActivity extends Activity {
     private void buildHome(LinearLayout p) {
         header(p, "VoidIsland", "Dynamic Island for Android  \u00b7  by vxyzview");
 
-        LinearLayout st = m.col();
-        st.setBackground(m.shape(m.primaryContainer, 28));
-        st.setPadding(dp(24), dp(22), dp(24), dp(22));
-        banner = m.text("", 24f, false, m.onPrimaryContainer);
-        bannerSub = m.text("", 14f, false, Col.alpha(m.onPrimaryContainer, 0.82f));
-        bannerSub.setPadding(0, dp(6), 0, 0);
-        st.addView(banner);
-        st.addView(bannerSub);
-        p.addView(st, m.top(M3.MATCH, M3.WRAP, 12));
         boolean a = a11yOn(), n = notifOn();
+        int state = a && n ? 0 : a ? 1 : 2;   // 0 live · 1 one step to go · 2 setup needed
+        int heroBg = state == 0 ? m.primaryContainer : state == 1 ? m.tertiaryContainer : m.errorContainer;
+        int heroOn = state == 0 ? m.onPrimaryContainer : state == 1 ? m.onTertiaryContainer : m.onErrorContainer;
+        int heroGlyph = state == 0 ? IconView.CLOCK : state == 1 ? IconView.BELL : IconView.ACCESS;
+        LinearLayout st = m.col();
+        st.setBackground(m.shape(heroBg, 28));
+        st.setPadding(dp(22), dp(20), dp(22), dp(22));
+        LinearLayout hr = m.row();
+        FrameLayout isle = new FrameLayout(this);   // a small black pill — the island itself, idle clock on
+        isle.setBackground(m.shape(0xFF000000, 16));
+        isle.addView(new IconView(this, heroGlyph, 0xFFFFFFFF), new FrameLayout.LayoutParams(dp(15), dp(15), Gravity.CENTER));
+        hr.addView(isle, m.lp(dp(50), dp(30)));
+        LinearLayout ht = m.col();
+        ht.setPadding(dp(14), 0, 0, 0);
+        banner = m.text("", 20f, true, heroOn);
+        bannerSub = m.text("", 13.5f, false, Col.alpha(heroOn, 0.86f));
+        bannerSub.setPadding(0, dp(3), 0, 0);
+        ht.addView(banner);
+        ht.addView(bannerSub);
+        hr.addView(ht, m.lpw(1f));
+        st.addView(hr);
+        p.addView(st, m.top(M3.MATCH, M3.WRAP, 12));
         if (a && n) { banner.setText("Island is live"); bannerSub.setText("Everything is on. Try a demo below, or play some music."); }
-        else if (a) { banner.setText("Almost there"); bannerSub.setText("Turn on Notification access for music, calls and payments."); }
+        else if (a) { banner.setText("One step to go"); bannerSub.setText("Turn on Notification access to show music, calls and payments."); }
         else { banner.setText("Setup needed"); bannerSub.setText("Turn on step 1 so the island has somewhere to live."); }
 
         LinearLayout su = m.card(p, "Setup");
@@ -206,22 +219,34 @@ public final class MainActivity extends Activity {
         }));
 
         LinearLayout ty = m.card(p, "Try it");
-        String[][] items = {{"Music", "m"}, {"Call", "c"}, {"Payment", "p"}, {"Charging", "g"}, {"Message", "n"}, {"Download", "d"}, {"Timer", "t"}, {"Toast", "s"}};
+        String[] dNm = {"Music", "Call", "Payment", "Charging", "Message", "Download", "Timer", "Toast"};
+        String[] dCd = {"m", "c", "p", "g", "n", "d", "t", "s"};
+        int[] dIc = {IconView.NOTE, IconView.PHONE, IconView.CARD, IconView.BOLT, IconView.BELL, IconView.DOWNLOAD, IconView.TIMER, IconView.MOON};
         LinearLayout row = null;
-        for (int i = 0; i < items.length; i++) {
+        for (int i = 0; i < dNm.length; i++) {
             if (i % 2 == 0) {
                 row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 ty.addView(row, m.top(M3.MATCH, M3.WRAP, i == 0 ? 0 : 8));
             }
-            final String code = items[i][1];
-            TextView b = m.button(items[i][0], 1, new Runnable() { @Override public void run() { demo(code); } });
+            final String code = dCd[i];
+            View b = m.richButton(dIc[i], dNm[i], new Runnable() { @Override public void run() { demo(code); } });
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, M3.WRAP, 1f);
             if (i % 2 == 1) bp.setMarginStart(dp(8));
             row.addView(b, bp);
         }
         TextView clear = m.button("Clear demos", 3, new Runnable() { @Override public void run() { clearDemos(); } });
         ty.addView(clear, m.top(M3.WRAP, M3.WRAP, 6));
+
+        LinearLayout th = m.card(p, "Theme");
+        th.addView(m.body("Follow the system, or pin it. AMOLED is true black \u2014 pixels stay off on OLED screens. The island keeps its own colours."));
+        th.addView(m.segmented(new String[]{"System", "Light", "Dark", "AMOLED"}, m.themeMode, new M3.OnSel() {
+            @Override public void on(int i) {
+                put(Prefs.K_THEME, i);
+                recreate();
+            }
+        }), m.top(M3.MATCH, dp(40), 12));
+
         TextView tip2 = m.body("Tip: turn off floating / pop-up notifications in system settings so banners only appear on the island.");
         tip2.setPadding(dp(4), dp(16), dp(4), 0);
         p.addView(tip2);

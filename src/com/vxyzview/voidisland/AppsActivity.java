@@ -37,7 +37,7 @@ public final class AppsActivity extends Activity {
         blocked = new HashSet<String>(Prefs.blocked(this));
         getWindow().setBackgroundDrawable(new ColorDrawable(m.surface));
         getWindow().setStatusBarColor(m.surface);
-        getWindow().setNavigationBarColor(m.surface);
+        getWindow().setNavigationBarColor(m.surfaceLow);
         int f = View.SYSTEM_UI_FLAG_VISIBLE;
         if (!m.dark) f |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         getWindow().getDecorView().setSystemUiVisibility(f);
