@@ -1004,29 +1004,60 @@ final class Cards {
         return root;
     }
 
+    /** Black or white, whichever reads better on top of {@code bgc} (the glyph on the filled play button). */
+    private static int readableOn(int bgc) {
+        int lum = (Color.red(bgc) * 299 + Color.green(bgc) * 587 + Color.blue(bgc) * 114) / 1000;
+        return lum > 150 ? 0xFF111111 : 0xFFFFFFFF;
+    }
+
+    /** The colour the music card is themed with: Material You's accent, else the one pulled from the artwork. */
+    private static int musicAccent(IslandEvent e) { return S.m3 ? S.accent : acc(e); }
+
+    /** Soft wash of the accent from the top-left corner, fading to nothing: the card takes on the song's colour. */
+    private static GradientDrawable musicTint(int accent) {
+        return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+            new int[]{Col.alpha(accent, 0.36f), Col.alpha(accent, 0.10f), 0x00000000});
+    }
+
     private static View media(final Context c, final IslandEvent e) {
-        LinearLayout root = col(c);
+        final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT;
+        final LinearLayout root = col(c);
         root.setPadding(px(c), py(c), px(c), py(c));
+
+        // ---- header: ringed cover, app + title + artist, equaliser
         LinearLayout top = row(c);
+        final FrameLayout ring = new FrameLayout(c);          // the cover sits in a ring of the accent
         final RoundImage art = new RoundImage(c);
-        art.set(e.art != null ? e.art : e.icon, dp(c, 14));
-        top.addView(art, lp(dp(c, 62), dp(c, 62)));
+        int rp = dp(c, 3);
+        ring.setPadding(rp, rp, rp, rp);
+        ring.addView(art, new FrameLayout.LayoutParams(dp(c, 76), dp(c, 76)));
+        top.addView(ring, lp(dp(c, 82), dp(c, 82)));
+
         LinearLayout txt = col(c);
+        txt.setGravity(Gravity.CENTER_VERTICAL);
         txt.setPadding(dp(c, 14), 0, dp(c, 10), 0);
-        final TextView title = tv(c, e.title, 17f, WHITE, true);
+        LinearLayout who = row(c);
+        final RoundImage appIc = new RoundImage(c);
+        appIc.set(e.icon, -1f);
+        appIc.setVisibility(e.icon == null ? View.GONE : View.VISIBLE);
+        who.addView(appIc, lp(dp(c, 14), dp(c, 14)));
+        final TextView app = tv(c, e.appName == null || e.appName.length() == 0 ? "Now playing" : e.appName, 11f, WHITE, true);
+        app.setLetterSpacing(0.06f);
+        app.setPadding(e.icon == null ? 0 : dp(c, 6), 0, 0, 0);
+        who.addView(app, lp(WRAP, WRAP));
+        txt.addView(who);
+        final TextView title = tv(c, e.title, 19f, WHITE, true);
+        title.setPadding(0, dp(c, 5), 0, 0);
         final TextView artist = tv(c, e.text, 14.5f, SUB, false);
         artist.setPadding(0, dp(c, 3), 0, 0);
         txt.addView(title);
         txt.addView(artist);
         top.addView(txt, lpw(0, WRAP, 1f));
         final EqView eq = new EqView(c);
-        eq.setColor(acc(e));
-        eq.setPlaying(e.playing);
         top.addView(eq, lp(dp(c, 22), dp(c, 20)));
         root.addView(top);
 
-        LinearLayout sr = row(c);
-        sr.setPadding(0, dp(c, 14), 0, 0);
+        // ---- progress: thick accent bar, times underneath
         final TextView el = tv(c, "0:00", 11.5f, SUB, false);
         final TextView rem = tv(c, "-0:00", 11.5f, SUB, false);
         el.setFontFeatureSettings("tnum");
@@ -1036,35 +1067,66 @@ final class Cards {
         seek.setListener(new SeekView.Listener() {
             @Override public void onSeek(float f) { if (e.durMs > 0) seekTo(e, (long) (f * e.durMs)); }
         });
-        sr.addView(el, lp(dp(c, 38), WRAP));
-        sr.addView(seek, lpw(0, dp(c, 22), 1f));
-        sr.addView(rem, lp(dp(c, 44), WRAP));
-        root.addView(sr);
+        LinearLayout.LayoutParams sp = lp(MATCH, dp(c, 26));
+        sp.topMargin = dp(c, 12);
+        root.addView(seek, sp);
+        LinearLayout times = row(c);
+        times.setPadding(dp(c, 2), 0, dp(c, 2), 0);
+        times.addView(el, lpw(0, WRAP, 1f));
+        times.addView(rem, lp(WRAP, WRAP));
+        root.addView(times);
 
+        // ---- controls: two round ghost buttons around a big filled play button
         LinearLayout ctl = row(c);
         ctl.setGravity(Gravity.CENTER);
+        final int ghost = S.m3 ? S.secCont : BTN;
         final IconView prev = new IconView(c, IconView.PREV, WHITE), next = new IconView(c, IconView.NEXT, WHITE);
         final IconView play = new IconView(c, e.playing ? IconView.PAUSE : IconView.PLAY, WHITE);
-        prev.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
-        next.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
-        play.setPadding(dp(c, 12), dp(c, 8), dp(c, 12), dp(c, 8));
-        final int playFg = S.m3 ? S.onAccent : WHITE;
-        if (S.m3) {   // M3 filled button: primary pill with the on-primary glyph
-            play.set(e.playing ? IconView.PAUSE : IconView.PLAY, playFg);
-            play.setBackground(bg(S.accent, dp(c, 28)));
-        }
+        int gp = dp(c, 15), pp0 = dp(c, 19);
+        prev.setPadding(gp, gp, gp, gp);
+        next.setPadding(gp, gp, gp, gp);
+        play.setPadding(pp0, pp0, pp0, pp0);
+        prev.setBackground(bg(ghost, dp(c, 26)));
+        next.setBackground(bg(ghost, dp(c, 26)));
+        prev.setContentDescription("Previous");
+        next.setContentDescription("Next");
         prev.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 0); } });
         next.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 2); } });
         play.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 1); } });
         press(prev);
         press(next);
         press(play);
-        ctl.addView(prev, lp(dp(c, 64), dp(c, 52)));
-        LinearLayout.LayoutParams pp = lp(dp(c, 76), dp(c, 56));
-        pp.setMargins(dp(c, 10), 0, dp(c, 10), 0);
-        ctl.addView(play, pp);
-        ctl.addView(next, lp(dp(c, 64), dp(c, 52)));
-        root.addView(ctl);
+        LinearLayout.LayoutParams gl = lp(dp(c, 52), dp(c, 52));
+        gl.setMargins(dp(c, 10), 0, dp(c, 10), 0);
+        LinearLayout.LayoutParams gr = lp(dp(c, 52), dp(c, 52));
+        gr.setMargins(dp(c, 10), 0, dp(c, 10), 0);
+        LinearLayout.LayoutParams pl = lp(dp(c, 68), dp(c, 68));
+        pl.setMargins(dp(c, 10), 0, dp(c, 10), 0);
+        ctl.addView(prev, gl);
+        ctl.addView(play, pl);
+        ctl.addView(next, gr);
+        LinearLayout.LayoutParams cp = lp(MATCH, WRAP);
+        cp.topMargin = dp(c, 6);
+        root.addView(ctl, cp);
+
+        // everything that follows the song's colour or the play state, applied now and on every update
+        final Runnable look = new Runnable() {
+            @Override public void run() {
+                int a = musicAccent(e);
+                root.setBackground(musicTint(a));
+                ring.setBackground(bg(Col.alpha(a, e.playing ? 0.65f : 0.30f), dp(c, 24)));
+                art.setAlpha(e.playing ? 1f : 0.72f);          // a paused song dims a little
+                app.setTextColor(a);
+                eq.setColor(a);
+                eq.setPlaying(e.playing);
+                seek.setColor(a);
+                play.set(e.playing ? IconView.PAUSE : IconView.PLAY, S.m3 ? S.onAccent : readableOn(a));
+                play.setBackground(bg(a, dp(c, 34)));
+                play.setContentDescription(e.playing ? "Pause" : "Play");
+            }
+        };
+        art.set(e.art != null ? e.art : e.icon, dp(c, 21));
+        look.run();
 
         e.tE = new Runnable() {
             @Override public void run() {
@@ -1082,10 +1144,8 @@ final class Cards {
             @Override public boolean update() {
                 title.setText(e.title);
                 artist.setText(e.text);
-                art.set(e.art != null ? e.art : e.icon, dp(c, 14));
-                eq.setColor(acc(e));
-                eq.setPlaying(e.playing);
-                play.set(e.playing ? IconView.PAUSE : IconView.PLAY, playFg);
+                art.set(e.art != null ? e.art : e.icon, dp(c, 21));
+                look.run();
                 boolean can = e.durMs > 0;
                 seek.setInteractive(can && (e.mc == null || (e.actions & PlaybackState.ACTION_SEEK_TO) != 0));
                 el.setVisibility(can ? View.VISIBLE : View.INVISIBLE);
