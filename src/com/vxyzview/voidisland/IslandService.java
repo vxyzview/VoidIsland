@@ -80,7 +80,10 @@ public final class IslandService extends AccessibilityService {
                     if (!fg.isEmpty()) { fg = ""; ctl.clearForeground(); }
                     return;
                 }
-                if (pk.equals(ime) || pk.equals("android") || cls.startsWith("android.")) return;
+                if (pk.equals(ime) || pk.equals("android")) return;
+                // Dialogs and popups report "android.*" classes; a launcher's window may too, and must still count as
+                // "back on the home screen" (otherwise the last app stays the foreground and the idle clock stays hidden).
+                if (cls.startsWith("android.") && !ctl.isHome(pk)) return;
                 if (Bus.shadeOpen) shade(false); // another app's window changed, so the panel must be closed
                 if (!pk.equals(fg)) { fg = pk; ctl.setForeground(pk); }
                 break;

@@ -49,7 +49,7 @@ final class IslandController implements IslandView.Host {
     private boolean landscape;
     private float cutCx = Float.NaN, cutCy = Float.NaN;
 
-    private String homePkg = "";   // the launcher: the one "app" the island stays visible in
+    private final java.util.HashSet<String> homes = new java.util.HashSet<String>();   // the launcher(s): the one "app" the island stays visible in
     private boolean appOpen;       // true while a real app (not launcher, not keyboard) is in the foreground
 
     /** Synthetic event shown while nothing else is on the island (icon + time). */
@@ -128,18 +128,39 @@ final class IslandController implements IslandView.Host {
         layerApp = wantApp(style);
         readHome();
         attachWindow();
+        // Nothing else draws the island at start-up: without this the idle clock stayed invisible until the first
+        // event (a notification, an app switch, a setting changed in the app) happened to call evaluate().
+        evaluate();
     }
 
-    /** Which package owns the home screen (launcher). Everything else being foreground counts as "an app is open". */
+    /**
+     * Which package(s) own the home screen. Everything else being foreground counts as "an app is open".
+     * The default launcher when there is one; with no default chosen the system answers with its chooser ("android"),
+     * so then every installed launcher counts instead. (Needs the HOME intent in the manifest's {@code <queries>}.)
+     */
     private void readHome() {
+        homes.clear();
         try {
-            ResolveInfo r = svc.getPackageManager().resolveActivity(
-                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY);
-            homePkg = r == null || r.activityInfo == null ? "" : r.activityInfo.packageName;
+            PackageManager pm = svc.getPackageManager();
+            Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
+            ResolveInfo r = pm.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY);
+            String def = r == null || r.activityInfo == null ? "" : r.activityInfo.packageName;
+            if (def.length() > 0 && !def.equals("android")) {
+                homes.add(def);
+            } else {
+                List<ResolveInfo> all = pm.queryIntentActivities(home, 0);
+                if (all != null) for (ResolveInfo i : all) {
+                    String p = i.activityInfo == null ? "" : i.activityInfo.packageName;
+                    if (p.length() > 0 && !p.equals("android") && !p.equals("com.android.settings")) homes.add(p);   // Settings' FallbackHome is not a launcher
+                }
+            }
         } catch (Throwable t) {
-            homePkg = ""; // detection failed: never treat an unknown window as "an app is open"
+            homes.clear(); // detection failed: never treat an unknown window as "an app is open"
         }
     }
+
+    /** True when {@code pkg} is the home screen (launcher). */
+    boolean isHome(String pkg) { return pkg != null && homes.contains(pkg); }
 
     private boolean wantApp(Style s) {
         if (s.qs != Style.QS_UNDER) return false;
@@ -418,7 +439,8 @@ final class IslandController implements IslandView.Host {
     void setForeground(String pkg) {
         if (pkg == null || pkg.equals(fg)) return;
         fg = pkg;
-        boolean nowApp = homePkg.length() > 0 && fg.length() > 0 && !fg.equals(homePkg);
+        readHome();   // cheap, and follows a launcher the user switched to since the service started
+        boolean nowApp = !homes.isEmpty() && fg.length() > 0 && !homes.contains(fg);
         if (nowApp != appOpen) appOpen = nowApp;
         evaluate();
     }

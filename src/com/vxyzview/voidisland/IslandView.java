@@ -167,6 +167,12 @@ final class IslandView extends ViewGroup {
     void present(final IslandEvent ev, final int m, boolean fade) {
         pendingRun = null;
         pendingSwap = null;
+        // A content swap fades the old content out (swap -> 0), installs the new one, then fades back in (swap -> 1).
+        // If this call interrupts a swap that is still fading out, its "install + fade back in" step was just dropped above,
+        // and swap would stay at 0 for good: the new content gets installed fully transparent (an empty black island, e.g.
+        // "Music" / "Stopwatch" demos that post and expand in the same tick). Always bring it back up; a swap that is needed
+        // for THIS call drives it down again below.
+        if (swap.target != 1f) { swap.tune(520f, 1f); swap.to(1f); start(); }
         final int tw, th, exH;
         final View ex;
         if (m == EXPANDED) {
