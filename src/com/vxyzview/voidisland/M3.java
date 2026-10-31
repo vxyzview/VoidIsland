@@ -40,7 +40,7 @@ final class M3 {
     /** 0 follow the system · 1 light · 2 dark · 3 AMOLED (pure black). */
     static final int THEME_SYSTEM = 0, THEME_LIGHT = 1, THEME_DARK = 2, THEME_AMOLED = 3;
     final int themeMode;
-    final boolean dark, amoled;
+    final boolean dark, amoled, wide;
 
     final int primary, onPrimary, primaryContainer, onPrimaryContainer, secondaryContainer, onSecondaryContainer,
         tertiaryContainer, onTertiaryContainer, surface, surfaceLow, container, containerHigh, onSurface,
@@ -49,6 +49,8 @@ final class M3 {
     M3(Context c) {
         this.c = c;
         d = c.getResources().getDisplayMetrics().density;
+        // M3 window size classes: >= 600dp width is an expanded window (tablets, big splits, phones in landscape).
+        wide = c.getResources().getConfiguration().screenWidthDp >= 600;
         themeMode = Prefs.i(c, Prefs.K_THEME, THEME_SYSTEM);
         boolean sysDark = (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
         dark = themeMode == THEME_DARK || themeMode == THEME_AMOLED || (themeMode == THEME_SYSTEM && sysDark);
@@ -175,6 +177,23 @@ final class M3 {
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(w, h);
         p.topMargin = dp(topDp);
         return p;
+    }
+
+    /**
+     * Host that keeps its single child no wider than maxDp and centres it — settings content
+     * never stretches across a tablet or a split-screen window, cards stay readable.
+     */
+    View maxSized(final View child, final float maxDp) {
+        FrameLayout f = new FrameLayout(c) {
+            @Override protected void onMeasure(int wSpec, int hSpec) {
+                int cap = Math.min(MeasureSpec.getSize(wSpec), dp(maxDp));
+                child.measure(MeasureSpec.makeMeasureSpec(cap, MeasureSpec.EXACTLY), hSpec);
+                setMeasuredDimension(MeasureSpec.getSize(wSpec),
+                    View.resolveSizeAndState(Math.max(getMinimumHeight(), child.getMeasuredHeight()), hSpec, 0));
+            }
+        };
+        f.addView(child, new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.CENTER_HORIZONTAL));
+        return f;
     }
 
     /** Filled card with an optional small coloured heading. */
@@ -414,6 +433,7 @@ final class M3 {
             p.addView(ic, new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
             item.addView(p, lp(dp(64), dp(32)));
             TextView l = text(labels[i], 12f, true, onSurfaceVariant);
+            l.setSingleLine();
             l.setPadding(0, dp(4), 0, 0);
             item.addView(l);
             item.setOnClickListener(new View.OnClickListener() {
@@ -429,6 +449,43 @@ final class M3 {
         }
         nav.select(sel);
         return bar;
+    }
+
+    /** Material 3 navigation rail for expanded-width windows (tablets, landscape phones): same items, one column. */
+    LinearLayout navRail(String[] labels, int[] icons, int sel, final OnSel cb) {
+        final Nav nav = new Nav(labels.length);
+        LinearLayout rail = new LinearLayout(c);
+        rail.setOrientation(LinearLayout.VERTICAL);
+        rail.setGravity(Gravity.CENTER_HORIZONTAL);
+        rail.setBackgroundColor(surfaceLow);
+        rail.setPadding(dp(8), dp(16), dp(8), dp(24));
+        for (int i = 0; i < labels.length; i++) {
+            final int idx = i;
+            LinearLayout item = col();
+            item.setGravity(Gravity.CENTER_HORIZONTAL);
+            item.setPadding(0, dp(8), 0, dp(8));
+            item.setClickable(true);
+            FrameLayout p = new FrameLayout(c);
+            IconView ic = new IconView(c, icons[i], onSurfaceVariant);
+            p.addView(ic, new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
+            item.addView(p, lp(dp(56), dp(32)));
+            TextView l = text(labels[i], 12f, true, onSurfaceVariant);
+            l.setSingleLine();
+            l.setPadding(0, dp(4), 0, 0);
+            item.addView(l);
+            item.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    nav.select(idx);
+                    cb.on(idx);
+                }
+            });
+            nav.pill[i] = p;
+            nav.lab[i] = l;
+            nav.ico[i] = ic;
+            rail.addView(item);
+        }
+        nav.select(sel);
+        return rail;
     }
 
     // ------------------------------------------------------------------ colours
@@ -536,7 +593,7 @@ final class M3 {
         dlg.setContentView(box);
         if (dlg.getWindow() != null) {
             dlg.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            dlg.getWindow().setLayout(Math.round(c.getResources().getDisplayMetrics().widthPixels * 0.9f), WRAP);
+            dlg.getWindow().setLayout(Math.min(Math.round(c.getResources().getDisplayMetrics().widthPixels * 0.9f), dp(360)), WRAP);
         }
         dlg.show();
     }

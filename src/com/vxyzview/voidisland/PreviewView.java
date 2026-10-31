@@ -2,10 +2,8 @@ package com.vxyzview.voidisland;
 
 import android.animation.ValueAnimator;
 import android.graphics.Canvas;
-import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.graphics.Typeface;
 import android.view.View;
 import android.view.animation.OvershootInterpolator;
@@ -62,11 +60,11 @@ final class PreviewView extends View {
         c.save();
         c.clipRect(0, 0, W, H);
         // phone body with a faint wallpaper glow
+        // phone body, one flat tone (a gradient would fight the flat tonal surfaces around it)
         p.setStyle(Paint.Style.FILL);
-        p.setShader(new LinearGradient(0, top0, 0, H, Col.alpha(m.primary, 0.42f), 0xFF0B0B0F, Shader.TileMode.CLAMP));
+        p.setColor(0xFF15171D);
         r.set(left, top0, left + mockW, H + 80f * d);
         c.drawRoundRect(r, 30f * u, 30f * u, p);
-        p.setShader(null);
         // status bar + camera hole
         p.setColor(0xE6FFFFFF);
         p.setTextSize(13f * u);

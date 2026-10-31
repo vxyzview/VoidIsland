@@ -55,8 +55,8 @@ public final class AppsActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(m.dp(20), m.dp(20), m.dp(12), 0);
-        TextView t = m.text("Apps", 34f, false, m.onSurface);
+        root.setPadding(m.dp(16), m.dp(16), m.dp(16), 0);
+        TextView t = m.text("Apps", 32f, false, m.onSurface);
         root.addView(t);
         TextView s = m.text("Switch off apps you never want on the island.", 14f, false, m.onSurfaceVariant);
         s.setPadding(0, m.dp(6), 0, m.dp(10));
@@ -64,7 +64,7 @@ public final class AppsActivity extends Activity {
         ListView lv = new ListView(this);
         lv.setDivider(null);
         lv.setAdapter(new Adapter());
-        root.addView(lv, new LinearLayout.LayoutParams(M3.MATCH, 0, 1f));
+        root.addView(m.maxSized(lv, 520), new LinearLayout.LayoutParams(M3.MATCH, 0, 1f));
         setContentView(root);
     }
 
@@ -79,7 +79,10 @@ public final class AppsActivity extends Activity {
             LinearLayout row = new LinearLayout(AppsActivity.this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setMinimumHeight(m.dp(56));
             row.setPadding(0, m.dp(8), m.dp(8), m.dp(8));
+            row.setBackground(m.ripple(0, 12, 0, m.onSurface));
+            row.setClickable(true);
             ImageView icon = new ImageView(AppsActivity.this);
             icon.setImageDrawable(r.loadIcon(pm));
             row.addView(icon, new LinearLayout.LayoutParams(m.dp(40), m.dp(40)));

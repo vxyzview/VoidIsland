@@ -9,9 +9,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.LinearGradient;
 import android.graphics.Paint;
-import android.graphics.Shader;
 import android.graphics.drawable.ColorDrawable;
 import android.media.session.PlaybackState;
 import android.net.Uri;
@@ -41,7 +39,6 @@ public final class MainActivity extends Activity {
     private final Handler h = new Handler(Looper.getMainLooper());
     private M3 m;
     private ScrollView scroll;
-    private LinearLayout navBar;
     private int page;
     private PreviewView preview;
     private boolean previewExpanded;
@@ -71,14 +68,22 @@ public final class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(f);
 
         LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
         scroll = new ScrollView(this);
         scroll.setVerticalScrollBarEnabled(false);
-        root.addView(scroll, new LinearLayout.LayoutParams(M3.MATCH, 0, 1f));
-        navBar = m.navBar(new String[]{"Home", "Style", "Behavior"}, new int[]{IconView.HOME, IconView.PALETTE, IconView.TUNE}, 0, new M3.OnSel() {
+        M3.OnSel pickNav = new M3.OnSel() {
             @Override public void on(int i) { showPage(i, false); }
-        });
-        root.addView(navBar, new LinearLayout.LayoutParams(M3.MATCH, M3.WRAP));
+        };
+        if (m.wide) {   // expanded window (tablet, split screen, phone in landscape): a Material rail beats a stretched bar
+            root.setOrientation(LinearLayout.HORIZONTAL);
+            root.addView(m.navRail(new String[]{"Home", "Style", "Behavior"}, new int[]{IconView.HOME, IconView.PALETTE, IconView.TUNE}, 0, pickNav),
+                new LinearLayout.LayoutParams(dp(88), M3.MATCH));
+            root.addView(scroll, new LinearLayout.LayoutParams(0, M3.MATCH, 1f));
+        } else {
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.addView(scroll, new LinearLayout.LayoutParams(M3.MATCH, 0, 1f));
+            root.addView(m.navBar(new String[]{"Home", "Style", "Behavior"},
+                new int[]{IconView.HOME, IconView.PALETTE, IconView.TUNE}, 0, pickNav), new LinearLayout.LayoutParams(M3.MATCH, M3.WRAP));
+        }
         setContentView(root);
         lastOverlay = overlayOn();
         showPage(0, false);
@@ -108,7 +113,7 @@ public final class MainActivity extends Activity {
         scroll.removeAllViews();
         LinearLayout c = m.col();
         c.setPadding(dp(16), dp(8), dp(16), dp(28));
-        scroll.addView(c, new FrameLayout.LayoutParams(M3.MATCH, M3.WRAP));
+        scroll.addView(m.maxSized(c, 480), new FrameLayout.LayoutParams(M3.MATCH, M3.WRAP));
         if (p == 0) buildHome(c);
         else if (p == 1) buildStyle(c);
         else buildBehavior(c);
@@ -520,9 +525,8 @@ public final class MainActivity extends Activity {
         Bitmap b = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(b);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setShader(new LinearGradient(0, 0, 256, 256, 0xFF7C4DFF, 0xFF00E5FF, Shader.TileMode.CLAMP));
+        p.setColor(0xFF41307A);   // flat deep violet — the island's own colours never use gradients
         c.drawRect(0, 0, 256, 256, p);
-        p.setShader(null);
         p.setColor(0xCC000000);
         c.drawCircle(128, 128, 84, p);
         p.setColor(0xFFB388FF);
