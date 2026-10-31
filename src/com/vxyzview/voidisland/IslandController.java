@@ -100,7 +100,13 @@ final class IslandController implements IslandView.Host {
                 if (e.paused || e.snap != null) return 1500L;   // frozen, or only changes when its app posts again
                 return Parse.nextSecondMs(e.when, e.countDown, now) + 8L;
             case IslandEvent.CALL: if (e.chrono && !e.incoming) return Parse.nextSecondMs(e.when, false, now) + 8L; return 1000L;
-            default: return 400L;   // music: lyric line / progress bar
+            case IslandEvent.MEDIA:
+                // Nothing moves while paused (play / seek arrive as new events), and on the pill the lyric row paces its own
+                // line changes and slide: this tick only re-anchors it, so once a second is plenty. The open card has a
+                // progress bar and a seconds readout, which keep the faster beat while playing.
+                if (!e.playing) return 2000L;
+                return shownMode == IslandView.EXPANDED ? 400L : 1000L;
+            default: return 400L;
         }
     }
 
@@ -503,6 +509,7 @@ final class IslandController implements IslandView.Host {
                 want.dirty = false;
                 IslandEvent.Updater u = mode == IslandView.COMPACT ? want.uC : want.uE;
                 if (u == null || !u.update()) { view.present(want, mode); startTick(60); }   // rebuilt: pick the new ticker up
+                else if (want.type == IslandEvent.MEDIA) startTick(60);   // play / pause / seek: leave the slow paused beat right away
             }
             return;
         }

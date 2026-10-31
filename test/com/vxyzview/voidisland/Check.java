@@ -232,6 +232,55 @@ public class Check {
         ok("27\u00b0".equals(Wx.temp(26.6, false)) && "80\u00b0".equals(Wx.temp(26.6, true)) && "0\u00b0".equals(Wx.temp(-0.2, false)) && "-3\u00b0".equals(Wx.temp(-3.2, false)), "weather: temperature text, no minus zero");
         ok(Wx.useF(0, "US") && !Wx.useF(0, "ID") && Wx.useF(2, "ID") && !Wx.useF(1, "US"), "weather: unit follows the country unless chosen");
 
+        // --- Lru: oldest entry leaves first, recently used ones stay (no mass wipe at the cap)
+        java.util.LinkedHashMap<String, Integer> lru = Lru.map(3);
+        lru.put("a", 1); lru.put("b", 2); lru.put("c", 3);
+        lru.get("a");                      // a is now the freshest
+        lru.put("d", 4);                   // b is the oldest -> goes
+        ok(lru.size() == 3 && !lru.containsKey("b") && lru.containsKey("a") && lru.containsKey("c") && lru.containsKey("d"), "lru: evicts only the least recently used entry");
+        for (int i = 0; i < 50; i++) lru.put("k" + i, i);
+        ok(lru.size() == 3, "lru: never grows past its cap");
+
+        // --- Rules: a busy phone no longer forgets a chat that just buzzed
+        Rules.resetChats();
+        long t0 = 1000000L;
+        ok(!Rules.chatRepeat("hot|chat", t0, 60000L), "chats: first banner of a chat shows");
+        boolean hotKept = true;
+        for (int i = 0; i < 300; i++) {            // 300 other chats while this one keeps being active (old code wiped everything at 200)
+            Rules.chatRepeat("other|" + i, t0 + 1, 60000L);
+            if (i % 50 == 49 && !Rules.chatRepeat("hot|chat", t0 + 2, 60000L)) hotKept = false;
+        }
+        ok(hotKept && Rules.chatRepeat("hot|chat", t0 + 2, 60000L), "chats: an active chat is still remembered after 300 other chats");
+        for (int i = 0; i < 400; i++) Rules.chatRepeat("flood|" + i, t0 + 3, 60000L);
+        ok(!Rules.chatRepeat("hot|chat", t0 + 4, 60000L), "chats: memory stays bounded, the oldest chat is eventually forgotten");
+        Rules.resetChats();
+
+        // --- Http: size cap, status codes and failures all come back as null; a good answer comes back whole
+        try {
+            com.sun.net.httpserver.HttpServer srv = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+            srv.createContext("/ok", new com.sun.net.httpserver.HttpHandler() {
+                @Override public void handle(com.sun.net.httpserver.HttpExchange x) throws java.io.IOException {
+                    byte[] b = "{\"a\":1}".getBytes("UTF-8"); x.sendResponseHeaders(200, b.length); x.getResponseBody().write(b); x.close(); }
+            });
+            srv.createContext("/big", new com.sun.net.httpserver.HttpHandler() {
+                @Override public void handle(com.sun.net.httpserver.HttpExchange x) throws java.io.IOException {
+                    byte[] b = new byte[50000]; java.util.Arrays.fill(b, (byte) 'x'); x.sendResponseHeaders(200, b.length); x.getResponseBody().write(b); x.close(); }
+            });
+            srv.createContext("/gone", new com.sun.net.httpserver.HttpHandler() {
+                @Override public void handle(com.sun.net.httpserver.HttpExchange x) throws java.io.IOException { x.sendResponseHeaders(404, -1); x.close(); }
+            });
+            srv.start();
+            String base = "http://127.0.0.1:" + srv.getAddress().getPort();
+            ok("{\"a\":1}".equals(Http.get(base + "/ok", 2000, 2000, 1000)), "http: a small 200 answer comes back whole");
+            ok(Http.get(base + "/big", 2000, 2000, 10000) == null, "http: an answer over the size cap is dropped");
+            ok(Http.get(base + "/big", 2000, 2000, 100000) != null, "http: the same answer is fine under a bigger cap");
+            ok(Http.get(base + "/gone", 2000, 2000, 1000) == null, "http: a 404 is null");
+            srv.stop(0);
+            ok(Http.get(base + "/ok", 500, 500, 1000) == null, "http: a dead server is null, not an exception");
+        } catch (Throwable ex) {
+            ok(false, "http: local server test could not run: " + ex);
+        }
+
         System.out.println(fails == 0 ? "ALL CHECKS PASSED" : (fails + " FAILED"));
         System.exit(fails == 0 ? 0 : 1);
     }

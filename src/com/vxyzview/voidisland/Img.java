@@ -14,6 +14,12 @@ import android.util.LruCache;
 final class Img {
     private Img() {}
 
+    /** One daemon worker for slow bitmap work (artwork scaling, accent colour) so the main thread never does it. */
+    static final java.util.concurrent.ExecutorService BG = java.util.concurrent.Executors.newSingleThreadExecutor(
+        new java.util.concurrent.ThreadFactory() {
+            @Override public Thread newThread(Runnable r) { Thread t = new Thread(r, "vi-bitmap"); t.setDaemon(true); return t; }
+        });
+
     private static final LruCache<String, Bitmap> ICONS = new LruCache<String, Bitmap>(48);
     private static final LruCache<String, String> LABELS = new LruCache<String, String>(96);
 

@@ -114,7 +114,13 @@ public final class ReplyActivity extends Activity {
             Bundle res = new Bundle();
             res.putCharSequence(ri.getResultKey(), t.toString().trim());
             RemoteInput.addResultsToIntent(new RemoteInput[]{ri}, fill, res);
-            pi.send(this, 0, fill);
+            if (android.os.Build.VERSION.SDK_INT >= 34) {   // Android 14+: say the reply intent may start an activity
+                android.app.ActivityOptions o = android.app.ActivityOptions.makeBasic();
+                o.setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
+                pi.send(this, 0, fill, null, null, null, o.toBundle());
+            } else {
+                pi.send(this, 0, fill);
+            }
             Toast.makeText(this, "Sent", Toast.LENGTH_SHORT).show();
         } catch (Throwable x) {
             Toast.makeText(this, "Couldn't send the reply", Toast.LENGTH_SHORT).show();

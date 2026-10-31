@@ -52,6 +52,9 @@ final class Prefs {
         return s != null && s.contains(value);
     }
 
+    /** The live string set (null when unset). Read only: never modify it. Use {@link #set} when you need your own copy. */
+    static Set<String> live(Context c, String key) { return sp(c).getStringSet(key, null); }
+
     static boolean b(Context c, String k, boolean def) { return sp(c).getBoolean(k, def); }
 
     static int i(Context c, String k, int def) { return sp(c).getInt(k, def); }

@@ -25,8 +25,8 @@ import java.util.HashMap;
 final class Classifier {
     private Classifier() {}
 
-    private static final HashMap<String, Integer> SEEN = new HashMap<String, Integer>();
-    private static final HashMap<String, Long> SEEN_AT = new HashMap<String, Long>();
+    /** Last banner per notification: {signature hash, time}. Oldest entries fall out one by one (never a mass wipe that re-shows duplicates). */
+    private static final HashMap<String, long[]> SEEN = Lru.map(300);
 
     private static boolean empty(CharSequence s) { return s == null || s.toString().trim().length() == 0; }
 
@@ -86,7 +86,7 @@ final class Classifier {
             Calendar cal = Calendar.getInstance();
             int now = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE);
             if (Rules.inQuiet(now, Prefs.i(c, Prefs.K_QFROM, 22 * 60), Prefs.i(c, Prefs.K_QTO, 7 * 60))
-                && Rules.quietCovers(pkg, Prefs.set(c, Prefs.K_QAPPS))) return true;
+                && Rules.quietCovers(pkg, Prefs.live(c, Prefs.K_QAPPS))) return true;
         }
         CharSequence conv = x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE);
         boolean group = x.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION) || !empty(conv);
@@ -169,11 +169,47 @@ final class Classifier {
         return out;
     }
 
+    /** A Chronometer found in a clock app's layout, remembered so a once-a-second repost does not inflate the layout again. */
+    private static final class Probed {
+        String sig;
+        long at;
+        Probe probe;
+    }
+
+    private static final HashMap<String, Probed> PROBES = Lru.map(24);
+    private static final long PROBE_TTL_MS = 10000L;   // never trust a cached reading for longer than this
+
+    /**
+     * {@link #probe} with a memory. The Chronometer base only changes when the app restarts / pauses / resumes, which also changes
+     * its buttons (Pause <-> Resume) or its post time, so the same signature means the same answer. Text-only layouts (no
+     * Chronometer) change with every repost and are never cached.
+     */
+    private static Probe probeCached(Context c, Notification n, String nkey) {
+        StringBuilder sg = new StringBuilder().append(n.when);
+        if (n.actions != null) for (Notification.Action a : n.actions) if (a != null) sg.append('|').append(a.title);
+        String sig = sg.toString();
+        long now = SystemClock.elapsedRealtime();
+        Probed p = nkey == null ? null : PROBES.get(nkey);
+        if (p != null && p.sig.equals(sig) && now - p.at < PROBE_TTL_MS) return p.probe;
+        long t0 = Perf.begin();
+        Probe fresh = probe(c, n);
+        Perf.end(Perf.PROBE, t0);
+        if (nkey != null && fresh.k != null) {
+            Probed q = new Probed();
+            q.sig = sig;
+            q.at = now;
+            q.probe = fresh;
+            PROBES.put(nkey, q);
+        } else if (nkey != null) {
+            PROBES.remove(nkey);
+        }
+        return fresh;
+    }
+
     /** Count-down lengths seen so far, by notification: {full length, last remaining}. */
-    private static final HashMap<String, long[]> TOTAL = new HashMap<String, long[]>();
+    private static final HashMap<String, long[]> TOTAL = Lru.map(60);   // LRU: a running count-down never loses its full length to a wipe
 
     private static long total(String nkey, long left, long now) {
-        if (TOTAL.size() > 60) TOTAL.clear();
         long[] st = TOTAL.get(nkey);
         if (st == null || left > st[1] + 1500L) st = new long[]{Parse.totalMs(0L, left), left};   // first sight, or restarted / extended
         st[0] = Parse.totalMs(st[0], left);
@@ -186,17 +222,15 @@ final class Classifier {
     static void forget(String nkey) {
         TOTAL.remove(nkey);
         SEEN.remove(nkey);
-        SEEN_AT.remove(nkey);
+        PROBES.remove(nkey);
     }
 
     private static boolean duplicate(String nkey, String sig) {
         long now = System.currentTimeMillis();
-        Integer h = SEEN.get(nkey);
-        Long at = SEEN_AT.get(nkey);
-        if (h != null && at != null && h == sig.hashCode() && now - at < 30000) return true;
-        if (SEEN.size() > 300) { SEEN.clear(); SEEN_AT.clear(); }
-        SEEN.put(nkey, sig.hashCode());
-        SEEN_AT.put(nkey, now);
+        long[] last = SEEN.get(nkey);
+        int h = sig.hashCode();
+        if (last != null && last[0] == h && now - last[1] < 30000) return true;
+        SEEN.put(nkey, new long[]{h, now});
         return false;
     }
 
@@ -271,7 +305,7 @@ final class Classifier {
         }
         boolean actPaused = probeActs != null && Parse.pausedByActions(probeActs.actLabels);
         if (!chrono && clockish) {
-            Probe pr = probe(c, n);   // the clock app's own stopwatch / timer layout
+            Probe pr = probeCached(c, n, nkey);   // the clock app's own stopwatch / timer layout
             if (pr.k != null) {
                 timerLike = true; tWhen = pr.k.when; tCount = pr.k.countDown;
                 tPaused = !pr.k.running || actPaused;

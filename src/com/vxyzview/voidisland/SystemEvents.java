@@ -63,7 +63,8 @@ final class SystemEvents {
         f.addAction(Intent.ACTION_SCREEN_ON);
         f.addAction(Intent.ACTION_SCREEN_OFF);
         f.addAction(Intent.ACTION_USER_PRESENT);
-        c.registerReceiver(rx, f);
+        if (android.os.Build.VERSION.SDK_INT >= 33) c.registerReceiver(rx, f, Context.RECEIVER_NOT_EXPORTED);   // system broadcasts only
+        else c.registerReceiver(rx, f);
         try {
             cm = (CameraManager) c.getSystemService(Context.CAMERA_SERVICE);
             torchCb = new CameraManager.TorchCallback() {

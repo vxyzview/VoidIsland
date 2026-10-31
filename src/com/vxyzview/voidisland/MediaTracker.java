@@ -20,17 +20,19 @@ import java.util.List;
 
 /** Follows every active media session (Spotify, YouTube Music, ...) and mirrors the best one to the island. */
 final class MediaTracker {
-    private static final HashMap<String, Bitmap> ART = new HashMap<String, Bitmap>();
+    private static final android.util.LruCache<String, Bitmap> ART = new android.util.LruCache<String, Bitmap>(6);
     private static MediaTracker inst;
 
-    private static final HashMap<String, String> ART_SIG = new HashMap<String, String>();
+    private static final HashMap<String, String> ART_SIG = Lru.map(12);
 
     /** True when artwork for this exact track was already taken from {@code pkg}'s notification (players repost it every second or so). */
     static boolean artFresh(String pkg, String sig) {
+        if (pkg == null || sig == null) return false;
         return sig.equals(ART_SIG.get(pkg)) && ART.get(pkg) != null;
     }
 
     static void art(String pkg, String sig, Bitmap b) {
+        if (pkg == null || b == null) return;   // LruCache refuses nulls
         ART.put(pkg, b);
         ART_SIG.put(pkg, sig);
         if (inst != null) inst.soon();
@@ -49,6 +51,7 @@ final class MediaTracker {
     private String artKey = "";
     private Bitmap artBmp;
     private int accent = Color.WHITE;
+    private String pendingKey = "";   // artwork of this song is being prepared on the worker thread
 
     private final Runnable refresh = new Runnable() { @Override public void run() { refreshNow(); } };
     private boolean expiring, gaveUp;
@@ -74,7 +77,8 @@ final class MediaTracker {
     }
 
     void stop() {
-        if (inst == this) inst = null;
+        if (inst == this) { inst = null; ART.evictAll(); ART_SIG.clear(); }   // nothing can show this artwork any more
+        pendingKey = "";
         try { if (msm != null) msm.removeOnActiveSessionsChangedListener(sessions); } catch (Throwable t) { /* ignore */ }
         for (Holder x : holders) { try { x.mc.unregisterCallback(x.cb); } catch (Throwable t) { /* ignore */ } }
         holders.clear();
@@ -173,11 +177,48 @@ final class MediaTracker {
             if (art == null) art = md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON);
         }
         if (art == null) art = ART.get(pkg);
-        String key = pkg + "|" + e.title + "|" + e.text + "|" + (art == null ? 0 : System.identityHashCode(art));
+        final String key = pkg + "|" + e.title + "|" + e.text + "|" + (art == null ? 0 : System.identityHashCode(art));
         if (!key.equals(artKey)) {
-            artKey = key;
-            artBmp = Img.scaled(art, 256);
-            accent = Img.dominant(artBmp, Cards.PURPLE);
+            if (art == null) {                       // nothing to scale: settle at once
+                artKey = key;
+                artBmp = null;
+                accent = Img.dominant(null, Cards.PURPLE);
+            } else if (!key.equals(pendingKey)) {
+                // Scaling and the accent colour are the slow part of a track change: do them on the worker and
+                // post the song once they are ready, rather than blocking the main thread (or showing it twice).
+                pendingKey = key;
+                final Bitmap src = art;
+                try {
+                    Img.BG.execute(new Runnable() {
+                        @Override public void run() {
+                            long t0 = System.nanoTime();
+                            Bitmap sc = null;
+                            int ac = Cards.PURPLE;
+                            try { sc = Img.scaled(src, 256); ac = Img.dominant(sc, Cards.PURPLE); } catch (Throwable t) { /* keep the fallbacks */ }
+                            final Bitmap fsc = sc;
+                            final int fac = ac;
+                            final long took = System.nanoTime() - t0;
+                            h.post(new Runnable() {
+                                @Override public void run() {
+                                    if (!key.equals(pendingKey)) return;   // the song moved on, or we stopped
+                                    pendingKey = "";
+                                    artKey = key;
+                                    artBmp = fsc;
+                                    accent = fac;
+                                    Perf.record(Perf.ART, took);
+                                    refreshNow();
+                                }
+                            });
+                        }
+                    });
+                } catch (Throwable t) {                // worker refused the job: do it here, as before
+                    pendingKey = "";
+                    artKey = key;
+                    artBmp = Img.scaled(art, 256);
+                    accent = Img.dominant(artBmp, Cards.PURPLE);
+                }
+            }
+            if (!key.equals(artKey)) return;         // artwork still on its way: refreshNow() runs again when it lands
         }
         e.art = artBmp;
         e.accent = accent;

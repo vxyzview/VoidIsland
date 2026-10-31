@@ -44,7 +44,7 @@ service; check them before reusing or redistributing anything you see. Turn it o
 
 ## Building yourself
 
-Local build needs an `android.jar` (API 34) at `libs/android-34.jar`, a JDK, and `aapt` + `d8` (or `dx`) + `apksigner` + `zipalign`, then:
+Local build needs an `android.jar` (API 34) at `libs/android-34.jar`, a JDK, and `aapt2` (or the older `aapt`) + `d8` (or `dx`) + `apksigner` + `zipalign` (+ `zip` when using aapt2), then:
 
 ```sh
 ./build.sh
@@ -66,10 +66,23 @@ The `Build APK` workflow builds and signs on every trigger:
 
 ## Tests
 
-Unit checks for the pure-Java logic live in `test/` (Spring, Parse, Col, Geo, ShadeMatch). CI runs them before every
+Unit checks for the pure-Java logic live in `test/` (Spring, Parse, Col, Geo, ShadeMatch, Rules, Lru, and the HTTP helper against a local server). CI runs them before every
 release, and locally you can run them after building:
 
 ```sh
 javac -d out/test -cp out/classes $(find test -name '*.java')
 java -cp out/test:out/classes com.vxyzview.voidisland.Check
 ```
+
+## Performance log
+
+Timing is off by default. To see how long the island's heavy steps take on your phone (building the expanded card, the per-frame
+spring step, artwork scaling, clock-app layout probing), turn it on from a computer:
+
+```sh
+adb shell setprop log.tag.VoidPerf DEBUG
+adb logcat -s VoidPerf          # count / average / worst, printed every 40 samples
+adb shell setprop log.tag.VoidPerf INFO   # off again
+```
+
+Nothing is recorded or stored anywhere else, and with the tag off each timed step costs one clock read.

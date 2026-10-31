@@ -36,19 +36,22 @@ if [ -z "$DEXER" ] && [ -n "$ANDROID_HOME" ]; then
 fi
 if [ -z "$DEXER" ]; then DEXER=$(find_tool "$BT/d8" d8 dx) || DEXER=""; fi
 [ -n "$DEXER" ] || missing "d8/dx"
-AAPT=$(find_tool "$BT/aapt" aapt)          || missing "aapt"
+AAPT2=$(find_tool "$BT/aapt2" aapt2) || AAPT2=""   # preferred: aapt (v1) is deprecated and absent from newer build-tools
+AAPT=$(find_tool "$BT/aapt" aapt) || AAPT=""
+[ -n "$AAPT2" ] || [ -n "$AAPT" ] || missing "aapt2 / aapt"
 ZIP=$(find_tool "$BT/zipalign" zipalign)   || missing "zipalign"
 SIGN=$(find_tool "$BT/apksigner" apksigner) || missing "apksigner"
 echo "using build-tools: $BT"
 echo "using android.jar: $AJ"
 echo "dexer: $DEXER"
+echo "resources: ${AAPT2:-$AAPT}"
 
 NAME=${1:-VoidIsland}
 VER=${2:-1.1}
 VCODE=${3:-2}
 
 rm -rf out && mkdir -p out/classes
-echo "[1/6] javac";   javac -source 8 -target 8 -Xlint:-options -encoding UTF-8 -bootclasspath "$AJ" -d out/classes $(find src -name '*.java') 2>&1 | grep -v '^Note:' || true
+echo "[1/6] javac";   javac -source 8 -target 8 -Xlint:all,-options,-deprecation,-serial,-auxiliaryclass -encoding UTF-8 -bootclasspath "$AJ" -d out/classes $(find src -name '*.java') 2>&1 | grep -v '^Note:' || true
 if [ "${DEXER##*/}" = dx ]; then
     echo "[2/6] dex";
     "$DEXER" --dex --min-sdk-version=26 --output=out/classes.dex out/classes
@@ -56,8 +59,20 @@ else
     echo "[2/6] dex (d8)";
     "$DEXER" --release --min-api 26 --lib "$AJ" --output out $(find out/classes -name '*.class')
 fi
-echo "[3/6] aapt";    "$AAPT" package -f -M AndroidManifest.xml -S res -I "$AJ" --min-sdk-version 26 --target-sdk-version 33 --version-code "$VCODE" --version-name "$VER" -F out/unsigned.apk
-echo "[4/6] add dex"; (cd out && "$AAPT" add -f unsigned.apk classes.dex >/dev/null)
+if [ -n "$AAPT2" ]; then
+    echo "[3/6] aapt2"
+    "$AAPT2" compile --dir res -o out/res.zip
+    "$AAPT2" link -o out/unsigned.apk -I "$AJ" --manifest AndroidManifest.xml --min-sdk-version 26 --target-sdk-version 34 \
+        --version-code "$VCODE" --version-name "$VER" out/res.zip
+    echo "[4/6] add dex"
+    if command -v zip >/dev/null 2>&1; then (cd out && zip -q -j unsigned.apk classes.dex)
+    elif [ -n "$AAPT" ]; then (cd out && "$AAPT" add -f unsigned.apk classes.dex >/dev/null)
+    else echo "error: need zip (or aapt) to add classes.dex to the APK" >&2; exit 1; fi
+else
+    echo "[3/6] aapt"
+    "$AAPT" package -f -M AndroidManifest.xml -S res -I "$AJ" --min-sdk-version 26 --target-sdk-version 34 --version-code "$VCODE" --version-name "$VER" -F out/unsigned.apk
+    echo "[4/6] add dex"; (cd out && "$AAPT" add -f unsigned.apk classes.dex >/dev/null)
+fi
 echo "[5/6] align";   "$ZIP" -f -p 4 out/unsigned.apk out/aligned.apk
 [ -f void.jks ] || keytool -genkeypair -keystore void.jks -alias void -keyalg RSA -keysize 2048 -validity 36500 \
     -storepass voidisland -keypass voidisland -dname "CN=vxyzview, OU=VoidIsland, O=vxyzview, C=ID" >/dev/null 2>&1

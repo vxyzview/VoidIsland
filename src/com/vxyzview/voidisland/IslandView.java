@@ -78,8 +78,10 @@ final class IslandView extends ViewGroup {
         @Override public void doFrame(long nanos) {
             float dt = last == 0 ? 1f / 60f : Math.min((nanos - last) / 1e9f, 0.05f);
             last = nanos;
+            long pt = Perf.begin();
             boolean act = stepAll(dt);
             applyVisuals();
+            Perf.end(Perf.FRAME, pt);
             if (act) {
                 Choreographer.getInstance().postFrameCallback(this);
             } else {
@@ -170,9 +172,11 @@ final class IslandView extends ViewGroup {
         final int tw, th, exH;
         final View ex;
         if (m == EXPANDED) {
+            long pt = Perf.begin();
             ex = Cards.buildExpanded(getContext(), ev, baseEW);
             ex.measure(MeasureSpec.makeMeasureSpec(baseEW, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
             exH = ex.getMeasuredHeight();
+            Perf.end(Perf.PRESENT, pt);
             tw = baseEW;
             th = exH;
         } else if (m == COMPACT) {

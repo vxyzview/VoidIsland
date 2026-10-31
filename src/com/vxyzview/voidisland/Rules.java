@@ -22,7 +22,7 @@ final class Rules {
         return apps == null || apps.isEmpty() || (pkg != null && apps.contains(pkg));
     }
 
-    private static final HashMap<String, Long> LAST = new HashMap<String, Long>();
+    private static final HashMap<String, Long> LAST = Lru.map(200);
 
     /**
      * "One banner per chat": true when this chat already had a banner within the window (stay quiet).
@@ -31,7 +31,6 @@ final class Rules {
     static boolean chatRepeat(String chatKey, long now, long windowMs) {
         Long last = LAST.get(chatKey);
         if (last != null && now - last >= 0 && now - last < windowMs) return true;
-        if (LAST.size() > 200) LAST.clear();
         LAST.put(chatKey, now);
         return false;
     }

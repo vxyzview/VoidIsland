@@ -30,8 +30,19 @@ jobs:
 
       - name: Install Android SDK pieces
         run: |
-          SDKM="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
-          yes | "$SDKM" --sdk_root="$ANDROID_HOME" "platforms;android-34" "build-tools;34.0.0" "build-tools;35.0.0" >/dev/null
+          # the runner image usually ships these already: only download what is really missing
+          NEED=""
+          [ -f "$ANDROID_HOME/platforms/android-34/android.jar" ] || NEED="$NEED platforms;android-34"
+          [ -x "$ANDROID_HOME/build-tools/34.0.0/apksigner" ]     || NEED="$NEED build-tools;34.0.0"
+          [ -x "$ANDROID_HOME/build-tools/35.0.0/d8" ]            || NEED="$NEED build-tools;35.0.0"
+          if [ -z "$NEED" ]; then
+            echo "Android SDK pieces already present"
+          else
+            echo "Installing:$NEED"
+            SDKM="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
+            # shellcheck disable=SC2086
+            yes | "$SDKM" --sdk_root="$ANDROID_HOME" $NEED >/dev/null
+          fi
 
       - name: Restore signing key
         env:
@@ -82,7 +93,7 @@ jobs:
           } >> "$GITHUB_ENV"
           echo "::notice::$( [ "$PRE" = "1" ] && echo pre-release || echo stable ) -> VoidIsland-$VERSION (versionCode $VCODE)"
 
-      - name: Build (javac, dx, aapt, zipalign, apksigner)
+      - name: Build (javac with lint, d8, aapt2, zipalign, apksigner)
         run: ./build.sh "$APK" "$VERSION" "$VERSIONCODE"
 
       - name: Unit checks

@@ -133,21 +133,11 @@ final class Weather {
     }
 
     private static Now fetch(Context c, float la, float lo) {
-        HttpURLConnection h = null;
         try {
             String q = String.format(Locale.US, "https://api.open-meteo.com/v1/forecast?latitude=%.2f&longitude=%.2f"
                 + "&current=temperature_2m,apparent_temperature,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto", la, lo);
-            h = (HttpURLConnection) new URL(q).openConnection();
-            h.setConnectTimeout(6000);
-            h.setReadTimeout(8000);
-            h.setRequestProperty("User-Agent", "VoidIsland (Android)");
-            if (h.getResponseCode() != 200) return null;
-            BufferedReader r = new BufferedReader(new InputStreamReader(h.getInputStream(), "UTF-8"));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = r.readLine()) != null) sb.append(line);
-            r.close();
-            JSONObject o = new JSONObject(sb.toString());
+            JSONObject o = Http.object(q, 6000, 8000, 100000);   // shared helper: timeouts, size cap, null on any failure
+            if (o == null) return null;
             JSONObject cur = o.getJSONObject("current");
             JSONObject day = o.optJSONObject("daily");
             Now n = new Now();
@@ -170,8 +160,6 @@ final class Weather {
             return n;
         } catch (Throwable t) {
             return null;   // offline / rate-limited: keep showing the last answer
-        } finally {
-            if (h != null) h.disconnect();
         }
     }
 
