@@ -22,6 +22,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.view.Window;
+import android.view.animation.PathInterpolator;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
@@ -34,6 +35,9 @@ final class M3 {
     interface Fmt { String f(int v); }
 
     static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+    /** M3 "standard" easing, cubic-bezier(0.2, 0, 0, 1): quick start, long soft landing. Shared by every animation here. */
+    static final PathInterpolator STANDARD = new PathInterpolator(0.2f, 0f, 0f, 1f);
 
     final Context c;
     final float d;
@@ -226,6 +230,18 @@ final class M3 {
         return t;
     }
 
+    /** 48dp round icon button (M3 icon button): back arrows and the like. */
+    View iconButton(int icon, String description, final Runnable r) {
+        FrameLayout f = new FrameLayout(c);
+        f.setBackground(ripple(0, 24, 0, onSurface));
+        f.setClickable(true);
+        f.setFocusable(true);
+        f.setContentDescription(description);
+        f.addView(new IconView(c, icon, onSurface), new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
+        f.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { r.run(); } });
+        return f;
+    }
+
     /** Leading tonal icon circle + title + supporting text + optional trailing view. */
     LinearLayout item(int icon, String title, String sub, View trailing, final Runnable click) {
         LinearLayout r = row();
@@ -287,6 +303,7 @@ final class M3 {
             }
         });
         r.addView(sw, lp(dp(52), dp(32)));
+        r.setBackground(ripple(0, 12, 0, onSurface));
         r.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { sw.toggle(); } });
         parent.addView(r);
         return sw;
@@ -319,6 +336,7 @@ final class M3 {
     /** Segmented button group. selected may be -1 (none). */
     final class Seg {
         final TextView[] t;
+        final GradientDrawable[] fill;   // the ripple's content layer: recoloured in place so a press ripple is never cut short
         final String[] labels;
         final OnSel cb;
 
@@ -326,12 +344,13 @@ final class M3 {
             this.labels = labels;
             this.cb = cb;
             t = new TextView[labels.length];
+            fill = new GradientDrawable[labels.length];
         }
 
         void select(int sel) {
             for (int i = 0; i < t.length; i++) {
                 boolean on = i == sel;
-                t[i].setBackgroundColor(on ? secondaryContainer : 0);
+                fill[i].setColor(on ? secondaryContainer : 0);
                 t[i].setTextColor(on ? onSecondaryContainer : onSurface);
                 t[i].setText(labels[i]);
             }
@@ -358,6 +377,9 @@ final class M3 {
             t.setGravity(Gravity.CENTER);
             t.setSingleLine();
             t.setPadding(dp(4), 0, dp(4), 0);
+            GradientDrawable fill = shape(0, 0);
+            t.setBackground(new RippleDrawable(ColorStateList.valueOf(Col.alpha(onSurface, 0.16f)), fill, shape(0xFFFFFFFF, 0)));
+            seg.fill[i] = fill;
             t.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     seg.select(idx);
@@ -396,97 +418,139 @@ final class M3 {
         return b;
     }
 
-    /** Material 3 navigation bar. */
-    final class Nav {
-        final View[] pill;
-        final TextView[] lab;
-        final IconView[] ico;
+    /**
+     * One destination of the navigation bar / rail: a 32dp active-indicator pill (grows out of its centre
+     * when selected, ripples when pressed) holding the icon, and a label centred underneath.
+     */
+    final class NavItem extends LinearLayout {
+        private final Paint ip = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final RectF ir = new RectF();
+        private final View ind;
+        private final IconView ico;
+        private final TextView lab;
+        private float act;            // 0 inactive .. 1 active (drives indicator, icon + label colour)
+        private ValueAnimator va;
 
-        Nav(int n) {
-            pill = new View[n];
-            lab = new TextView[n];
-            ico = new IconView[n];
+        NavItem(String label, int icon, int indicatorDp, int padDp) {
+            super(M3.this.c);
+            setOrientation(LinearLayout.VERTICAL);
+            setGravity(Gravity.CENTER_HORIZONTAL);
+            setPadding(0, dp(padDp), 0, dp(padDp));
+            setClickable(true);
+            setFocusable(true);
+            setContentDescription(label);
+
+            FrameLayout box = new FrameLayout(M3.this.c);
+            ind = new View(M3.this.c) {
+                @Override protected void onDraw(Canvas cv) {
+                    if (act <= 0.001f) return;
+                    float w = getWidth(), h = getHeight(), pw = w * (0.3f + 0.7f * act);
+                    ip.setColor(Col.alpha(secondaryContainer, act));
+                    ir.set((w - pw) / 2f, 0f, (w + pw) / 2f, h);
+                    cv.drawRoundRect(ir, h / 2f, h / 2f, ip);
+                }
+            };
+            // The parent's pressed state is dispatched to this (non-clickable) child, so the ripple stays inside the pill.
+            ind.setForeground(ripple(0, 16, 0, onSurface));
+            box.addView(ind, new FrameLayout.LayoutParams(MATCH, MATCH));
+            ico = new IconView(M3.this.c, icon, onSurfaceVariant);
+            box.addView(ico, new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
+            addView(box, lp(dp(indicatorDp), dp(32)));
+
+            lab = text(label, 12f, true, onSurfaceVariant);
+            lab.setSingleLine();
+            lab.setGravity(Gravity.CENTER_HORIZONTAL);   // a vertical LinearLayout hands children MATCH_PARENT width by default: centre the text itself
+            lab.setPadding(0, dp(4), 0, 0);
+            addView(lab, new LinearLayout.LayoutParams(WRAP, WRAP));
         }
 
-        void select(int sel) {
-            for (int i = 0; i < pill.length; i++) {
-                boolean on = i == sel;
-                pill[i].setBackground(shape(on ? secondaryContainer : 0, 16));
-                ico[i].set(ico[i].type(), on ? onSecondaryContainer : onSurfaceVariant);
-                lab[i].setTextColor(on ? onSurface : onSurfaceVariant);
+        void setActive(boolean on, boolean animate) {
+            setSelected(on);
+            if (va != null) { va.cancel(); va = null; }
+            float to = on ? 1f : 0f;
+            if (!animate || to == act) {
+                act = to;
+                paint();
+                return;
             }
+            va = ValueAnimator.ofFloat(act, to);
+            va.setDuration(on ? 280 : 160);
+            va.setInterpolator(STANDARD);
+            va.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                @Override public void onAnimationUpdate(ValueAnimator a) {
+                    act = (Float) a.getAnimatedValue();
+                    paint();
+                }
+            });
+            va.start();
+        }
+
+        private void paint() {
+            ico.set(ico.type(), Col.mix(onSurfaceVariant, onSecondaryContainer, act));
+            lab.setTextColor(Col.mix(onSurfaceVariant, onSurface, act));
+            ind.invalidate();
         }
     }
 
-    LinearLayout navBar(String[] labels, int[] icons, int sel, final OnSel cb) {
-        final Nav nav = new Nav(labels.length);
-        LinearLayout bar = new LinearLayout(c);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setBackgroundColor(surfaceLow);
-        bar.setPadding(dp(8), dp(12), dp(8), dp(16));
-        for (int i = 0; i < labels.length; i++) {
-            final int idx = i;
-            LinearLayout item = col();
-            item.setGravity(Gravity.CENTER_HORIZONTAL);
-            FrameLayout p = new FrameLayout(c);
-            IconView ic = new IconView(c, icons[i], onSurfaceVariant);
-            p.addView(ic, new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
-            item.addView(p, lp(dp(64), dp(32)));
-            TextView l = text(labels[i], 12f, true, onSurfaceVariant);
-            l.setSingleLine();
-            l.setPadding(0, dp(4), 0, 0);
-            item.addView(l);
-            item.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) {
-                    nav.select(idx);
-                    cb.on(idx);
-                }
-            });
-            nav.pill[i] = p;
-            nav.lab[i] = l;
-            nav.ico[i] = ic;
-            bar.addView(item, new LinearLayout.LayoutParams(0, WRAP, 1f));
+    /** Handle on a built navigation bar or rail: {@link #view} goes into the layout, {@link #select} moves the selection. */
+    final class Nav {
+        final LinearLayout view;
+        private final NavItem[] items;
+        private int sel = -1;
+
+        Nav(LinearLayout view, int n) {
+            this.view = view;
+            this.items = new NavItem[n];
         }
-        nav.select(sel);
-        return bar;
+
+        /** Selects item i. Animated unless this is the first selection. */
+        void select(int i, boolean animate) {
+            for (int k = 0; k < items.length; k++) items[k].setActive(k == i, animate && sel >= 0);
+            sel = i;
+        }
+
+        int selected() { return sel; }
     }
 
-    /** Material 3 navigation rail for expanded-width windows (tablets, landscape phones): same items, one column. */
-    LinearLayout navRail(String[] labels, int[] icons, int sel, final OnSel cb) {
-        final Nav nav = new Nav(labels.length);
-        LinearLayout rail = new LinearLayout(c);
-        rail.setOrientation(LinearLayout.VERTICAL);
-        rail.setGravity(Gravity.CENTER_HORIZONTAL);
-        rail.setBackgroundColor(surfaceLow);
-        rail.setPadding(dp(8), dp(16), dp(8), dp(24));
+    /**
+     * Material 3 navigation bar (compact windows) or rail (expanded windows, e.g. tablets and landscape phones):
+     * same items, one row or one column. {@code cb} fires when another item is picked, {@code again} when the
+     * item that is already selected is tapped again (M3: scroll that destination back to the top).
+     */
+    private Nav nav(boolean rail, String[] labels, int[] icons, int sel, final OnSel cb, final OnSel again) {
+        final Nav nav = new Nav(new LinearLayout(c), labels.length);
+        LinearLayout box = nav.view;
+        box.setOrientation(rail ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        box.setBackgroundColor(surfaceLow);
+        if (rail) {
+            box.setGravity(Gravity.CENTER_HORIZONTAL);
+            box.setPadding(dp(8), dp(16), dp(8), dp(24));
+        } else {
+            box.setPadding(dp(8), dp(12), dp(8), dp(16));
+        }
         for (int i = 0; i < labels.length; i++) {
             final int idx = i;
-            LinearLayout item = col();
-            item.setGravity(Gravity.CENTER_HORIZONTAL);
-            item.setPadding(0, dp(8), 0, dp(8));
-            item.setClickable(true);
-            FrameLayout p = new FrameLayout(c);
-            IconView ic = new IconView(c, icons[i], onSurfaceVariant);
-            p.addView(ic, new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER));
-            item.addView(p, lp(dp(56), dp(32)));
-            TextView l = text(labels[i], 12f, true, onSurfaceVariant);
-            l.setSingleLine();
-            l.setPadding(0, dp(4), 0, 0);
-            item.addView(l);
+            NavItem item = new NavItem(labels[i], icons[i], rail ? 56 : 64, rail ? 6 : 0);
             item.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
-                    nav.select(idx);
+                    if (nav.selected() == idx) {
+                        if (again != null) again.on(idx);
+                        return;
+                    }
+                    nav.select(idx, true);
                     cb.on(idx);
                 }
             });
-            nav.pill[i] = p;
-            nav.lab[i] = l;
-            nav.ico[i] = ic;
-            rail.addView(item);
+            nav.items[i] = item;
+            box.addView(item, rail ? new LinearLayout.LayoutParams(MATCH, WRAP) : new LinearLayout.LayoutParams(0, WRAP, 1f));
         }
-        nav.select(sel);
-        return rail;
+        nav.select(sel, false);
+        return nav;
     }
+
+    Nav navBar(String[] labels, int[] icons, int sel, OnSel cb, OnSel again) { return nav(false, labels, icons, sel, cb, again); }
+
+    Nav navRail(String[] labels, int[] icons, int sel, OnSel cb, OnSel again) { return nav(true, labels, icons, sel, cb, again); }
 
     // ------------------------------------------------------------------ colours
 
@@ -606,7 +670,7 @@ final class M3Switch extends View {
     private final M3 m;
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF r = new RectF();
-    private final M3.OnSel cb;
+    private M3.OnSel cb;
     private boolean on;
     private float t;
     private ValueAnimator va;
@@ -623,12 +687,22 @@ final class M3Switch extends View {
 
     boolean isOn() { return on; }
 
+    /** Re-binds a recycled switch: jumps to {@code on} with no animation and no callback. */
+    void bind(boolean on, M3.OnSel cb) {
+        if (va != null) { va.cancel(); va = null; }
+        this.on = on;
+        this.t = on ? 1f : 0f;
+        this.cb = cb;
+        invalidate();
+    }
+
     void toggle() {
         on = !on;
         performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
         if (va != null) va.cancel();
         va = ValueAnimator.ofFloat(t, on ? 1f : 0f);
-        va.setDuration(180);
+        va.setDuration(220);
+        va.setInterpolator(M3.STANDARD);
         va.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override public void onAnimationUpdate(ValueAnimator a) { t = (Float) a.getAnimatedValue(); invalidate(); }
         });

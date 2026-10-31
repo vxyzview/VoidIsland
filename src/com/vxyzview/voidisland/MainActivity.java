@@ -22,6 +22,8 @@ import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
+import android.view.animation.LinearInterpolator;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
@@ -36,10 +38,16 @@ public final class MainActivity extends Activity {
     private static final int[] ACC = {0xFFB388FF, 0xFF0A84FF, 0xFF30D158, 0xFFFF9F0A, 0xFFFF375F, 0xFFFFD60A, 0xFFFFFFFF};
     private static final int[] BORDER = {0x66FFFFFF, 0xFFFFFFFF, 0xFFB388FF, 0xFF0A84FF, 0xFF30D158, 0xFFFF375F};
 
+    private static final String S_PAGE = "page", S_Y = "ys", S_PREVIEW = "pv";
+
     private final Handler h = new Handler(Looper.getMainLooper());
     private M3 m;
+    private M3.Nav nav;
     private ScrollView scroll;
-    private int page;
+    private int page;                       // destination the user picked (may still be fading in)
+    private int shown = -1;                 // destination whose content is in the scroll view right now (-1: nothing built yet)
+    private int gen;                        // bumped by every (re)build: a pending page-switch fade bails when stale
+    private int[] ys = new int[3];          // remembered scroll position per destination
     private PreviewView preview;
     private boolean previewExpanded;
     private TextView banner, bannerSub, diag;
@@ -67,26 +75,47 @@ public final class MainActivity extends Activity {
         if (!m.dark) f |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         getWindow().getDecorView().setSystemUiVisibility(f);
 
+        int start = 0;
+        if (b != null) {   // rotation, theme switch, process restore: land back on the same tab, same scroll
+            start = Math.max(0, Math.min(2, b.getInt(S_PAGE, 0)));
+            int[] saved = b.getIntArray(S_Y);
+            if (saved != null && saved.length == ys.length) ys = saved;
+            previewExpanded = b.getBoolean(S_PREVIEW, false);
+        }
+
         LinearLayout root = new LinearLayout(this);
         scroll = new ScrollView(this);
         scroll.setVerticalScrollBarEnabled(false);
         M3.OnSel pickNav = new M3.OnSel() {
-            @Override public void on(int i) { showPage(i, false); }
+            @Override public void on(int i) { switchPage(i); }
         };
+        M3.OnSel topNav = new M3.OnSel() {   // tapping the tab you are already on glides it back to the top
+            @Override public void on(int i) { scroll.smoothScrollTo(0, 0); }
+        };
+        String[] names = {"Home", "Style", "Behavior"};
+        int[] glyphs = {IconView.HOME, IconView.PALETTE, IconView.TUNE};
         if (m.wide) {   // expanded window (tablet, split screen, phone in landscape): a Material rail beats a stretched bar
+            nav = m.navRail(names, glyphs, start, pickNav, topNav);
             root.setOrientation(LinearLayout.HORIZONTAL);
-            root.addView(m.navRail(new String[]{"Home", "Style", "Behavior"}, new int[]{IconView.HOME, IconView.PALETTE, IconView.TUNE}, 0, pickNav),
-                new LinearLayout.LayoutParams(dp(88), M3.MATCH));
+            root.addView(nav.view, new LinearLayout.LayoutParams(dp(88), M3.MATCH));
             root.addView(scroll, new LinearLayout.LayoutParams(0, M3.MATCH, 1f));
         } else {
+            nav = m.navBar(names, glyphs, start, pickNav, topNav);
             root.setOrientation(LinearLayout.VERTICAL);
             root.addView(scroll, new LinearLayout.LayoutParams(M3.MATCH, 0, 1f));
-            root.addView(m.navBar(new String[]{"Home", "Style", "Behavior"},
-                new int[]{IconView.HOME, IconView.PALETTE, IconView.TUNE}, 0, pickNav), new LinearLayout.LayoutParams(M3.MATCH, M3.WRAP));
+            root.addView(nav.view, new LinearLayout.LayoutParams(M3.MATCH, M3.WRAP));
         }
         setContentView(root);
         lastOverlay = overlayOn();
-        showPage(0, false);
+        showPage(start, true);
+    }
+
+    @Override protected void onSaveInstanceState(Bundle out) {
+        super.onSaveInstanceState(out);
+        if (shown >= 0) ys[shown] = scroll.getScrollY();
+        out.putInt(S_PAGE, page);
+        out.putIntArray(S_Y, ys);
+        out.putBoolean(S_PREVIEW, previewExpanded);
     }
 
     @Override protected void onResume() {
@@ -104,9 +133,52 @@ public final class MainActivity extends Activity {
         h.removeCallbacks(diagRun);
     }
 
-    private void showPage(int p, boolean keepScroll) {
-        final int y = keepScroll ? scroll.getScrollY() : 0;
+    /** Back from Style / Behavior lands on Home first (the start destination); back from Home leaves the app. */
+    @Override public void onBackPressed() {
+        if (page != 0) {
+            nav.select(0, true);
+            switchPage(0);
+        } else {
+            super.onBackPressed();
+        }
+    }
+
+    /**
+     * User picked another tab: Material "fade through". The old page fades out fast, the new one fades in
+     * while rising a few dp. Only the viewport-sized ScrollView is animated (never its tall content), so it stays cheap.
+     */
+    private void switchPage(final int p) {
+        if (p == page) return;
+        ys[shown] = scroll.getScrollY();
         page = p;
+        final int my = ++gen;
+        scroll.animate().cancel();
+        scroll.animate().alpha(0f).setDuration(90).setInterpolator(new LinearInterpolator()).withEndAction(new Runnable() {
+            @Override public void run() {
+                if (my != gen) return;   // a newer rebuild or switch took over
+                build(p);
+                restoreScroll(ys[p]);
+                scroll.setAlpha(0f);
+                scroll.setTranslationY(dp(14));
+                scroll.animate().alpha(1f).translationY(0f).setDuration(240).setInterpolator(M3.STANDARD).start();
+            }
+        }).start();
+    }
+
+    /** Instant rebuild of page {@code p} (settings changed, or returning from system Settings), without any visible jump. */
+    private void showPage(int p, boolean keepScroll) {
+        int y = !keepScroll ? 0 : (shown == p ? scroll.getScrollY() : ys[p]);
+        page = p;
+        gen++;
+        scroll.animate().cancel();
+        scroll.setAlpha(1f);
+        scroll.setTranslationY(0f);
+        build(p);
+        restoreScroll(y);
+    }
+
+    private void build(int p) {
+        shown = p;
         preview = null;
         banner = null;
         diag = null;
@@ -117,9 +189,26 @@ public final class MainActivity extends Activity {
         if (p == 0) buildHome(c);
         else if (p == 1) buildStyle(c);
         else buildBehavior(c);
-        scroll.post(new Runnable() { @Override public void run() { scroll.scrollTo(0, y); } });
         h.removeCallbacks(diagRun);
         if (p == 2) h.post(diagRun);
+    }
+
+    /**
+     * The new content has no height until it is laid out, so scrollTo() right now would clamp to 0 and a
+     * post()ed scrollTo would run after that first frame was drawn (a visible jump to the top and back).
+     * Apply it just before the first draw instead.
+     */
+    private void restoreScroll(final int y) {
+        scroll.scrollTo(0, 0);
+        if (y <= 0) return;
+        scroll.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override public boolean onPreDraw() {
+                ViewTreeObserver o = scroll.getViewTreeObserver();
+                if (o.isAlive()) o.removeOnPreDrawListener(this);
+                scroll.scrollTo(0, y);
+                return true;
+            }
+        });
     }
 
     private void header(LinearLayout parent, String title, String sub) {
@@ -248,7 +337,8 @@ public final class MainActivity extends Activity {
         th.addView(m.segmented(new String[]{"System", "Light", "Dark", "AMOLED"}, m.themeMode, new M3.OnSel() {
             @Override public void on(int i) {
                 put(Prefs.K_THEME, i);
-                recreate();
+                recreate();   // page + scroll come back through onSaveInstanceState
+                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out);
             }
         }), m.top(M3.MATCH, dp(40), 12));
 
@@ -303,7 +393,7 @@ public final class MainActivity extends Activity {
         pv.addView(m.segmented(new String[]{"Compact", "Expanded"}, previewExpanded ? 1 : 0, new M3.OnSel() {
             @Override public void on(int i) { previewExpanded = i == 1; preview.setExpanded(previewExpanded); previewIsland(previewExpanded); }
         }), m.top(M3.MATCH, dp(40), 12));
-        if (previewExpanded) preview.setExpanded(true);
+        if (previewExpanded) preview.snapExpanded(true);   // a rebuild must not replay the expand animation
 
         LinearLayout qs = m.card(p, "Quick styles");
         HorizontalScrollView hs = new HorizontalScrollView(this);

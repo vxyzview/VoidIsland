@@ -29,6 +29,13 @@ final class PreviewView extends View {
         invalidate();
     }
 
+    /** Jumps straight to the compact / expanded pose (page rebuilds), no animation. */
+    void snapExpanded(boolean e) {
+        if (va != null) va.cancel();
+        t = e ? 1f : 0f;
+        invalidate();
+    }
+
     void setExpanded(boolean e) {
         if (va != null) va.cancel();
         va = ValueAnimator.ofFloat(t, e ? 1f : 0f);
