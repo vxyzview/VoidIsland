@@ -164,6 +164,7 @@ final class IslandController implements IslandView.Host {
         lp = new WindowManager.LayoutParams(view.winW(), view.winH(), type, flags, PixelFormat.TRANSLUCENT);
         lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         lp.setTitle("VoidIsland");
+        noMoveAnimation(lp);
         if (Build.VERSION.SDK_INT >= 30) {
             lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
             lp.setFitInsetsTypes(0);
@@ -212,6 +213,20 @@ final class IslandController implements IslandView.Host {
         } catch (Throwable t) {
             attached = false; // could not show the island at all; the service stays alive and will retry on the next settings change
         }
+    }
+
+    /**
+     * The island animates itself with springs, but the overlay WINDOW is resized around its centre when a transition starts
+     * and ends, and the system answers every change of the window's left edge by sliding the whole window to its new spot
+     * (a short decelerating glide). That glide is the sideways "jiggle" when the pill expands, collapses or reappears.
+     * PRIVATE_FLAG_NO_MOVE_ANIMATION (0x40) turns it off, so the window just snaps and the springs do all the moving.
+     * Hidden field, hence reflection; if a ROM refuses it nothing breaks, the island simply behaves as before.
+     */
+    private static void noMoveAnimation(WindowManager.LayoutParams p) {
+        try {
+            java.lang.reflect.Field f = WindowManager.LayoutParams.class.getField("privateFlags");
+            f.setInt(p, f.getInt(p) | 0x00000040);
+        } catch (Throwable t) { /* flag unavailable: keep the default window behaviour */ }
     }
 
     private void updateLayout() {
