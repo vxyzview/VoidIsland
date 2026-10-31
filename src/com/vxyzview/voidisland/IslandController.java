@@ -61,6 +61,12 @@ final class IslandController implements IslandView.Host {
     private final LinkedHashMap<String, IslandEvent> live = new LinkedHashMap<String, IslandEvent>();
     private final ArrayDeque<IslandEvent> queue = new ArrayDeque<IslandEvent>();
     private IslandEvent popup, userExpanded, shown;
+    /**
+     * shownMode value meaning "the window may be showing anything": the next show() must push its state to the view, even
+     * when that state is null/HIDDEN. Without it, hiding (e.g. rotating to landscape with "Hide in landscape") right after a
+     * style/config re-apply looked like "already hidden" and left the old pill on screen with nothing behind it to tap.
+     */
+    private static final int UNKNOWN = -1;
     private int shownMode = IslandView.HIDDEN;
     private String pinnedKey, fg = "";
     private boolean restyle;   // next present() should morph, not cross-fade (settings were just changed)
@@ -378,7 +384,7 @@ final class IslandController implements IslandView.Host {
         updateLayout();
         locked = isLocked();
         shown = null;
-        shownMode = IslandView.HIDDEN;
+        shownMode = UNKNOWN;   // not HIDDEN: if the island must be hidden now, the view still has to be told so
         restyle = true;
         evaluate();
         restyle = false;
