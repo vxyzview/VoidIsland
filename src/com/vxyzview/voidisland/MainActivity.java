@@ -506,7 +506,7 @@ public final class MainActivity extends Activity {
                 @Override public void on(int c) { put(Prefs.K_TXT, c); showPage(1, true); changed(previewExpanded); }
             }));
         }
-        co.addView(label("Accent (bars, progress, rings)"));
+        co.addView(label("Accent (buttons, bars, rings, icons)"));
         co.addView(m.segmented(new String[]{"Auto", "Material You", "Custom"}, s.accMode, new M3.OnSel() {
             @Override public void on(int i) { put(Prefs.K_ACCMODE, i); showPage(1, true); changed(previewExpanded); }
         }));

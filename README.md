@@ -10,6 +10,7 @@ Dynamic Island for Android (by vxyzview) — notifications, media and calls on a
 - **Quick reply**: expand a message banner and tap *Reply* to answer without opening the app.
 - **Island rules**: quiet hours (optionally only for chosen apps), mute group chats, one banner per chat.
 - **Live activities**: rides, food delivery and live scores stay on the island while they run.
+- **Material You accent on a black island**: on Android 12+ the accent follows your wallpaper colours by default (play button, seek / progress bars, rings, action buttons, glyphs, in both the compact pill and the expanded card) while the island itself stays pure black. Change it at **Style > Colors > Accent** (*Auto* = album-art / app colour, *Material You*, or *Custom*).
 
 ## Install
 

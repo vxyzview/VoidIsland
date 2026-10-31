@@ -26,6 +26,8 @@ final class Style {
     // derived
     int bg = 0xFF000000, text = 0xFFFFFFFF, sub = 0xB3FFFFFF, btn = 0x2EFFFFFF, tile = 0x24FFFFFF, accent = 0xFFB388FF;
     boolean accentOverride = false;
+    // accent family (filled button / tonal button): only meaningful while accentOverride is on
+    int accentOn = 0xFF381E72, accentCont = 0xFF4F378B, accentOnCont = 0xFFEADDFF;
 
     private static int clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -54,7 +56,8 @@ final class Style {
         s.bgAlpha = clamp(sp.getInt(Prefs.K_BGA, s.bgAlpha), 20, 100);
         s.textMode = clamp(sp.getInt(Prefs.K_TXTMODE, 0), 0, 1);
         s.textCustom = sp.getInt(Prefs.K_TXT, s.textCustom) | 0xFF000000;
-        s.accMode = clamp(sp.getInt(Prefs.K_ACCMODE, 0), 0, 2);
+        // Android 12+: the accent follows Material You out of the box (the island itself stays black unless told otherwise)
+        s.accMode = clamp(sp.getInt(Prefs.K_ACCMODE, Pal.dynamic() ? 1 : 0), 0, 2);
         s.accCustom = sp.getInt(Prefs.K_ACC, s.accCustom) | 0xFF000000;
         s.borderW = clamp(sp.getInt(Prefs.K_BW, 0), 0, 4);
         s.borderCol = sp.getInt(Prefs.K_BCOL, s.borderCol);
@@ -80,6 +83,19 @@ final class Style {
         btn = Col.alpha(text, 0.18f);
         tile = Col.alpha(text, 0.14f);
         accentOverride = accMode != 0;
-        accent = accMode == 1 ? Pal.get(c, "accent1", 200, 0xFFD0BCFF) : (accMode == 2 ? accCustom : 0xFFB388FF);
+        if (accMode == 1) {
+            // same tones Material 3 uses for a dark scheme: primary, on-primary, primary container, on-primary container
+            accent = Pal.get(c, "accent1", 200, 0xFFD0BCFF);
+            accentOn = Pal.get(c, "accent1", 800, 0xFF381E72);
+            accentCont = Pal.get(c, "accent1", 700, 0xFF4F378B);
+            accentOnCont = Pal.get(c, "accent1", 100, 0xFFEADDFF);
+        } else if (accMode == 2) {
+            accent = accCustom;
+            accentOn = Col.onColor(accent);
+            accentCont = Col.container(accent);
+            accentOnCont = Col.onContainer(accent);
+        } else {
+            accent = 0xFFB388FF;
+        }
     }
 }

@@ -79,6 +79,11 @@ public class Check {
         ok(Col.mix(0xFF000000, 0xFFFFFFFF, 0.5f) == 0xFF808080, "Col.mix midpoint");
         ok(Col.onColor(0xFF000000) == 0xFFFFFFFF && Col.onColor(0xFFF2F2F7) == 0xFF111114, "Col.onColor contrast");
         ok(Col.onColor(0xFF0B1B3A) == 0xFFFFFFFF, "Col.onColor navy -> white text");
+        // custom accent family: container is dark, on-container is light, both opaque and still the accent's hue
+        int cont = Col.container(0xFFB388FF), onCont = Col.onContainer(0xFFB388FF);
+        ok((cont >>> 24) == 255 && (onCont >>> 24) == 255, "Col.container / onContainer are opaque");
+        ok(Col.luma(cont) < 0.25f && Col.luma(onCont) > 0.8f, "Col.container is dark, Col.onContainer is light");
+        ok(Col.luma(onCont) - Col.luma(cont) > 0.5f, "accent container text keeps strong contrast");
 
         // --- Geo: pill / box / notch
         float[] g = new float[5];

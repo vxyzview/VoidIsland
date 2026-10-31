@@ -54,6 +54,15 @@ final class Cards {
 
     static int acc(IslandEvent e) { return S.accentOverride ? S.accent : e.accent; }
 
+    /** The theme accent (Material You or custom) when one is chosen, otherwise the content's own colour. */
+    static int accOr(int own) { return S.accentOverride ? S.accent : own; }
+
+    /** Button for the card's action rows. With a theme accent: the first one is a filled accent button, the rest are tonal (Material 3 style). */
+    private static View actionBtn(Context c, String label, boolean primary, Runnable run) {
+        if (!S.accentOverride) return button(c, label, BTN, -1, run);
+        return primary ? button(c, label, S.accent, -1, S.accentOn, run) : button(c, label, S.accentCont, -1, S.accentOnCont, run);
+    }
+
     static int px(Context c) { return dp(c, S.padX); }
 
     static int py(Context c) { return dp(c, S.padY); }
@@ -275,15 +284,15 @@ final class Cards {
                 break;
             }
             case IslandEvent.TIMER: {
-                out.addView(new IconView(c, IconView.TIMER, ORANGE), fl(g, g, Gravity.START | side, m));
-                final TextView t = tv(c, timerText(e), 13f, ORANGE, true);
+                out.addView(new IconView(c, IconView.TIMER, accOr(ORANGE)), fl(g, g, Gravity.START | side, m));
+                final TextView t = tv(c, timerText(e), 13f, accOr(ORANGE), true);
                 t.setFontFeatureSettings("tnum");
                 out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
                 e.tC = new Runnable() { @Override public void run() { put(t, timerText(e)); } };
                 break;
             }
             case IslandEvent.NAV: {
-                out.addView(new IconView(c, IconView.NAV, BLUE), fl(g, g, Gravity.START | side, m));
+                out.addView(new IconView(c, IconView.NAV, accOr(BLUE)), fl(g, g, Gravity.START | side, m));
                 final TextView t = tv(c, e.title, 12.5f, WHITE, true);
                 t.setMaxWidth(dp(c, 58));
                 out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
@@ -327,9 +336,9 @@ final class Cards {
                 break;
             }
             case IslandEvent.PREVIEW: {
-                out.addView(new IconView(c, IconView.NOTE, PURPLE), fl(g, g, Gravity.START | side, m));
+                out.addView(new IconView(c, IconView.NOTE, accOr(PURPLE)), fl(g, g, Gravity.START | side, m));
                 EqView eq = new EqView(c);
-                eq.setColor(PURPLE);
+                eq.setColor(accOr(PURPLE));
                 out.addView(eq, fl(Math.round(g * 0.9f), Math.round(g * 0.75f), Gravity.END | side, m));
                 break;
             }
@@ -387,7 +396,7 @@ final class Cards {
         int n = Math.min(max, e.actLabels.length);
         for (int i = 0; i < n; i++) {
             final int idx = i;
-            View b = button(c, e.actLabels[i], BTN, -1, new Runnable() {
+            View b = actionBtn(c, e.actLabels[i], i == 0, new Runnable() {
                 @Override public void run() { fire(e, idx); }
             });
             LinearLayout.LayoutParams p = lpw(0, dp(c, 40), 1f);
@@ -401,13 +410,13 @@ final class Cards {
     private static View replyRow(final Context c, final IslandEvent e) {
         LinearLayout r = row(c);
         r.setPadding(0, dp(c, 12), 0, 0);
-        r.addView(button(c, "Reply", BTN, -1, new Runnable() {
+        r.addView(actionBtn(c, "Reply", true, new Runnable() {
             @Override public void run() { ReplyActivity.start(c, e); }
         }), lpw(0, dp(c, 40), 1f));
         if (e.actLabels.length > 0) {
             LinearLayout.LayoutParams p = lpw(0, dp(c, 40), 1f);
             p.setMarginStart(dp(c, 8));
-            r.addView(button(c, e.actLabels[0], BTN, -1, new Runnable() {
+            r.addView(actionBtn(c, e.actLabels[0], false, new Runnable() {
                 @Override public void run() { fire(e, 0); }
             }), p);
         }
@@ -692,7 +701,7 @@ final class Cards {
         LinearLayout root = col(c);
         root.setPadding(px(c), py(c), px(c), py(c));
         LinearLayout top = row(c);
-        top.addView(new IconView(c, IconView.TIMER, ORANGE), lp(dp(c, 30), dp(c, 30)));
+        top.addView(new IconView(c, IconView.TIMER, accOr(ORANGE)), lp(dp(c, 30), dp(c, 30)));
         LinearLayout t = col(c);
         t.setPadding(dp(c, 14), 0, 0, 0);
         final TextView label = tv(c, e.title, 14f, SUB, false);
@@ -745,6 +754,7 @@ final class Cards {
         rem.setFontFeatureSettings("tnum");
         rem.setGravity(Gravity.END);
         final SeekView seek = new SeekView(c);
+        if (S.accentOverride) seek.setColor(S.accent);
         seek.setListener(new SeekView.Listener() {
             @Override public void onSeek(float f) { if (e.durMs > 0) seekTo(e, (long) (f * e.durMs)); }
         });
@@ -756,10 +766,14 @@ final class Cards {
         LinearLayout ctl = row(c);
         ctl.setGravity(Gravity.CENTER);
         final IconView prev = new IconView(c, IconView.PREV, WHITE), next = new IconView(c, IconView.NEXT, WHITE);
-        final IconView play = new IconView(c, e.playing ? IconView.PAUSE : IconView.PLAY, WHITE);
+        // Material 3 style: with a theme accent the play button is a filled accent pill with an on-accent glyph
+        final int playFg = S.accentOverride ? S.accentOn : WHITE;
+        final IconView play = new IconView(c, e.playing ? IconView.PAUSE : IconView.PLAY, playFg);
+        if (S.accentOverride) play.setBackground(bg(S.accent, dp(c, 28)));
         prev.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
         next.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
-        play.setPadding(dp(c, 12), dp(c, 8), dp(c, 12), dp(c, 8));
+        if (S.accentOverride) play.setPadding(dp(c, 24), dp(c, 14), dp(c, 24), dp(c, 14));   // glyph sits inside the filled pill
+        else play.setPadding(dp(c, 12), dp(c, 8), dp(c, 12), dp(c, 8));
         prev.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 0); } });
         next.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 2); } });
         play.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 1); } });
@@ -792,7 +806,8 @@ final class Cards {
                 art.set(e.art != null ? e.art : e.icon, dp(c, 14));
                 eq.setColor(acc(e));
                 eq.setPlaying(e.playing);
-                play.set(e.playing ? IconView.PAUSE : IconView.PLAY, WHITE);
+                play.set(e.playing ? IconView.PAUSE : IconView.PLAY, playFg);
+                if (S.accentOverride) seek.setColor(S.accent);
                 boolean can = e.durMs > 0;
                 seek.setInteractive(can && (e.mc == null || (e.actions & PlaybackState.ACTION_SEEK_TO) != 0));
                 el.setVisibility(can ? View.VISIBLE : View.INVISIBLE);

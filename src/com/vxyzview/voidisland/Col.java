@@ -28,4 +28,10 @@ final class Col {
 
     /** Readable text colour on top of {@code bg}. */
     static int onColor(int bg) { return luma(bg) > 0.58f ? 0xFF111114 : 0xFFFFFFFF; }
+
+    /** Dark tonal container for a custom accent (the role Material's "primary container" plays): the accent pulled toward black. */
+    static int container(int accent) { return Col.mix(accent | 0xFF000000, 0xFF000000, 0.62f); }
+
+    /** Text / icon colour that sits on {@link #container}: the accent pushed toward white. */
+    static int onContainer(int accent) { return Col.mix(accent | 0xFF000000, 0xFFFFFFFF, 0.78f); }
 }
