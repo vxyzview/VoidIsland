@@ -17,6 +17,9 @@ final class Prefs {
         K_LIVEACT = "f_live", K_KEEP = "keep_apps", K_QUIET = "quiet_on", K_QFROM = "quiet_from", K_QTO = "quiet_to",
         K_QAPPS = "quiet_apps", K_NOGROUP = "no_group", K_ONEPERCHAT = "one_per_chat",
         K_LYROFF = "lyric_off", K_LYRSIZE = "lyric_size";
+    // idle clock + weather
+    static final String K_CLOCKSTYLE = "clock_style", K_WEATHER = "f_weather", K_WUNIT = "w_unit", K_WLAT = "w_lat", K_WLON = "w_lon",
+        K_WCACHE = "w_cache", K_WPLACE = "w_place", K_CALARM = "clk_alarm", K_CBATT = "clk_batt", K_CWEEK = "clk_week";
     // shape + size
     static final String K_SHAPE = "shape", K_ESHAPE = "e_shape", K_CW = "c_w", K_CH = "c_h", K_CR = "c_r", K_CPAD = "c_pad", K_GLYPH = "glyph",
         K_EW = "e_w", K_ER = "e_r", K_PADX = "pad_x", K_PADY = "pad_y", K_TS = "t_scale";
@@ -63,5 +66,5 @@ final class Prefs {
 
     /** Every key that changes how the island LOOKS (sizes, shape, colours...). Used for presets and reset. */
     static final String[] STYLE_KEYS = {K_SHAPE, K_ESHAPE, K_CW, K_CH, K_CR, K_CPAD, K_GLYPH, K_EW, K_ER, K_PADX, K_PADY, K_TS, K_Y, K_X,
-        K_DROP, K_SIDE, K_COLMODE, K_BG, K_BGA, K_TXTMODE, K_TXT, K_ACCMODE, K_ACC, K_BW, K_BCOL, K_SPEED, K_BOUNCE};
+        K_DROP, K_SIDE, K_CLOCKSTYLE, K_COLMODE, K_BG, K_BGA, K_TXTMODE, K_TXT, K_ACCMODE, K_ACC, K_BW, K_BCOL, K_SPEED, K_BOUNCE};
 }

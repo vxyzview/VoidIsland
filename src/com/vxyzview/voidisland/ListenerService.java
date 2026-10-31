@@ -38,6 +38,7 @@ public final class ListenerService extends NotificationListenerService {
         // our own absorb removes the original while the island shows it — that removal must not clear the banner
         if (sbn == null || reason == REASON_SNOOZED || reason == REASON_LISTENER_CANCEL) return;
         Bus.removeByNkey(sbn.getKey(), false);
+        Classifier.forget(sbn.getKey());
     }
 
     private void handle(StatusBarNotification sbn, RankingMap rm, boolean initial) {
@@ -48,7 +49,7 @@ public final class ListenerService extends NotificationListenerService {
                 if (rm.getRanking(sbn.getKey(), r)) importance = r.matchesInterruptionFilter() ? r.getImportance() : 0;
             }
             Notification n = sbn.getNotification();
-            IslandEvent e = Classifier.from(this, sbn.getPackageName(), n, sbn.getKey(), importance, initial);
+            IslandEvent e = Classifier.from(this, sbn.getPackageName(), n, sbn.getKey(), importance, initial, sbn.getPostTime());
             if (e == null) {
                 Bus.removeByNkey(sbn.getKey(), true); // e.g. progress notification turned into "download complete"
             } else {

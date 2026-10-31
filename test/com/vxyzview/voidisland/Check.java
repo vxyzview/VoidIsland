@@ -212,6 +212,26 @@ public class Check {
         ok(Live.kind("com.whatsapp") == Live.NONE && Live.kind(null) == Live.NONE && Live.kind("") == Live.NONE, "live: ordinary apps are not live activities");
         ok(Live.kind("com.some.foodpanda.app") == Live.FOOD && Live.kind("io.city.taxi") == Live.RIDE, "live: keyword fallback");
 
+        // --- stopwatch / timer readouts and the text clock
+        ok(Parse.findClockMs("01:23") == 83000L && Parse.findClockMs("Stopwatch 12:34.56") == 754560L && Parse.findClockMs("1:02:03") == 3723000L, "timer: reads mm:ss, mm:ss.cc and h:mm:ss");
+        ok(Parse.findClockMs("no time here") == -1L && Parse.findClockMs("07:75") == -1L && Parse.findClockMs(null) == -1L, "timer: no time / impossible minutes are not a readout");
+        ok(Parse.findClockMs("0:05.3") == 5300L && Parse.findClockMs("0:05.123") == 5123L, "timer: tenths and thousandths");
+        ok(Parse.timerWords("Stopwatch") && Parse.timerWords("Pause") && !Parse.timerWords("Next alarm 07:00"), "timer: stopwatch words are told from an alarm");
+        ok(Parse.timerWords("Lap") && Parse.timerWords("Stopwatch  00:12") && !Parse.timerWords("Collapse") && !Parse.timerWords("Alarm 07:00 Snooze Dismiss"), "timer: 'lap' is a word, an alarm is not a timer");
+        ok(Parse.pausedByActions(new String[]{"Resume", "Reset"}) && !Parse.pausedByActions(new String[]{"Lap", "Pause"}) && Parse.pausedByActions(new String[]{"Lanjutkan"}) && !Parse.pausedByActions(new String[0]), "timer: Resume without Pause means frozen");
+        ok(Parse.frozenMs(1000L, false, 6000L, 99000L) == 5000L && Parse.frozenMs(10000L, true, 4000L, 99000L) == 6000L, "timer: a paused stopwatch / countdown freezes at its post time");
+        ok(Parse.frozenMs(50000L, false, 1000L, 60000L) == 10000L, "timer: a post time before the base falls back to now");
+        ok(Parse.totalMs(0L, 299600L) == 300000L && Parse.totalMs(300000L, 120000L) == 300000L && Parse.totalMs(0L, 400L) == 0L, "timer: first-seen length is the full mark of the ring");
+        ok(Parse.isClockApp("com.google.android.deskclock") && Parse.isClockApp("com.sec.android.app.clockpackage") && Parse.isClockApp("com.fossor.stopwatchtimer") && !Parse.isClockApp("com.whatsapp"), "timer: clock apps are recognised");
+        ok("Quarter past ten".equals(Parse.words(10, 15)) && "Half past three".equals(Parse.words(15, 30)) && "Twenty to six".equals(Parse.words(17, 40)), "words: past / half / to");
+        ok("Noon".equals(Parse.words(12, 1)) && "Midnight".equals(Parse.words(23, 58)) && "Ten o'clock".equals(Parse.words(10, 2)) && "Five past one".equals(Parse.words(13, 4)), "words: o'clock, noon, midnight, rounding to five");
+        ok("Twenty five past eleven".equals(Parse.words(11, 25)) && "Five to twelve".equals(Parse.words(11, 55)) && "One o'clock".equals(Parse.words(0, 58)), "words: twenty five, hour rollover");
+        ok("in 25m".equals(Parse.until(25 * 60000L, 0L)) && "in 7h 48m".equals(Parse.until((7 * 60 + 48) * 60000L, 0L)) && "in 2d 3h".equals(Parse.until((51 * 60) * 60000L, 0L)), "alarm: wait text");
+        ok(Wx.kind(0) == Wx.CLEAR && Wx.kind(2) == Wx.PARTLY && Wx.kind(63) == Wx.RAIN && Wx.kind(81) == Wx.RAIN && Wx.kind(73) == Wx.SNOW && Wx.kind(95) == Wx.STORM && Wx.kind(45) == Wx.FOG && Wx.kind(53) == Wx.DRIZZLE, "weather: codes map to icons");
+        ok("Sunny".equals(Wx.desc(0, true)) && "Clear".equals(Wx.desc(0, false)) && "Showers".equals(Wx.desc(81, true)), "weather: words follow day / night");
+        ok("27\u00b0".equals(Wx.temp(26.6, false)) && "80\u00b0".equals(Wx.temp(26.6, true)) && "0\u00b0".equals(Wx.temp(-0.2, false)) && "-3\u00b0".equals(Wx.temp(-3.2, false)), "weather: temperature text, no minus zero");
+        ok(Wx.useF(0, "US") && !Wx.useF(0, "ID") && Wx.useF(2, "ID") && !Wx.useF(1, "US"), "weather: unit follows the country unless chosen");
+
         System.out.println(fails == 0 ? "ALL CHECKS PASSED" : (fails + " FAILED"));
         System.exit(fails == 0 ? 0 : 1);
     }

@@ -29,6 +29,12 @@ final class IslandEvent {
     boolean countDown, chrono;
     int progress = -1;     // 0..100, -1 = none
 
+    // timer / stopwatch from a clock app
+    boolean paused;        // frozen in its app (Pause was pressed)
+    long frozenMs;         // what a paused one reads
+    long totalMs;          // count-down: its full length, for the progress ring (0 = unknown)
+    CharSequence snap;     // the app draws its readout as plain text: shown as last posted, never ticked here
+
     PendingIntent contentIntent;
     String[] actLabels = new String[0];
     PendingIntent[] actIntents = new PendingIntent[0];
@@ -72,6 +78,7 @@ final class IslandEvent {
         title = o.title; text = o.text; sub = o.sub;
         icon = o.icon; art = o.art; accent = o.accent; iconType = o.iconType;
         when = o.when; countDown = o.countDown; chrono = o.chrono; progress = o.progress;
+        paused = o.paused; frozenMs = o.frozenMs; totalMs = o.totalMs; snap = o.snap;
         contentIntent = o.contentIntent; actLabels = o.actLabels; actIntents = o.actIntents; actRuns = o.actRuns;
         replyIntent = o.replyIntent; replyInput = o.replyInput; liveKind = o.liveKind;
         mc = o.mc; playing = o.playing; posMs = o.posMs; durMs = o.durMs; posAt = o.posAt; actions = o.actions; speed = o.speed;

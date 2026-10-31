@@ -1,7 +1,9 @@
 package com.vxyzview.voidisland;
 
+import android.app.AlarmManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -11,7 +13,11 @@ import android.media.session.PlaybackState;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.text.Spannable;
+import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.RelativeSizeSpan;
 import android.text.format.DateFormat;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -27,7 +33,9 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.text.DateFormatSymbols;
 import java.util.Calendar;
+import java.util.Locale;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -53,6 +61,12 @@ final class Cards {
     }
 
     static int acc(IslandEvent e) { return S.accentOverride ? S.accent : e.accent; }
+
+    /** Accent for things that are otherwise a fixed semantic colour (charging green, timer orange...): only Material You takes those over. */
+    static int tone(IslandEvent e, int own) { return S.m3 ? S.accent : own; }
+
+    /** Track behind a progress / seek bar / ring: Material You uses its secondary container, everything else a faint wash of the text colour. */
+    static int track() { return S.m3 ? S.secCont : Col.alpha(WHITE, 0.2f); }
 
     static int px(Context c) { return dp(c, S.padX); }
 
@@ -119,6 +133,7 @@ final class Cards {
 
     static View button(Context c, String label, int bgColor, int icon, final Runnable run) {
         boolean semantic = bgColor == RED || bgColor == GREEN;
+        if (S.m3 && bgColor == BTN) return button(c, label, S.secCont, icon, S.onSecCont, run);   // M3 filled-tonal button
         return button(c, label, bgColor, icon, semantic ? 0xFFFFFFFF : WHITE, run);
     }
 
@@ -161,8 +176,49 @@ final class Cards {
         if (!s.contentEquals(t.getText())) t.setText(s);
     }
 
+    static void put(TextView t, CharSequence s) {
+        if (!s.toString().equals(t.getText().toString())) t.setText(s);
+    }
+
     static String timerText(IslandEvent e) {
+        if (e.snap != null) return e.snap.toString();                       // the clock app prints its own readout
+        if (e.paused) return Parse.clock(e.frozenMs);                       // frozen where the app froze it
         return Parse.clock(Parse.chronoMs(e.when, e.countDown, System.currentTimeMillis()));
+    }
+
+    /** Stopwatch glyph for a stopwatch, hourglass for a count-down, pause bars while it is paused. */
+    static int timerGlyph(IslandEvent e) { return e.paused ? IconView.PAUSE : (e.countDown ? IconView.HOURGLASS : IconView.TIMER); }
+
+    /** How much of a count-down is left, 0..1 (needs {@link IslandEvent#totalMs}). */
+    static float timerFrac(IslandEvent e) {
+        if (e.totalMs <= 0) return 0f;
+        long left = e.paused ? e.frozenMs : Parse.chronoMs(e.when, true, System.currentTimeMillis());
+        return Math.max(0f, Math.min(1f, left / (float) e.totalMs));
+    }
+
+    /** The idle clock's accent: the chosen one, else the island's violet. */
+    static int clockAcc() { return S.accentOverride ? S.accent : PURPLE; }
+
+    private static String ampm(int hour24) {
+        String[] a = new DateFormatSymbols(Locale.getDefault()).getAmPmStrings();
+        return a != null && a.length >= 2 ? a[hour24 < 12 ? 0 : 1] : (hour24 < 12 ? "AM" : "PM");
+    }
+
+    /** "1:05" with a small, quieter "PM" after it in 12 h mode. */
+    static CharSequence clockSpan(boolean use24, float ampmScale) {
+        Calendar cal = Calendar.getInstance();
+        int h = cal.get(Calendar.HOUR_OF_DAY);
+        String base = Parse.timeOfDay(h, cal.get(Calendar.MINUTE), use24);
+        if (use24) return base;
+        SpannableStringBuilder sb = new SpannableStringBuilder(base + " " + ampm(h));
+        sb.setSpan(new RelativeSizeSpan(ampmScale), base.length() + 1, sb.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new ForegroundColorSpan(SUB), base.length() + 1, sb.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return sb;
+    }
+
+    private static void setHands(ClockView v, boolean secs) {
+        Calendar cal = Calendar.getInstance();
+        v.set(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), cal.get(Calendar.SECOND), secs);
     }
 
     /** The idle pill's clock text: "1:05" (12 h) or "13:05" (24 h), following the system setting. */
@@ -275,11 +331,37 @@ final class Cards {
                 break;
             }
             case IslandEvent.TIMER: {
-                out.addView(new IconView(c, IconView.TIMER, ORANGE), fl(g, g, Gravity.START | side, m));
-                final TextView t = tv(c, timerText(e), 13f, ORANGE, true);
+                final int tc = tone(e, ORANGE);
+                final boolean ring = e.countDown && e.totalMs > 0 && e.snap == null, cp = e.paused, cd = e.countDown;
+                final IconView ic = new IconView(c, timerGlyph(e), tc);
+                final RingView rg = ring ? new RingView(c) : null;
+                if (ring) {   // a count-down wears a ring that drains as the time runs out
+                    FrameLayout lead = new FrameLayout(c);
+                    lead.addView(rg, new FrameLayout.LayoutParams(g, g));
+                    int in = Math.round(g * 0.27f);
+                    ic.setPadding(in, in, in, in);
+                    lead.addView(ic, new FrameLayout.LayoutParams(g, g));
+                    out.addView(lead, fl(g, g, Gravity.START | side, m));
+                } else {
+                    out.addView(ic, fl(g, g, Gravity.START | side, m));
+                }
+                final TextView t = tv(c, timerText(e), 13f, e.paused ? SUB : tc, true);
                 t.setFontFeatureSettings("tnum");
                 out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
-                e.tC = new Runnable() { @Override public void run() { put(t, timerText(e)); } };
+                e.tC = new Runnable() {
+                    @Override public void run() {
+                        put(t, timerText(e));
+                        if (rg != null) rg.set(timerFrac(e), tc);
+                    }
+                };
+                if (rg != null) rg.set(timerFrac(e), tc);
+                e.uC = new IslandEvent.Updater() {
+                    @Override public boolean update() {
+                        if (e.paused != cp || e.countDown != cd || (e.countDown && e.totalMs > 0 && e.snap == null) != ring) return false;   // looks different now: rebuild
+                        e.tC.run();
+                        return true;
+                    }
+                };
                 break;
             }
             case IslandEvent.NAV: {
@@ -327,19 +409,41 @@ final class Cards {
                 break;
             }
             case IslandEvent.PREVIEW: {
-                out.addView(new IconView(c, IconView.NOTE, PURPLE), fl(g, g, Gravity.START | side, m));
+                int pv = S.accentOverride ? S.accent : PURPLE;
+                out.addView(new IconView(c, IconView.NOTE, pv), fl(g, g, Gravity.START | side, m));
                 EqView eq = new EqView(c);
-                eq.setColor(PURPLE);
+                eq.setColor(pv);
                 out.addView(eq, fl(Math.round(g * 0.9f), Math.round(g * 0.75f), Gravity.END | side, m));
                 break;
             }
             case IslandEvent.CLOCK: {
                 final boolean use24 = DateFormat.is24HourFormat(c);
-                out.addView(new IconView(c, IconView.CLOCK, acc(e)), fl(g, g, Gravity.START | side, m));
-                final TextView t = tv(c, clockText(use24), 13f, WHITE, true);
+                final int look = Prefs.i(c, Prefs.K_CLOCKSTYLE, 0), ac = clockAcc();
+                final int lw = Math.max(dp(c, 36), dp(c, S.cW) - g - dp(c, S.cPad * 2) - dp(c, 4));
+                final ClockView cv = look == 1 ? null : new ClockView(c);
+                final TextView lead = look == 1 ? tv(c, "", 11.5f, ac, true) : null;
+                final TextView t = tv(c, "", look == 2 ? 12f : 14f, WHITE, true);
+                if (cv != null) {   // a little analog face, the minute hand and centre in the accent
+                    cv.setColors(Col.alpha(ac, 0.45f), WHITE, ac);
+                    out.addView(cv, fl(g, g, Gravity.START | side, m));
+                } else {            // weekday + date, e.g. "SAT 31"
+                    lead.setLetterSpacing(0.06f);
+                    out.addView(lead, fl(WRAP, WRAP, Gravity.START | side, m));
+                }
                 t.setFontFeatureSettings("tnum");
+                if (look == 2) t.setMaxWidth(lw);
                 out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
-                e.tC = new Runnable() { @Override public void run() { put(t, clockText(use24)); } };
+                final Runnable paint = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        if (look == 2) put(t, Parse.words(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE)));
+                        else put(t, clockSpan(use24, 0.62f));
+                        if (cv != null) setHands(cv, false);
+                        else put(lead, DateFormat.format("EEE d", cal.getTimeInMillis()).toString().toUpperCase(Locale.getDefault()));
+                    }
+                };
+                paint.run();
+                e.tC = paint;
                 break;
             }
             default: {
@@ -348,7 +452,7 @@ final class Cards {
                     ri.set(e.icon, g * 0.3f);
                     out.addView(ri, fl(g, g, Gravity.START | side, m));
                 } else {
-                    out.addView(new IconView(c, e.iconType >= 0 ? e.iconType : IconView.BELL, e.accent), fl(g, g, Gravity.START | side, m));
+                    out.addView(new IconView(c, e.iconType >= 0 ? e.iconType : IconView.BELL, acc(e)), fl(g, g, Gravity.START | side, m));
                 }
             }
         }
@@ -401,9 +505,9 @@ final class Cards {
     private static View replyRow(final Context c, final IslandEvent e) {
         LinearLayout r = row(c);
         r.setPadding(0, dp(c, 12), 0, 0);
-        r.addView(button(c, "Reply", BTN, -1, new Runnable() {
-            @Override public void run() { ReplyActivity.start(c, e); }
-        }), lpw(0, dp(c, 40), 1f));
+        Runnable reply = new Runnable() { @Override public void run() { ReplyActivity.start(c, e); } };
+        // Material You: Reply is the primary action, so it gets the primary container; the other action stays tonal
+        r.addView(S.m3 ? button(c, "Reply", S.accCont, -1, S.onAccCont, reply) : button(c, "Reply", BTN, -1, reply), lpw(0, dp(c, 40), 1f));
         if (e.actLabels.length > 0) {
             LinearLayout.LayoutParams p = lpw(0, dp(c, 40), 1f);
             p.setMarginStart(dp(c, 8));
@@ -536,15 +640,15 @@ final class Cards {
     private static View charge(final Context c, final IslandEvent e) {
         LinearLayout root = row(c);
         root.setPadding(px(c), py(c), px(c), py(c));
-        root.addView(new BatteryView(c, e.level, e.charging, e.accent), lp(dp(c, 76), dp(c, 38)));
+        root.addView(new BatteryView(c, e.level, e.charging, tone(e, e.accent)), lp(dp(c, 76), dp(c, 38)));
         LinearLayout t = col(c);
         t.setPadding(dp(c, 18), 0, 0, 0);
-        t.addView(tv(c, e.title, 14.5f, e.accent, true));
+        t.addView(tv(c, e.title, 14.5f, tone(e, e.accent), true));
         TextView pct = tv(c, e.level + "%", 30f, WHITE, true);
         pct.setFontFeatureSettings("tnum");
         t.addView(pct);
         root.addView(t, lpw(0, WRAP, 1f));
-        if (e.charging) root.addView(new IconView(c, IconView.BOLT, e.accent), lp(dp(c, 26), dp(c, 26)));
+        if (e.charging) root.addView(new IconView(c, IconView.BOLT, tone(e, e.accent)), lp(dp(c, 26), dp(c, 26)));
         return root;
     }
 
@@ -557,9 +661,9 @@ final class Cards {
             ri.set(e.icon, dp(c, 12));
             badge.addView(ri, new FrameLayout.LayoutParams(dp(c, 44), dp(c, 44)));
         } else {
-            badge.setBackground(bg((e.accent & 0x00FFFFFF) | 0x38000000, dp(c, 22)));
+            badge.setBackground(bg(S.m3 ? S.accCont : (e.accent & 0x00FFFFFF) | 0x38000000, dp(c, 22)));
             FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(dp(c, 22), dp(c, 22), Gravity.CENTER);
-            badge.addView(new IconView(c, e.iconType >= 0 ? e.iconType : IconView.BELL, e.accent), p);
+            badge.addView(new IconView(c, e.iconType >= 0 ? e.iconType : IconView.BELL, S.m3 ? S.onAccCont : e.accent), p);
         }
         root.addView(badge, lp(dp(c, 44), dp(c, 44)));
         LinearLayout t = col(c);
@@ -663,53 +767,223 @@ final class Cards {
         return root;
     }
 
+    /** One small rounded fact on the clock card: a glyph and a few words. */
+    private static LinearLayout chip(Context c, int icon, int iconColor, TextView text) {
+        LinearLayout ch = row(c);
+        ch.setBackground(bg(TILE, dp(c, 16)));
+        ch.setPadding(dp(c, 10), 0, dp(c, 11), 0);
+        ch.addView(new IconView(c, icon, iconColor), lp(dp(c, 14), dp(c, 14)));
+        text.setPadding(dp(c, 6), 0, 0, 0);
+        ch.addView(text);
+        return ch;
+    }
+
+    private static String alarmText(Context c, boolean use24) {
+        try {
+            AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+            AlarmManager.AlarmClockInfo ai = am == null ? null : am.getNextAlarmClock();
+            if (ai == null) return null;
+            Calendar cal = Calendar.getInstance();
+            cal.setTimeInMillis(ai.getTriggerTime());
+            int h = cal.get(Calendar.HOUR_OF_DAY);
+            String t = Parse.timeOfDay(h, cal.get(Calendar.MINUTE), use24) + (use24 ? "" : " " + ampm(h));
+            return t + " \u00b7 " + Parse.until(ai.getTriggerTime(), System.currentTimeMillis()).substring(3);
+        } catch (Throwable t) { return null; }
+    }
+
+    private static int[] battery(Context c) {   // {percent, charging 0/1} or null
+        try {
+            Intent b = c.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (b == null) return null;
+            int lv = b.getIntExtra("level", -1), sc = b.getIntExtra("scale", 100), st = b.getIntExtra("status", 0);
+            if (lv < 0 || sc <= 0) return null;
+            return new int[]{Math.round(lv * 100f / sc), st == 2 || st == 5 ? 1 : 0};
+        } catch (Throwable t) { return null; }
+    }
+
+    /** Weather row of the clock card. Its size is fixed up front (the card is measured once); numbers fill in when they arrive. */
+    private static View weatherTile(final Context c) {
+        LinearLayout tile = row(c);
+        tile.setBackground(bg(TILE, dp(c, 20)));
+        tile.setPadding(dp(c, 14), 0, dp(c, 14), 0);
+        final WxView icon = new WxView(c);
+        icon.set(Wx.CLOUDY, true, WHITE);
+        tile.addView(icon, lp(dp(c, 42), dp(c, 42)));
+        LinearLayout mid = col(c);
+        mid.setPadding(dp(c, 12), 0, dp(c, 8), 0);
+        final TextView temp = tv(c, "--", 24f, WHITE, true);
+        temp.setFontFeatureSettings("tnum");
+        final TextView desc = tv(c, "", 12.5f, SUB, false);
+        mid.addView(temp);
+        mid.addView(desc);
+        tile.addView(mid, lpw(0, WRAP, 1f));
+        LinearLayout right = col(c);
+        right.setGravity(Gravity.END);
+        final TextView hl = tv(c, "", 12.5f, WHITE, true);
+        final TextView place = tv(c, "", 11.5f, SUB, false);
+        hl.setGravity(Gravity.END);
+        place.setGravity(Gravity.END);
+        place.setMaxWidth(dp(c, 110));
+        right.addView(hl);
+        right.addView(place);
+        tile.addView(right);
+        final boolean f = Weather.useF(c);
+        final boolean[] shown = {false};
+        final Weather.Cb fill = new Weather.Cb() {
+            @Override public void on(Weather.Now n) {
+                if (n == null) {
+                    if (!shown[0]) { temp.setText("--"); desc.setText("Weather unavailable"); }
+                    return;
+                }
+                shown[0] = true;
+                icon.set(Wx.kind(n.code), n.day, WHITE);
+                temp.setText(Wx.temp(n.temp, f));
+                desc.setText(Wx.desc(n.code, n.day) + " \u00b7 feels " + Wx.temp(n.feels, f));
+                hl.setText("H " + Wx.temp(n.hi, f) + "  L " + Wx.temp(n.lo, f));
+                place.setText(n.place);
+            }
+        };
+        if (!Weather.hasPermission(c)) {
+            temp.setText("Weather");
+            desc.setText("Allow location in VoidIsland");
+        } else {
+            Weather.Now have = Weather.cached(c);
+            if (have != null) fill.on(have);
+            else { temp.setText("--"); desc.setText(Weather.hasPlace(c) ? "Fetching weather\u2026" : "Open VoidIsland once to set the place"); }
+            Weather.refresh(c, fill);
+        }
+        return tile;
+    }
+
     private static View clockCard(final Context c, final IslandEvent e) {
         final boolean use24 = DateFormat.is24HourFormat(c);
+        final int ac = clockAcc();
         LinearLayout root = col(c);
-        root.setGravity(Gravity.CENTER);
-        root.setPadding(px(c), py(c) + dp(c, 6), px(c), py(c) + dp(c, 8));
-        final TextView time = tv(c, clockText(use24), 36f, WHITE, true);
+        root.setPadding(px(c), py(c) + dp(c, 2), px(c), py(c) + dp(c, 2));
+        LinearLayout top = row(c);
+        LinearLayout left = col(c);
+        final TextView time = tv(c, clockSpan(use24, 0.4f), 44f, WHITE, true);
         time.setFontFeatureSettings("tnum");
-        time.setGravity(Gravity.CENTER);
-        final TextView date = tv(c, dateText(), 13f, SUB, false);
-        date.setGravity(Gravity.CENTER);
-        date.setPadding(0, dp(c, 2), 0, 0);
-        root.addView(time);
-        root.addView(date);
+        final TextView date = tv(c, dateFull(), 14f, SUB, false);
+        date.setPadding(dp(c, 2), dp(c, 2), 0, 0);
+        left.addView(time);
+        left.addView(date);
+        top.addView(left, lpw(0, WRAP, 1f));
+        final ClockView cv = new ClockView(c);
+        cv.setColors(Col.alpha(ac, 0.45f), WHITE, ac);
+        setHands(cv, true);
+        top.addView(cv, lp(dp(c, 82), dp(c, 82)));
+        root.addView(top);
+        if (Weather.enabled(c)) {
+            LinearLayout.LayoutParams wp = lp(ViewGroup.LayoutParams.MATCH_PARENT, dp(c, 64));
+            wp.topMargin = dp(c, 12);
+            root.addView(weatherTile(c), wp);
+        }
+
+        // little facts: next alarm, battery, week of the year
+        final TextView alT = tv(c, "", 12f, WHITE, true), baT = tv(c, "", 12f, WHITE, true), wkT = tv(c, "", 12f, WHITE, true);
+        final boolean wantAl = Prefs.b(c, Prefs.K_CALARM, true), wantBa = Prefs.b(c, Prefs.K_CBATT, true), wantWk = Prefs.b(c, Prefs.K_CWEEK, false);
+        final LinearLayout facts = row(c);
+        facts.setPadding(0, dp(c, 12), 0, 0);
+        final String al0 = wantAl ? alarmText(c, use24) : null;
+        final int[] ba0 = wantBa ? battery(c) : null;
+        final LinearLayout alC = chip(c, IconView.ALARM, ac, alT), baC = chip(c, IconView.BATTERY, ac, baT), wkC = chip(c, IconView.CAL, ac, wkT);
+        final IconView baIc = (IconView) baC.getChildAt(0);
+        boolean any = false;
+        LinearLayout.LayoutParams cp = lp(WRAP, dp(c, 30));
+        cp.setMarginEnd(dp(c, 8));
+        if (al0 != null) { alT.setText(al0); facts.addView(alC, cp); any = true; }
+        if (ba0 != null) { baT.setText(ba0[0] + "%"); baIc.set(ba0[1] == 1 ? IconView.BOLT : IconView.BATTERY, ba0[1] == 1 ? GREEN : ac); facts.addView(baC, cp); any = true; }
+        if (wantWk) {
+            Calendar w = Calendar.getInstance();
+            wkT.setText("Week " + w.get(Calendar.WEEK_OF_YEAR));
+            facts.addView(wkC, cp);
+            any = true;
+        }
+        if (any) root.addView(facts);
+
+        final int[] lastMin = {-1};
         e.tE = new Runnable() {
             @Override public void run() {
-                put(time, clockText(use24));
-                date.setText(dateText());
+                Calendar cal = Calendar.getInstance();
+                int mn = cal.get(Calendar.MINUTE);
+                setHands(cv, true);
+                if (mn == lastMin[0]) return;
+                lastMin[0] = mn;
+                put(time, clockSpan(use24, 0.4f));
+                put(date, dateFull());
+                if (wantAl) { String a = alarmText(c, use24); if (a != null) put(alT, a); }
+                if (wantBa) {
+                    int[] b = battery(c);
+                    if (b != null) { put(baT, b[0] + "%"); baIc.set(b[1] == 1 ? IconView.BOLT : IconView.BATTERY, b[1] == 1 ? GREEN : ac); }
+                }
             }
         };
         e.uE = new IslandEvent.Updater() {
-            @Override public boolean update() { e.tE.run(); return true; }
+            @Override public boolean update() { lastMin[0] = -1; e.tE.run(); return true; }
         };
         return root;
     }
 
+    private static String dateFull() {
+        String pat;
+        try { pat = DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEdMMMM"); } catch (Throwable t) { pat = "EEEE, d MMMM"; }
+        return DateFormat.format(pat, System.currentTimeMillis()).toString();
+    }
+
     private static View timer(final Context c, final IslandEvent e) {
-        LinearLayout root = col(c);
+        final int tc = tone(e, ORANGE);
+        final boolean ring = e.countDown && e.totalMs > 0 && e.snap == null, cp = e.paused, cd = e.countDown;
+        final LinearLayout root = col(c);
         root.setPadding(px(c), py(c), px(c), py(c));
         LinearLayout top = row(c);
-        top.addView(new IconView(c, IconView.TIMER, ORANGE), lp(dp(c, 30), dp(c, 30)));
+        FrameLayout tile = new FrameLayout(c);
+        tile.setBackground(bg(S.m3 ? S.accCont : Col.alpha(tc, 0.18f), dp(c, 15)));
+        IconView ic = new IconView(c, timerGlyph(e), S.m3 ? S.onAccCont : tc);
+        ic.setPadding(dp(c, 10), dp(c, 10), dp(c, 10), dp(c, 10));
+        tile.addView(ic, new FrameLayout.LayoutParams(dp(c, 48), dp(c, 48)));
+        top.addView(tile, lp(dp(c, 48), dp(c, 48)));
         LinearLayout t = col(c);
-        t.setPadding(dp(c, 14), 0, 0, 0);
-        final TextView label = tv(c, e.title, 14f, SUB, false);
-        final TextView time = tv(c, timerText(e), 34f, WHITE, true);
+        t.setPadding(dp(c, 14), 0, dp(c, 8), 0);
+        String kind = e.sub != null && e.sub.length() > 0 ? e.sub.toString() : (e.countDown ? "Timer" : "Stopwatch");
+        String named = e.title != null && e.title.length() > 0 && !e.title.toString().equals(e.appName) ? e.title.toString() : kind;
+        String head = e.appName != null && e.appName.length() > 0 ? named + " \u00b7 " + e.appName : named;
+        TextView k = tv(c, head.toUpperCase(Locale.getDefault()), 11f, e.paused ? SUB : tc, true);
+        k.setLetterSpacing(0.06f);
+        final TextView time = tv(c, timerText(e), 36f, e.paused ? SUB : WHITE, true);
         time.setFontFeatureSettings("tnum");
-        t.addView(label);
+        t.addView(k);
         t.addView(time);
         top.addView(t, lpw(0, WRAP, 1f));
+        if (e.paused) {
+            TextView chipT = tv(c, "Paused", 11.5f, WHITE, true);
+            chipT.setPadding(dp(c, 10), dp(c, 5), dp(c, 10), dp(c, 5));
+            chipT.setBackground(bg(TILE, dp(c, 14)));
+            top.addView(chipT);
+        }
         root.addView(top);
-        if (e.actLabels.length > 0) root.addView(actionsRow(c, e, 2));
-        e.tE = new Runnable() { @Override public void run() { put(time, timerText(e)); } };
+        final SeekView bar = new SeekView(c);
+        if (ring) {   // time left in the count-down
+            bar.setInteractive(false);
+            bar.setColor(tc);
+            bar.setFrac(timerFrac(e));
+            LinearLayout.LayoutParams bp = lp(ViewGroup.LayoutParams.MATCH_PARENT, dp(c, 18));
+            bp.topMargin = dp(c, 10);
+            root.addView(bar, bp);
+        }
+        if (e.actLabels.length > 0) root.addView(actionsRow(c, e, 3));
+        e.tE = new Runnable() {
+            @Override public void run() {
+                put(time, timerText(e));
+                if (ring) bar.setFrac(timerFrac(e));
+            }
+        };
         final String[] shownLabels = e.actLabels;
         e.uE = new IslandEvent.Updater() {
             @Override public boolean update() {
                 if (!Parse.sameLabels(shownLabels, e.actLabels)) return false;   // Pause <-> Resume: rebuild the buttons
-                label.setText(e.title);
-                put(time, timerText(e));
+                if (e.paused != cp || e.countDown != cd || (e.countDown && e.totalMs > 0 && e.snap == null) != ring) return false;
+                e.tE.run();
                 return true;
             }
         };
@@ -760,6 +1034,11 @@ final class Cards {
         prev.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
         next.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
         play.setPadding(dp(c, 12), dp(c, 8), dp(c, 12), dp(c, 8));
+        final int playFg = S.m3 ? S.onAccent : WHITE;
+        if (S.m3) {   // M3 filled button: primary pill with the on-primary glyph
+            play.set(e.playing ? IconView.PAUSE : IconView.PLAY, playFg);
+            play.setBackground(bg(S.accent, dp(c, 28)));
+        }
         prev.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 0); } });
         next.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 2); } });
         play.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 1); } });
@@ -792,7 +1071,7 @@ final class Cards {
                 art.set(e.art != null ? e.art : e.icon, dp(c, 14));
                 eq.setColor(acc(e));
                 eq.setPlaying(e.playing);
-                play.set(e.playing ? IconView.PAUSE : IconView.PLAY, WHITE);
+                play.set(e.playing ? IconView.PAUSE : IconView.PLAY, playFg);
                 boolean can = e.durMs > 0;
                 seek.setInteractive(can && (e.mc == null || (e.actions & PlaybackState.ACTION_SEEK_TO) != 0));
                 el.setVisibility(can ? View.VISIBLE : View.INVISIBLE);

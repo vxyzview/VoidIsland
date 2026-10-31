@@ -15,6 +15,7 @@ import android.view.ViewGroup;
 import android.widget.Chronometer;
 import android.widget.FrameLayout;
 import android.widget.RemoteViews;
+import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -103,6 +104,12 @@ final class Classifier {
         boolean countDown, running;
     }
 
+    /** What a clock app's own notification layout shows: its Chronometer (if it has one) and every piece of text in it. */
+    private static final class Probe {
+        Chrono k;
+        String text = "";
+    }
+
     private static Chronometer findChrono(View v) {
         if (v instanceof Chronometer) return (Chronometer) v;
         if (v instanceof ViewGroup) {
@@ -115,32 +122,71 @@ final class Classifier {
         return null;
     }
 
+    private static void collectText(View v, StringBuilder sb) {
+        if (v instanceof TextView) {
+            CharSequence t = ((TextView) v).getText();
+            if (t != null && t.length() > 0) sb.append(t).append('\n');
+        }
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) collectText(g.getChildAt(i), sb);
+        }
+    }
+
     /**
      * Many clock apps draw their stopwatch / timer with their own Chronometer inside a custom layout and never set the
-     * standard "show chronometer" flag, so the island used to miss them. Inflate the layout and read the base from it.
+     * standard "show chronometer" flag, so the island used to miss them. Inflate the layout and read the base from it;
+     * when there is no Chronometer, hand back the layout's text so a plain-text stopwatch can still be read.
      * Best effort: any failure just means "not a timer".
      */
     @SuppressWarnings("deprecation")
-    private static Chrono customChrono(Context c, Notification n) {
+    private static Probe probe(Context c, Notification n) {
+        Probe out = new Probe();
         RemoteViews[] all = { n.contentView, n.bigContentView, n.headsUpContentView };
         for (RemoteViews rv : all) {
             if (rv == null) continue;
             try {
-                Chronometer ch = findChrono(rv.apply(c, new FrameLayout(c)));
-                if (ch == null) continue;
-                Chrono k = new Chrono();
-                k.when = Parse.wallBase(ch.getBase(), SystemClock.elapsedRealtime(), System.currentTimeMillis());
-                k.countDown = ch.isCountDown();
-                k.running = true;
-                try {   // a paused stopwatch keeps its Chronometer but stops it; the flag is not public, so peek (assume running if hidden)
-                    java.lang.reflect.Field f = Chronometer.class.getDeclaredField("mStarted");
-                    f.setAccessible(true);
-                    k.running = f.getBoolean(ch);
-                } catch (Throwable t) { /* hidden: keep the assumption */ }
-                return k;
+                View root = rv.apply(c, new FrameLayout(c));
+                Chronometer ch = findChrono(root);
+                if (ch != null) {
+                    Chrono k = new Chrono();
+                    k.when = Parse.wallBase(ch.getBase(), SystemClock.elapsedRealtime(), System.currentTimeMillis());
+                    k.countDown = ch.isCountDown();
+                    k.running = true;
+                    try {   // a paused stopwatch keeps its Chronometer but stops it; the flag is not public, so peek (assume running if hidden)
+                        java.lang.reflect.Field f = Chronometer.class.getDeclaredField("mStarted");
+                        f.setAccessible(true);
+                        k.running = f.getBoolean(ch);
+                    } catch (Throwable t) { /* hidden: keep the assumption */ }
+                    out.k = k;
+                    return out;
+                }
+                StringBuilder sb = new StringBuilder();
+                collectText(root, sb);
+                if (out.text.length() == 0) out.text = sb.toString();
             } catch (Throwable t) { /* layout from a package we can't inflate */ }
         }
-        return null;
+        return out;
+    }
+
+    /** Count-down lengths seen so far, by notification: {full length, last remaining}. */
+    private static final HashMap<String, long[]> TOTAL = new HashMap<String, long[]>();
+
+    private static long total(String nkey, long left, long now) {
+        if (TOTAL.size() > 60) TOTAL.clear();
+        long[] st = TOTAL.get(nkey);
+        if (st == null || left > st[1] + 1500L) st = new long[]{Parse.totalMs(0L, left), left};   // first sight, or restarted / extended
+        st[0] = Parse.totalMs(st[0], left);
+        st[1] = left;
+        TOTAL.put(nkey, st);
+        return st[0];
+    }
+
+    /** A notification is gone: drop what was remembered about it. */
+    static void forget(String nkey) {
+        TOTAL.remove(nkey);
+        SEEN.remove(nkey);
+        SEEN_AT.remove(nkey);
     }
 
     private static boolean duplicate(String nkey, String sig) {
@@ -160,6 +206,11 @@ final class Classifier {
      * @return null when the notification should not appear on the island
      */
     static IslandEvent from(Context c, String pkg, Notification n, String nkey, int importance, boolean initial) {
+        return from(c, pkg, n, nkey, importance, initial, 0L);
+    }
+
+    /** @param postTime when the notification was last posted (wall clock), or 0 if unknown: a paused stopwatch froze at that moment */
+    static IslandEvent from(Context c, String pkg, Notification n, String nkey, int importance, boolean initial, long postTime) {
         if (pkg == null || n == null || c.getPackageName().equals(pkg)) return null;
         if (Prefs.has(c, Prefs.K_BLOCK, pkg)) return null;
         if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return null;
@@ -205,21 +256,65 @@ final class Classifier {
             return e;
         }
 
-        // ---- timers / stopwatches
-        boolean timerLike = chrono && ongoing;
+        // ---- timers / stopwatches (from the system clock, Google Clock, Samsung / Xiaomi / OnePlus clocks and other timer apps)
+        boolean sticky = ongoing || (n.flags & Notification.FLAG_FOREGROUND_SERVICE) != 0;
+        boolean timerLike = chrono && sticky;
         long tWhen = n.when;
         boolean tCount = x.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN);
-        if (!chrono && ongoing && (Notification.CATEGORY_ALARM.equals(cat) || Parse.isClockApp(pkg))) {
-            Chrono k = customChrono(c, n);   // the clock app's own stopwatch / timer layout
-            if (k != null && k.running) { timerLike = true; tWhen = k.when; tCount = k.countDown; }
+        boolean tPaused = false;
+        CharSequence tSnap = null;
+        boolean clockish = sticky && (Notification.CATEGORY_ALARM.equals(cat) || "stopwatch".equals(cat) || Parse.isClockApp(pkg));
+        IslandEvent probeActs = null;   // only to read the button labels
+        if (clockish || timerLike) {
+            probeActs = new IslandEvent("probe", IslandEvent.TIMER);
+            actions(probeActs, n);
+        }
+        boolean actPaused = probeActs != null && Parse.pausedByActions(probeActs.actLabels);
+        if (!chrono && clockish) {
+            Probe pr = probe(c, n);   // the clock app's own stopwatch / timer layout
+            if (pr.k != null) {
+                timerLike = true; tWhen = pr.k.when; tCount = pr.k.countDown;
+                tPaused = !pr.k.running || actPaused;
+            } else {
+                // No Chronometer anywhere: some clock apps print the readout as text and repost it as it changes.
+                // Only believe it when the notification says it is a stopwatch / timer.
+                StringBuilder all = new StringBuilder();
+                if (!empty(title)) all.append(title).append('\n');
+                if (!empty(text)) all.append(text).append('\n');
+                CharSequence big = x.getCharSequence(Notification.EXTRA_BIG_TEXT), subT = x.getCharSequence(Notification.EXTRA_SUB_TEXT);
+                if (!empty(big)) all.append(big).append('\n');
+                if (!empty(subT)) all.append(subT).append('\n');
+                all.append(pr.text);
+                long ms = Parse.findClockMs(all);
+                StringBuilder hint = new StringBuilder(all);
+                for (String l : probeActs.actLabels) hint.append('\n').append(l);
+                boolean said = "stopwatch".equals(cat) || Parse.timerWords(hint);   // not the alarm category alone: "Alarm 7:00" is not a 7 minute timer
+                if (ms >= 0 && said) {
+                    timerLike = true;
+                    tSnap = Parse.clock(ms);
+                    tPaused = actPaused;
+                    tCount = all.toString().toLowerCase(java.util.Locale.ROOT).contains("timer");
+                    tWhen = System.currentTimeMillis();
+                }
+            }
+        } else if (timerLike && actPaused) {
+            tPaused = true;   // standard chronometer, but the app offers "Resume": it is stopped
         }
         if (timerLike) {
             if (!Prefs.b(c, Prefs.K_NOTIF, true)) return null;
+            long now = System.currentTimeMillis();
             IslandEvent e = new IslandEvent("t:" + nkey, IslandEvent.TIMER);
-            e.live = true; e.priority = 80; e.pkg = pkg; e.appName = app;
+            e.live = true; e.priority = tPaused ? 55 : 80; e.pkg = pkg; e.appName = app;
             e.title = empty(title) ? app : title;
+            e.text = app;
+            e.sub = tCount ? "Timer" : "Stopwatch";
             e.countDown = tCount;
             e.when = tWhen;
+            e.paused = tPaused;
+            e.snap = tSnap;
+            if (tPaused) e.frozenMs = Parse.frozenMs(tWhen, tCount, postTime, now);
+            if (tCount && tSnap == null) e.totalMs = total(nkey, tPaused ? e.frozenMs : Math.max(0L, tWhen - now), now);
+            e.icon = Img.appIcon(c, pkg);
             e.contentIntent = n.contentIntent;
             actions(e, n);
             return e;

@@ -15,6 +15,9 @@
     <!-- Music lyrics are fetched from lrclib.net (open API, no account, no key). -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Optional, only if you turn on weather for the clock card: approximate position (rounded to ~1 km) goes to open-meteo.com. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />

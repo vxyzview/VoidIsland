@@ -9,12 +9,19 @@ Dynamic Island for Android (by vxyzview) — notifications, media and calls on a
 - **Only on the island** (opt-in, off by default): messages and payments shown on the island are removed from the shade. Apps on the *Keep in shade* list keep theirs. An original is only ever removed while the island is running and really showing that banner; if the island is off, hidden (landscape, lock screen, shade open) or ignoring the app, the notification stays in the shade. Android cannot bring back a notification that was already removed, so a banner you miss is gone.
 - **Quick reply**: expand a message banner and tap *Reply* to answer without opening the app.
 - **Island rules**: quiet hours (optionally only for chosen apps), mute group chats, one banner per chat.
+- **Clock & weather**: the idle pill is a small analog clock with the time (or *Digital*, or the time in *Words*). Tap it for a card with a big clock, the date, next alarm, battery and, if you turn it on, the weather.
+- **Timers & stopwatches**: the island follows the stopwatch and timer of your clock app (Google Clock, Samsung, Xiaomi, OnePlus... and most timer apps): it runs live on the pill, a count-down wears a ring that drains, and a paused one stays on the island frozen with a *Paused* tag until you resume or reset it.
 - **Live activities**: rides, food delivery and live scores stay on the island while they run.
 
 ## Install
 
 Grab an APK from [Releases](https://github.com/vxyzview/VoidIsland/releases) and sideload it (Android 8+ / API 26+).
 Then enable both accessibility services VoidIsland asks for, so it can see notifications and the shade.
+
+## Weather privacy
+
+Weather is **off by default** (*Behavior > Idle clock & weather*). When on, VoidIsland uses the *approximate* location permission, rounds the position to about 1 km and sends only that to
+[Open-Meteo](https://open-meteo.com) (open, no account or key) when the clock card is opened and the last answer is older than 30 minutes. Nothing runs in the background. The city name comes from the phone's own geocoder if it has one.
 
 ## Keeping it running
 

@@ -8,6 +8,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
@@ -155,7 +156,7 @@ final class SeekView extends View {
     @Override protected void onDraw(Canvas c) {
         float w = getWidth(), h = getHeight(), th = (dragging ? 9f : 5f) * d, y = h / 2f;
         r.set(0, y - th / 2f, w, y + th / 2f);
-        p.setColor(Col.alpha(Cards.WHITE, 0.2f));
+        p.setColor(Cards.track());
         c.drawRoundRect(r, th / 2f, th / 2f, p);
         float f = dragging ? dragFrac : frac;
         r.set(0, y - th / 2f, Math.max(th, w * f), y + th / 2f);
@@ -281,7 +282,7 @@ final class RingView extends View {
         float w = getWidth(), h = getHeight(), s = Math.min(w, h), sw = s * 0.14f;
         p.setStrokeWidth(sw);
         r.set((w - s) / 2f + sw / 2f, (h - s) / 2f + sw / 2f, (w + s) / 2f - sw / 2f, (h + s) / 2f - sw / 2f);
-        p.setColor(Col.alpha(Cards.WHITE, 0.2f));
+        p.setColor(Cards.track());
         c.drawArc(r, 0f, 360f, false, p);
         p.setColor(color);
         c.drawArc(r, -90f, 360f * frac, false, p);
@@ -554,5 +555,172 @@ final class LyricScroll extends View {
         removeCallbacks(frame);
         animate().cancel();
         setAlpha(1f);
+    }
+}
+
+/** Small analog clock for the idle pill and the clock card: a quiet ring, an hour and a minute hand, an accent second hand when asked. */
+final class ClockView extends View {
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final float d;
+    private int hour, min, sec;
+    private boolean secs;
+    private int ring = 0x55FFFFFF, hand = Color.WHITE, accent = Color.WHITE;
+
+    ClockView(Context c) {
+        super(c);
+        d = c.getResources().getDisplayMetrics().density;
+        p.setStrokeCap(Paint.Cap.ROUND);
+    }
+
+    void setColors(int ring, int hand, int accent) { this.ring = ring; this.hand = hand; this.accent = accent; invalidate(); }
+
+    /** @param withSeconds draw the second hand (the card ticks every second; the pill only every minute) */
+    void set(int h, int m, int s, boolean withSeconds) {
+        if (h == hour && m == min && s == sec && withSeconds == secs) return;
+        hour = h; min = m; sec = s; secs = withSeconds;
+        invalidate();
+    }
+
+    private void line(Canvas c, float cx, float cy, float deg, float from, float to, float w, int col) {
+        double a = Math.toRadians(deg - 90f);
+        float cs = (float) Math.cos(a), sn = (float) Math.sin(a);
+        p.setColor(col);
+        p.setStrokeWidth(w);
+        c.drawLine(cx + cs * from, cy + sn * from, cx + cs * to, cy + sn * to, p);
+    }
+
+    @Override protected void onDraw(Canvas c) {
+        float w = getWidth(), h = getHeight(), cx = w / 2f, cy = h / 2f, r = Math.min(w, h) / 2f;
+        float rw = Math.max(1.2f * d, r * 0.09f);
+        float R = r - rw / 2f;
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(rw);
+        p.setColor(ring);
+        c.drawCircle(cx, cy, R, p);
+        if (r > 18f * d) {   // big enough for the 12 / 3 / 6 / 9 marks
+            for (int i = 0; i < 12; i++) {
+                boolean q = i % 3 == 0;
+                line(c, cx, cy, i * 30f, R - (q ? 0.20f : 0.12f) * R, R - 0.05f * R, q ? rw * 0.9f : rw * 0.5f, q ? hand : ring);
+            }
+        }
+        float mAng = (min + sec / 60f) * 6f, hAng = ((hour % 12) + min / 60f) * 30f;
+        line(c, cx, cy, hAng, 0f, R * 0.50f, Math.max(1.6f * d, r * 0.11f), hand);
+        line(c, cx, cy, mAng, 0f, R * 0.74f, Math.max(1.3f * d, r * 0.08f), accent);
+        if (secs) line(c, cx, cy, sec * 6f, -R * 0.14f, R * 0.84f, Math.max(0.9f * d, r * 0.035f), accent);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(accent);
+        c.drawCircle(cx, cy, Math.max(1.6f * d, r * 0.075f), p);
+    }
+}
+
+/** Weather glyph drawn with plain shapes (sun, moon, clouds, rain, snow, bolt): no image files. */
+final class WxView extends View {
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF r = new RectF();
+    private final Path path = new Path(), cut = new Path();
+    private int kind = Wx.CLOUDY;
+    private boolean day = true;
+    private int cloud = Color.WHITE;
+
+    WxView(Context c) {
+        super(c);
+        p.setStrokeCap(Paint.Cap.ROUND);
+    }
+
+    void set(int kind, boolean day, int cloudColor) {
+        this.kind = kind; this.day = day; this.cloud = cloudColor;
+        invalidate();
+    }
+
+    private void cloud(Canvas c, float dx, float dy, int col) {
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(col);
+        c.drawCircle(36f + dx, 58f + dy, 15f, p);
+        c.drawCircle(55f + dx, 48f + dy, 20f, p);
+        c.drawCircle(73f + dx, 60f + dy, 13f, p);
+        r.set(22f + dx, 58f + dy, 86f + dx, 74f + dy);
+        c.drawRoundRect(r, 8f, 8f, p);
+    }
+
+    private void sun(Canvas c, float cx, float cy, float rad) {
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(0xFFFFC83D);
+        c.drawCircle(cx, cy, rad, p);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(rad * 0.28f);
+        for (int i = 0; i < 8; i++) {
+            double a = Math.toRadians(i * 45);
+            float cs = (float) Math.cos(a), sn = (float) Math.sin(a);
+            c.drawLine(cx + cs * rad * 1.45f, cy + sn * rad * 1.45f, cx + cs * rad * 1.95f, cy + sn * rad * 1.95f, p);
+        }
+    }
+
+    private void moon(Canvas c, float cx, float cy, float rad) {
+        path.reset();
+        path.addCircle(cx, cy, rad, Path.Direction.CW);
+        cut.reset();
+        cut.addCircle(cx + rad * 0.55f, cy - rad * 0.45f, rad * 0.85f, Path.Direction.CW);
+        path.op(cut, Path.Op.DIFFERENCE);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(0xFFDCE3FF);
+        c.drawPath(path, p);
+    }
+
+    @Override protected void onDraw(Canvas c) {
+        float s = Math.min(getWidth(), getHeight()) / 100f;
+        c.save();
+        c.translate((getWidth() - 100f * s) / 2f, (getHeight() - 100f * s) / 2f);
+        c.scale(s, s);
+        switch (kind) {
+            case Wx.CLEAR:
+                if (day) sun(c, 50f, 50f, 17f); else moon(c, 50f, 50f, 26f);
+                break;
+            case Wx.PARTLY:
+                if (day) sun(c, 36f, 36f, 12f); else moon(c, 36f, 36f, 18f);
+                cloud(c, 4f, 4f, cloud);
+                break;
+            case Wx.CLOUDY:
+                cloud(c, -8f, -8f, Col.alpha(cloud, 0.5f));
+                cloud(c, 4f, 4f, cloud);
+                break;
+            case Wx.FOG:
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(7f);
+                p.setColor(Col.alpha(cloud, 0.85f));
+                c.drawLine(20f, 38f, 80f, 38f, p);
+                c.drawLine(28f, 54f, 88f, 54f, p);
+                c.drawLine(20f, 70f, 72f, 70f, p);
+                break;
+            case Wx.DRIZZLE:
+            case Wx.RAIN:
+                cloud(c, 0f, -12f, cloud);
+                p.setStyle(Paint.Style.STROKE);
+                p.setColor(0xFF58B8FF);
+                p.setStrokeWidth(6f);
+                float L = kind == Wx.RAIN ? 14f : 8f;
+                for (int i = 0; i < 3; i++) c.drawLine(34f + i * 17f, 70f, 30f + i * 17f, 70f + L, p);
+                break;
+            case Wx.SNOW:
+                cloud(c, 0f, -12f, cloud);
+                p.setStyle(Paint.Style.FILL);
+                p.setColor(0xFFFFFFFF);
+                for (int i = 0; i < 3; i++) c.drawCircle(34f + i * 17f, 78f + (i == 1 ? 6f : 0f), 4.6f, p);
+                break;
+            default:   // storm
+                cloud(c, 0f, -12f, Col.alpha(cloud, 0.8f));
+                path.reset();
+                path.moveTo(54f, 58f);
+                path.lineTo(40f, 80f);
+                path.lineTo(51f, 80f);
+                path.lineTo(46f, 98f);
+                path.lineTo(66f, 72f);
+                path.lineTo(55f, 72f);
+                path.lineTo(61f, 58f);
+                path.close();
+                p.setStyle(Paint.Style.FILL);
+                p.setColor(0xFFFFC83D);
+                c.drawPath(path, p);
+        }
+        c.restore();
     }
 }

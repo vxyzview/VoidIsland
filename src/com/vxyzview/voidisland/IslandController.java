@@ -93,8 +93,12 @@ final class IslandController implements IslandView.Host {
     private long nextTick(IslandEvent e) {
         long now = System.currentTimeMillis();
         switch (e.type) {
-            case IslandEvent.CLOCK: return Parse.nextMinuteMs(now);
-            case IslandEvent.TIMER: return Parse.nextSecondMs(e.when, e.countDown, now) + 8L;
+            case IslandEvent.CLOCK:
+                // the open clock card sweeps a second hand; the idle pill only needs the minute
+                return shownMode == IslandView.EXPANDED ? 1000L - (now % 1000L) + 15L : Parse.nextMinuteMs(now);
+            case IslandEvent.TIMER:
+                if (e.paused || e.snap != null) return 1500L;   // frozen, or only changes when its app posts again
+                return Parse.nextSecondMs(e.when, e.countDown, now) + 8L;
             case IslandEvent.CALL: if (e.chrono && !e.incoming) return Parse.nextSecondMs(e.when, false, now) + 8L; return 1000L;
             default: return 400L;   // music: lyric line / progress bar
         }

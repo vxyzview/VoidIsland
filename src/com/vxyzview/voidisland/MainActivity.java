@@ -125,8 +125,22 @@ public final class MainActivity extends Activity {
             lastOverlay = o;
             Prefs.sp(this).edit().putLong(Prefs.K_POKE, System.currentTimeMillis()).apply();
         }
+        if (Weather.enabled(this) && Weather.hasPermission(this)) Weather.rememberLocation(this);   // cheap: reads the last known position
         if (page != 1) showPage(page, true);
         h.post(new Runnable() { @Override public void run() { askKeepAlive(); } });
+    }
+
+    @Override public void onRequestPermissionsResult(int code, String[] perms, int[] res) {
+        super.onRequestPermissionsResult(code, perms, res);
+        if (code == 8) {
+            if (Weather.hasPermission(this)) {
+                Weather.rememberLocation(this);
+                Prefs.sp(this).edit().putLong(Prefs.K_POKE, System.currentTimeMillis()).apply();   // island rebuilds its clock card
+            } else {
+                Toast.makeText(this, "Weather needs the approximate location", Toast.LENGTH_LONG).show();
+            }
+            if (page == 0 || page == 2) showPage(page, true);
+        }
     }
 
     @Override protected void onPause() {
@@ -324,6 +338,10 @@ public final class MainActivity extends Activity {
         su.addView(setupItem(IconView.BT, "Bluetooth names", "Optional: show which device connected", btOn(), "Allow", new Runnable() {
             @Override public void run() { if (Build.VERSION.SDK_INT >= 31) requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, 7); }
         }));
+        su.addView(setupItem(IconView.PIN, "Weather location", "Optional: approximate place for the weather on the clock card",
+            Weather.hasPermission(this), "Allow", new Runnable() {
+                @Override public void run() { requestPermissions(new String[]{"android.permission.ACCESS_COARSE_LOCATION"}, 8); }
+            }));
         String fam = KeepAlive.familyHere();
         su.addView(setupItem(IconView.BOLT, "Battery: unrestricted",
             (fam != null ? "Recommended on " + fam + " phones: " : "Optional: ") + "stops the system from putting the island to sleep",
@@ -341,9 +359,9 @@ public final class MainActivity extends Activity {
         }));
 
         LinearLayout ty = m.card(p, "Try it");
-        String[] dNm = {"Music", "Call", "Payment", "Charging", "Message", "Download", "Timer", "Toast"};
-        String[] dCd = {"m", "c", "p", "g", "n", "d", "t", "s"};
-        int[] dIc = {IconView.NOTE, IconView.PHONE, IconView.CARD, IconView.BOLT, IconView.BELL, IconView.DOWNLOAD, IconView.TIMER, IconView.MOON};
+        String[] dNm = {"Music", "Call", "Payment", "Charging", "Message", "Download", "Timer", "Stopwatch", "Paused", "Clock", "Toast"};
+        String[] dCd = {"m", "c", "p", "g", "n", "d", "t", "w", "x", "k", "s"};
+        int[] dIc = {IconView.NOTE, IconView.PHONE, IconView.CARD, IconView.BOLT, IconView.BELL, IconView.DOWNLOAD, IconView.HOURGLASS, IconView.TIMER, IconView.PAUSE, IconView.CLOCK, IconView.MOON};
         LinearLayout row = null;
         for (int i = 0; i < dNm.length; i++) {
             if (i % 2 == 0) {
@@ -407,6 +425,8 @@ public final class MainActivity extends Activity {
         } else if ("box".equals(name)) {
             e.putInt(Prefs.K_SHAPE, Style.BOX).putInt(Prefs.K_ESHAPE, Style.BOX).putInt(Prefs.K_CW, 140).putInt(Prefs.K_CH, 34).putInt(Prefs.K_CR, 10)
                 .putInt(Prefs.K_EW, 340).putInt(Prefs.K_ER, 20);
+        } else if ("amoled".equals(name)) {   // black island, Material You accents
+            e.putInt(Prefs.K_ACCMODE, 1);
         } else if ("you".equals(name)) {
             e.putInt(Prefs.K_COLMODE, 1).putInt(Prefs.K_ACCMODE, 1).putInt(Prefs.K_ER, 32);
         }
@@ -432,7 +452,7 @@ public final class MainActivity extends Activity {
         HorizontalScrollView hs = new HorizontalScrollView(this);
         hs.setHorizontalScrollBarEnabled(false);
         LinearLayout cr = m.row();
-        String[][] presets = {{"iOS pill", "ios"}, {"Notch", "notch"}, {"Mini", "mini"}, {"Box", "box"}, {"Material You", "you"}};
+        String[][] presets = {{"iOS pill", "ios"}, {"Notch", "notch"}, {"Mini", "mini"}, {"Box", "box"}, {"AMOLED + You", "amoled"}, {"Material You", "you"}};
         for (String[] pr : presets) {
             final String id = pr[1];
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(M3.WRAP, M3.WRAP);
@@ -506,10 +526,13 @@ public final class MainActivity extends Activity {
                 @Override public void on(int c) { put(Prefs.K_TXT, c); showPage(1, true); changed(previewExpanded); }
             }));
         }
-        co.addView(label("Accent (bars, progress, rings)"));
+        co.addView(label("Accent (buttons, bars, icons)"));
         co.addView(m.segmented(new String[]{"Auto", "Material You", "Custom"}, s.accMode, new M3.OnSel() {
             @Override public void on(int i) { put(Prefs.K_ACCMODE, i); showPage(1, true); changed(previewExpanded); }
         }));
+        if (s.accMode == 1) {
+            co.addView(m.body("Follows your wallpaper's Material You colors: filled play button, tonal buttons, bars, rings and icons. The island keeps its own color, so pure black stays black."));
+        }
         if (s.accMode == 2) {
             co.addView(m.swatches(this, ACC, s.accCustom, true, new M3.OnColor() {
                 @Override public void on(int c) { put(Prefs.K_ACC, c); showPage(1, true); changed(previewExpanded); }
@@ -601,6 +624,28 @@ public final class MainActivity extends Activity {
         m.toggle(sh, "Charging & battery", "Plugged in, full, low battery", Prefs.K_CHG, true, null);
         m.toggle(sh, "Phone events", "Silent mode, DND, headphones, Bluetooth, flashlight", Prefs.K_SYS, true, null);
         m.toggle(sh, "App toasts", "Short messages apps pop up", Prefs.K_TOAST, false, null);
+
+        LinearLayout ck = m.card(p, "Idle clock & weather");
+        ck.addView(label("Clock on the pill"));
+        ck.addView(m.segmented(new String[]{"Analog", "Digital", "Words"}, Prefs.i(this, Prefs.K_CLOCKSTYLE, 0), new M3.OnSel() {
+            @Override public void on(int i) { put(Prefs.K_CLOCKSTYLE, i); }
+        }));
+        ck.addView(m.body("Tap the idle clock to open the card: big time, date and a few extras."));
+        m.toggle(ck, "Next alarm", "Shown on the clock card", Prefs.K_CALARM, true, null);
+        m.toggle(ck, "Battery", "Shown on the clock card", Prefs.K_CBATT, true, null);
+        m.toggle(ck, "Week number", "Shown on the clock card", Prefs.K_CWEEK, false, null);
+        m.toggle(ck, "Weather", "Temperature and sky on the clock card. Uses your approximate location, rounded to about 1 km, and sends only that to open-meteo.com when the card opens (at most every 30 minutes). Nothing runs in the background",
+            Prefs.K_WEATHER, false, new Runnable() {
+                @Override public void run() {
+                    if (!Weather.enabled(MainActivity.this)) return;
+                    if (!Weather.hasPermission(MainActivity.this)) requestPermissions(new String[]{"android.permission.ACCESS_COARSE_LOCATION"}, 8);
+                    else Weather.rememberLocation(MainActivity.this);
+                }
+            });
+        ck.addView(label("Temperature unit"));
+        ck.addView(m.segmented(new String[]{"Auto", "\u00b0C", "\u00b0F"}, Prefs.i(this, Prefs.K_WUNIT, 0), new M3.OnSel() {
+            @Override public void on(int i) { put(Prefs.K_WUNIT, i); }
+        }));
 
         LinearLayout ru = m.card(p, "Rules");
         m.toggle(ru, "Hide in landscape", null, Prefs.K_LAND, true, null);
@@ -741,16 +786,45 @@ public final class MainActivity extends Activity {
             download(0);
         } else if ("t".equals(code)) {
             IslandEvent e = ev("t:demo", IslandEvent.TIMER);
-            e.live = true; e.priority = 80; e.title = "Timer"; e.countDown = true; e.when = System.currentTimeMillis() + 5 * 60 * 1000L;
+            e.live = true; e.priority = 80; e.title = "Timer"; e.sub = "Timer"; e.countDown = true; e.when = System.currentTimeMillis() + 5 * 60 * 1000L;
+            e.totalMs = 5 * 60 * 1000L;
             e.actLabels = new String[]{"Stop"};
             e.actIntents = new PendingIntent[1];
             e.actRuns = new Runnable[]{new Runnable() { @Override public void run() { Bus.remove("t:demo"); } }};
             Bus.post(e);
+        } else if ("w".equals(code)) {
+            stopwatch(false, 83000L);
+        } else if ("x".equals(code)) {
+            stopwatch(true, 83000L);
+        } else if ("k".equals(code)) {
+            if (!Prefs.b(this, Prefs.K_CLOCK, true)) Toast.makeText(this, "Turn on \u201cClock when idle\u201d in Behavior first", Toast.LENGTH_LONG).show();
+            else Bus.expand("clock");
         } else if ("s".equals(code)) {
             IslandEvent e = new IslandEvent("toast", IslandEvent.SYSTEM);
             e.title = "Headphones connected"; e.iconType = IconView.HEADSET; e.accent = Cards.GREEN; e.durationMs = 2400;
             Bus.post(e);
         }
+    }
+
+    /** A stopwatch the way a clock app posts it: running (Lap / Pause) or frozen (Resume / Reset). Pause and Resume swap the card in place. */
+    private void stopwatch(final boolean paused, final long elapsed) {
+        final IslandEvent e = ev("t:demo2", IslandEvent.TIMER);
+        long now = System.currentTimeMillis();
+        e.live = true; e.priority = paused ? 55 : 80; e.title = "Stopwatch"; e.sub = "Stopwatch"; e.countDown = false;
+        e.paused = paused; e.frozenMs = elapsed; e.when = now - elapsed;
+        e.actLabels = paused ? new String[]{"Resume", "Reset"} : new String[]{"Lap", "Pause"};
+        e.actIntents = new PendingIntent[2];
+        if (paused) {
+            e.actRuns = new Runnable[]{
+                new Runnable() { @Override public void run() { stopwatch(false, elapsed); } },
+                new Runnable() { @Override public void run() { Bus.remove("t:demo2"); } }};
+        } else {
+            e.actRuns = new Runnable[]{
+                null,   // Lap: nothing to do in the demo
+                new Runnable() { @Override public void run() { stopwatch(true, Parse.chronoMs(e.when, false, System.currentTimeMillis())); } }};
+        }
+        Bus.post(e);
+        if (!paused) Bus.expand("t:demo2");
     }
 
     private void ongoingCall() {
@@ -775,6 +849,6 @@ public final class MainActivity extends Activity {
     }
 
     private void clearDemos() {
-        for (String k : new String[]{"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "toast", "preview"}) Bus.remove(k);
+        for (String k : new String[]{"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "t:demo2", "toast", "preview"}) Bus.remove(k);
     }
 }

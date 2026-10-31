@@ -134,15 +134,22 @@ final class PreviewView extends View {
             p.setColor(Col.alpha(st.sub, ea * 0.8f));
             r.set(x0 + 70f * u, y0 + 30f * u, x0 + 70f * u + 80f * u, y0 + 38f * u);
             c.drawRoundRect(r, 4f * u, 4f * u, p);
-            p.setColor(Col.alpha(st.text, ea * 0.22f));
+            p.setColor(st.m3 ? Col.alpha(st.secCont, ea) : Col.alpha(st.text, ea * 0.22f));
             r.set(x0, y0 + 70f * u, x0 + cw, y0 + 74f * u);
             c.drawRoundRect(r, 2f * u, 2f * u, p);
-            p.setColor(Col.alpha(st.text, ea));
+            p.setColor(Col.alpha(st.accentOverride ? st.accent : st.text, ea));
             r.set(x0, y0 + 70f * u, x0 + cw * 0.4f, y0 + 74f * u);
             c.drawRoundRect(r, 2f * u, 2f * u, p);
             float mid = x0 + cw / 2f, cyy = y0 + 98f * u;
-            c.drawCircle(mid, cyy, 12f * u, p);
-            p.setColor(Col.alpha(st.sub, ea));
+            if (st.m3) {   // filled primary play pill, tonal skip buttons
+                r.set(mid - 19f * u, cyy - 12f * u, mid + 19f * u, cyy + 12f * u);
+                c.drawRoundRect(r, 12f * u, 12f * u, p);
+                p.setColor(Col.alpha(st.secCont, ea));
+            } else {
+                p.setColor(Col.alpha(st.text, ea));
+                c.drawCircle(mid, cyy, 12f * u, p);
+                p.setColor(Col.alpha(st.sub, ea));
+            }
             c.drawCircle(mid - 46f * u, cyy, 7f * u, p);
             c.drawCircle(mid + 46f * u, cyy, 7f * u, p);
         }

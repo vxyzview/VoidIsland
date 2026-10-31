@@ -26,6 +26,10 @@ final class Style {
     // derived
     int bg = 0xFF000000, text = 0xFFFFFFFF, sub = 0xB3FFFFFF, btn = 0x2EFFFFFF, tile = 0x24FFFFFF, accent = 0xFFB388FF;
     boolean accentOverride = false;
+    // Material You accent set (only filled in when accMode == 1). The island itself stays whatever colour it is (black / AMOLED);
+    // only the accents -- buttons, play button, bars, rings, badges, icons -- take the wallpaper's tonal palette, always the dark-scheme tones.
+    boolean m3 = false;
+    int onAccent = 0xFF381E72, accCont = 0xFF4F378B, onAccCont = 0xFFEADDFF, secCont = 0xFF4A4458, onSecCont = 0xFFE8DEF8;
 
     private static int clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -80,6 +84,15 @@ final class Style {
         btn = Col.alpha(text, 0.18f);
         tile = Col.alpha(text, 0.14f);
         accentOverride = accMode != 0;
+        m3 = accMode == 1;
         accent = accMode == 1 ? Pal.get(c, "accent1", 200, 0xFFD0BCFF) : (accMode == 2 ? accCustom : 0xFFB388FF);
+        if (m3) {
+            // same dark-scheme mapping the settings app uses: primary / on-primary, primary container, secondary container
+            onAccent = Pal.get(c, "accent1", 800, 0xFF381E72);
+            accCont = Pal.get(c, "accent1", 700, 0xFF4F378B);
+            onAccCont = Pal.get(c, "accent1", 100, 0xFFEADDFF);
+            secCont = Pal.get(c, "accent2", 700, 0xFF4A4458);
+            onSecCont = Pal.get(c, "accent2", 100, 0xFFE8DEF8);
+        }
     }
 }
