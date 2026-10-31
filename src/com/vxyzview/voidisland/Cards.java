@@ -225,14 +225,33 @@ final class Cards {
                 eq.setColor(acc(e));
                 eq.setPlaying(e.playing);
                 out.addView(eq, fl(Math.round(g * 0.9f), Math.round(g * 0.75f), Gravity.END | side, m));
+                // The playing song's current line rides the pill too: art left, lyric right;
+                // the equalizer bars take over only while no lyric is known.
+                final TextView lt = tv(c, "", 13f, WHITE, true);
+                lt.setMaxWidth(Math.max(dp(c, 36), dp(c, S.cW) - g - dp(c, S.cPad * 2) - dp(c, 2)));
+                lt.setVisibility(View.INVISIBLE);
+                out.addView(lt, fl(WRAP, WRAP, Gravity.END | side, m));
+                final String[] lkey = {""};
+                final Lyrics.Loaded[] lnow = {null};
+                final Runnable show = new Runnable() {
+                    @Override public void run() {
+                        Lyrics.Loaded l = lnow[0];
+                        String s = l == null ? null : l.textAt(position(e), e.durMs);
+                        if (s == null) { lt.setText(""); lt.setVisibility(View.INVISIBLE); eq.setVisibility(View.VISIBLE); }
+                        else { lt.setText(s); lt.setVisibility(View.VISIBLE); eq.setVisibility(View.GONE); }
+                    }
+                };
+                e.tC = new Runnable() { @Override public void run() { show.run(); } };
                 e.uC = new IslandEvent.Updater() {
                     @Override public boolean update() {
                         ri.set(e.art != null ? e.art : e.icon, g * 0.3f);
                         eq.setColor(acc(e));
                         eq.setPlaying(e.playing);
+                        lyricsLoad(c, e, lkey, lnow, show);
                         return true;
                     }
                 };
+                lyricsLoad(c, e, lkey, lnow, show);
                 break;
             }
             case IslandEvent.CALL: {
@@ -662,27 +681,6 @@ final class Cards {
                 else { lyr.setText(line); lyr.setVisibility(View.VISIBLE); }
             }
         };
-        final Runnable reloadLyrics = new Runnable() {
-            @Override public void run() {
-                if (!Prefs.b(c, Prefs.K_LYRICS, true)) { lnow[0] = null; lkey[0] = ""; showLyric.run(); return; }
-                final String track = e.title == null ? "" : e.title.toString().trim();
-                final String artist = e.text == null ? "" : e.text.toString().trim();
-                if (track.length() == 0) { lnow[0] = null; lkey[0] = ""; showLyric.run(); return; }
-                final String key = track + "|" + artist + "|" + (e.durMs / 1000);
-                if (key.equals(lkey[0])) return;   // already attempted this exact song (nothing was found)
-                lkey[0] = key;
-                lyricsFetch(track, artist, e.durMs / 1000, new GotLyrics() {
-                    @Override public void got(String t0, String a0, Lyrics.Loaded l) {
-                        if (l != null) Lyrics.remember(t0, a0, l);
-                        String n0 = e.title == null ? "" : e.title.toString().trim();
-                        String n1 = e.text == null ? "" : e.text.toString().trim();
-                        if (!n0.equals(t0) || !n1.equals(a0)) return;   // the song changed while we were fetching
-                        lnow[0] = l;
-                        showLyric.run();
-                    }
-                });
-            }
-        };
         e.tE = new Runnable() {
             @Override public void run() {
                 long dur = e.durMs, pos = position(e);
@@ -709,7 +707,7 @@ final class Cards {
                 el.setVisibility(can ? View.VISIBLE : View.INVISIBLE);
                 rem.setVisibility(can ? View.VISIBLE : View.INVISIBLE);
                 e.tE.run();
-                reloadLyrics.run();
+                lyricsLoad(c, e, lkey, lnow, showLyric);
                 return true;
             }
         };
@@ -738,6 +736,29 @@ final class Cards {
         }, "vi-lyrics");
         t.setDaemon(true);
         t.start();
+    }
+
+    /** The caller's small holders (key + loaded) plus the callback that should repaint its lyric row. */
+    static void lyricsLoad(final Context c, final IslandEvent e, final String[] key, final Lyrics.Loaded[] now, final Runnable on) {
+        if (!Prefs.b(c, Prefs.K_LYRICS, true)) { now[0] = null; key[0] = ""; on.run(); return; }
+        final String track = e.title == null ? "" : e.title.toString().trim();
+        final String artist = e.text == null ? "" : e.text.toString().trim();
+        if (track.length() == 0) { now[0] = null; key[0] = ""; on.run(); return; }
+        final String k = track + "|" + artist + "|" + (e.durMs / 1000);
+        if (k.equals(key[0])) return;   // already working on this exact song (found or not)
+        key[0] = k;
+        Lyrics.Loaded hit = Lyrics.cached(track, artist);
+        if (hit != null) { now[0] = hit; on.run(); return; }
+        lyricsFetch(track, artist, e.durMs / 1000, new GotLyrics() {
+            @Override public void got(String t0, String a0, Lyrics.Loaded l) {
+                if (l != null) Lyrics.remember(t0, a0, l);
+                String n0 = e.title == null ? "" : e.title.toString().trim();
+                String n1 = e.text == null ? "" : e.text.toString().trim();
+                if (!n0.equals(t0) || !n1.equals(a0)) return;   // the song changed while we were fetching
+                now[0] = l;
+                on.run();
+            }
+        });
     }
 
     /** LRCLIB (no key): /api/get first, then /api/search picking the entry whose duration fits best. */
