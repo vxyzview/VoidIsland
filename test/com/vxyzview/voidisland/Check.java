@@ -67,6 +67,14 @@ public class Check {
         Geo.surface(Geo.BOX, 400f, 20f, 0f, 100f, 38f, 0f, g);
         ok(g[4] == 10f, "box radius clamps to half the width");
 
+        // --- Absorb: one-shot notifications are the island's to show; their original rests, then returns
+        ok(Absorb.applies(IslandEvent.NOTIF, false, false) && Absorb.applies(IslandEvent.PAYMENT, false, false), "absorb: text banners are absorbed");
+        ok(!Absorb.applies(IslandEvent.CALL, true, false) && !Absorb.applies(IslandEvent.TIMER, true, false)
+            && !Absorb.applies(IslandEvent.PROGRESS, true, false), "absorb: live things keep their original notification");
+        ok(!Absorb.applies(IslandEvent.NOTIF, false, true), "absorb: never hides notifications that were already up at connect");
+        ok(Absorb.delayMs(5200) == 8200, "absorb: rests 3s past the banner");
+        ok(Absorb.delayMs(2000) == 6000 && Absorb.delayMs(20000) == 23000, "absorb: delay floor and scale");
+
         // --- ShadeMatch
         ok(ShadeMatch.panel("Notification shade.", "android.widget.FrameLayout"), "shade: en notification shade");
         ok(ShadeMatch.panel("Quick settings.", ""), "shade: en quick settings");
