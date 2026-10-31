@@ -23,6 +23,14 @@ final class Lyrics {
             return i >= 0 ? line[i] : null;
         }
 
+        /** Milliseconds of song position at which the line after the current one starts, or -1 when there is none. */
+        long nextStartMs(long ms, long durMs) {
+            int i = indexAt(ms, durMs);
+            if (synced) return i + 1 < at.length ? at[i + 1] : -1L;
+            if (line.length == 0 || durMs <= 0) return -1L;
+            return i + 1 < line.length ? durMs * (i + 1) / line.length + 1 : -1L;
+        }
+
         /** The index of the line playing at {@code ms}, or -1 when nothing is yet (also -1 for "no duration" plain text). */
         int indexAt(long ms, long durMs) {
             if (synced) {

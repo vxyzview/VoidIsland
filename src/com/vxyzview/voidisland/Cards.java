@@ -229,7 +229,7 @@ final class Cards {
                 // the equalizer bars take over only while no lyric is known.
                 final LyricScroll ls = new LyricScroll(c);
                 final int lw = Math.max(dp(c, 36), dp(c, S.cW) - g - dp(c, S.cPad * 2) - dp(c, 2));
-                ls.bind(null, lw, WHITE, SUB, 13f);
+                ls.bind(null, lw, WHITE, SUB, Prefs.i(c, Prefs.K_LYRSIZE, 13));
                 ls.setVisibility(View.INVISIBLE);
                 out.addView(ls, fl(WRAP, WRAP, Gravity.END | side, m));
                 final String[] lkey = {""};
@@ -237,10 +237,11 @@ final class Cards {
                 final Runnable show = new Runnable() {
                     @Override public void run() {
                         Lyrics.Loaded l = lnow[0];
-                        if (l == null) { ls.tick(0, 0, false); ls.setVisibility(View.INVISIBLE); eq.setVisibility(View.VISIBLE); }
+                        if (l == null) { ls.tick(0, 0, false, 1f); ls.setVisibility(View.INVISIBLE); eq.setVisibility(View.VISIBLE); }
                         else {
-                            ls.bind(l, lw, WHITE, SUB, 13f);
-                            ls.tick(position(e), e.durMs, e.playing);
+                            ls.bind(l, lw, WHITE, SUB, Prefs.i(c, Prefs.K_LYRSIZE, 13));
+                            // lyrics may be nudged earlier (+) or later (-) to match this player and phone
+                            ls.tick(position(e) + Prefs.i(c, Prefs.K_LYROFF, 200), e.durMs, e.playing, e.speed);
                             ls.setVisibility(View.VISIBLE);
                             eq.setVisibility(View.GONE);
                         }

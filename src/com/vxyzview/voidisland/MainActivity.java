@@ -562,6 +562,10 @@ public final class MainActivity extends Activity {
         m.toggle(sh, "Clock when idle", "Show the time on an empty island", Prefs.K_CLOCK, true, null);
         m.toggle(sh, "Music & media", "Album art, seek bar, controls", Prefs.K_MEDIA, true, null);
         m.toggle(sh, "Music lyrics", "The playing song's lyrics show on the pill, long lines slide sideways (from LRCLIB)", Prefs.K_LYRICS, true, null);
+        m.slider(sh, "Lyrics size", Prefs.K_LYRSIZE, 9, 16, 13, 1, unit(" sp"), null);
+        m.slider(sh, "Lyrics timing", Prefs.K_LYROFF, -10, 10, 2, 100, new M3.Fmt() {
+            @Override public String f(int v) { return (v > 0 ? "+" : "") + (v * 100) + " ms"; }
+        }, null);
         m.toggle(sh, "Calls", "Answer and decline from the island", Prefs.K_CALL, true, null);
         m.toggle(sh, "Payments", "Payment and transfer confirmations", Prefs.K_PAY, true, null);
         m.toggle(sh, "Notifications", "Banners, downloads, timers, maps", Prefs.K_NOTIF, true, null);

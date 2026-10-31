@@ -122,6 +122,10 @@ public class Check {
         ok(Lyrics.snapOffset(1, tops, 60f) == 10f, "scroll: window taller than the song clamps to the last edge");
         ok(Lyrics.snapOffset(0, new float[]{0f, 20f}, 30f) == 0f, "scroll: song shorter than the pill does not scroll");
 
+        ok(s0.nextStartMs(1500, 0) == 10500 && s0.nextStartMs(0, 0) == 1000, "lyrics: next line start (synced), also before the first line");
+        ok(s0.nextStartMs(65000, 0) == -1, "lyrics: no next line after the last one");
+        ok(p0.nextStartMs(0, 100000) > 0 && p0.nextStartMs(60000, 100000) == -1, "lyrics: next line start (plain)");
+
         // --- Island rules: quiet hours (may wrap midnight), per-app scope, one banner per chat
         ok(Rules.inQuiet(23 * 60, 22 * 60, 7 * 60) && Rules.inQuiet(3 * 60, 22 * 60, 7 * 60), "rules: quiet window wraps past midnight");
         ok(!Rules.inQuiet(12 * 60, 22 * 60, 7 * 60) && !Rules.inQuiet(7 * 60, 22 * 60, 7 * 60), "rules: outside the window, end is exclusive");

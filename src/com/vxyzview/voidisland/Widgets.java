@@ -355,8 +355,9 @@ final class BatteryView extends View {
 
 /**
  * The compact pill's lyric window: shows ONE lyric line on a single row. A line that fits just sits there;
- * a line wider than the pill slides sideways (marquee, left to right reading direction) so it can be read
- * to the end, finishing about when the next line starts. Edges fade softly while the text is moving.
+ * a line wider than the pill slides sideways (marquee, reading direction) so it can be read to the end.
+ * The view keeps its own clock from the last known song position, so the slide moves every frame and the line
+ * changes exactly when its timestamp arrives, however rarely the island refreshes it.
  */
 final class LyricScroll extends View {
     private static final float LINE = 1.34f;      // the window is roughly this multiple of the font size tall
@@ -369,12 +370,16 @@ final class LyricScroll extends View {
     private float off;                            // how far the text has slid to the left, in px
     private float overflow;                       // how far it has to slide in total (0 = the line fits)
     private float baseline;
-    private ValueAnimator anim;
-    private final ValueAnimator.AnimatorUpdateListener ride = new ValueAnimator.AnimatorUpdateListener() {
-        @Override public void onAnimationUpdate(ValueAnimator a) {
-            off = (Float) a.getAnimatedValue();
-            invalidate();
-        }
+
+    // the song clock: position at the moment of the last re-anchor, and how it advances
+    private long anchorPos, anchorAt, durMs;
+    private boolean playing, anchored;
+    private float speed = 1f;
+    // the active line's slide: it starts after "wait" ms and takes "scrollMs" ms, counted from lineStart
+    private long lineStart, wait, scrollMs;
+
+    private final Runnable frame = new Runnable() {
+        @Override public void run() { advance(); }
     };
 
     LyricScroll(Context c) {
@@ -398,8 +403,11 @@ final class LyricScroll extends View {
         windowH = Math.round(px * LINE);
         Paint.FontMetrics fm = p.getFontMetrics();
         baseline = (windowH - (fm.descent - fm.ascent)) / 2f - fm.ascent;
-        stop();
+        removeCallbacks(frame);
+        animate().cancel();
+        setAlpha(1f);
         active = -1;
+        anchored = false;
         off = 0;
         overflow = 0;
         rows = 0;
@@ -419,44 +427,74 @@ final class LyricScroll extends View {
         requestLayout();
     }
 
-    private static final long TICK = 400L;       // the island refreshes the pill about this often
-    private long lineStart, wait, scrollMs;      // when the active line begins, and the slide's timing inside it
-
     /**
-     * Follow the song. A new line fades in; a line wider than the pill then slides in step with the
-     * real playback position: it holds still while paused and jumps to the right spot after a seek.
+     * The island's periodic report of the song position. The view keeps counting by itself between reports and only
+     * re-anchors when the report disagrees with its own clock (a seek, a pause, a different speed).
      */
-    void tick(long pos, long durMs, boolean playing) {
-        int idx = l == null ? -1 : l.indexAt(pos, durMs);
-        if (idx != active) {
-            active = idx;
-            stop();
-            off = 0;
-            overflow = 0;
-            if (idx < 0 || idx >= rows) { invalidate(); return; }
-            int w = getWidth() > 0 ? getWidth() : viewW;
-            overflow = Math.max(0f, lineW[idx] - w);
-            setAlpha(0f);
-            animate().alpha(1f).setDuration(220).start();
-            long span = lineSpan(idx, durMs);
-            lineStart = l.synced ? l.at[idx] : (rows > 0 && durMs > 0 ? durMs * idx / rows : 0L);
-            wait = Math.min(700L, span / 5);
-            float dens = getResources().getDisplayMetrics().density;
-            float minDur = overflow / (0.22f * dens);                 // never faster than ~220dp/s
-            float maxDur = overflow / (0.03f * dens);                 // never slower than ~30dp/s
-            float dur = Math.min(Math.max(span * 0.75f - wait, minDur), maxDur);
-            scrollMs = Math.max(500L, (long) dur);
+    void tick(long pos, long durMs, boolean playing, float speed) {
+        float sp = speed <= 0f ? 1f : speed;
+        boolean same = anchored && playing == this.playing && this.durMs == durMs && sp == this.speed;
+        if (!(same && playing && Math.abs(pos - clock()) < 150L)) {
+            anchorPos = pos;
+            anchorAt = SystemClock.elapsedRealtime();
+            this.durMs = durMs;
+            this.playing = playing;
+            this.speed = sp;
+            anchored = true;
         }
-        if (idx < 0 || overflow <= 0f) return;
-        float target = overflow * fraction(pos);
-        if (anim != null) { anim.cancel(); anim = null; }
-        if (!playing) { off = target; invalidate(); return; }       // paused: sit exactly where the song is
-        float ahead = overflow * fraction(pos + TICK);                // glide to where the song will be at the next tick
-        anim = ValueAnimator.ofFloat(off, ahead);
-        anim.setInterpolator(new LinearInterpolator());
-        anim.setDuration(Math.abs(ahead - off) > overflow * 0.3f ? 160L : TICK);   // a big jump (seek) catches up quickly
-        anim.addUpdateListener(ride);
-        anim.start();
+        advance();
+    }
+
+    /** The song position right now, by our own clock. */
+    private long clock() {
+        long pos = playing ? anchorPos + (long) ((SystemClock.elapsedRealtime() - anchorAt) * speed) : anchorPos;
+        if (durMs > 0 && pos > durMs) pos = durMs;
+        return pos < 0 ? 0 : pos;
+    }
+
+    /** Re-evaluate the line and the slide at the current clock, then arrange the next wake-up. */
+    private void advance() {
+        removeCallbacks(frame);
+        if (!anchored) return;
+        long pos = clock();
+        int idx = l == null ? -1 : l.indexAt(pos, durMs);
+        if (idx != active) newLine(idx, pos);
+        boolean sliding = false;
+        if (idx >= 0 && idx < rows && overflow > 0f) {
+            float f = fraction(pos);
+            float to = overflow * f;
+            if (to != off) { off = to; invalidate(); }
+            sliding = f < 1f;
+        }
+        if (!playing || l == null || !isAttachedToWindow()) return;
+        if (sliding) { postOnAnimation(frame); return; }
+        long next = l.nextStartMs(pos, durMs);
+        if (next >= 0) postDelayed(frame, Math.max(16L, (long) ((next - pos) / speed)));
+    }
+
+    /** A new line arrives: fade it in and work out how its slide is paced. */
+    private void newLine(int idx, long pos) {
+        active = idx;
+        animate().cancel();
+        setAlpha(1f);
+        off = 0;
+        overflow = 0;
+        if (idx < 0 || idx >= rows) { invalidate(); return; }
+        int w = getWidth() > 0 ? getWidth() : viewW;
+        overflow = Math.max(0f, lineW[idx] - w);
+        setAlpha(0f);
+        animate().alpha(1f).setDuration(200).start();
+        long span = lineSpan(idx);
+        lineStart = l.synced ? l.at[idx] : (rows > 0 && durMs > 0 ? durMs * idx / rows : 0L);
+        // a line is sung in roughly 75 ms per character, not over the whole gap to the next one: pace the slide to that
+        long sing = Math.min(span, Math.max(1800L, l.line[idx].length() * 75L));
+        wait = Math.min(450L, sing / 5);
+        float dens = getResources().getDisplayMetrics().density;
+        float minDur = overflow / (0.35f * dens);                 // never faster than ~350dp/s
+        float maxDur = overflow / (0.03f * dens);                 // never slower than ~30dp/s
+        float dur = Math.min(Math.max(sing * 0.85f - wait, minDur), maxDur);
+        scrollMs = Math.max(400L, (long) dur);
+        invalidate();
     }
 
     /** How far through its slide the line is at song position {@code pos} (0 = start, 1 = end). */
@@ -466,7 +504,7 @@ final class LyricScroll extends View {
     }
 
     /** How long (ms) the line stays on screen: until the next stamp, or an even share of the song for plain text. */
-    private long lineSpan(int idx, long durMs) {
+    private long lineSpan(int idx) {
         long s;
         if (l.synced) {
             long end = idx + 1 < l.at.length ? l.at[idx + 1] : (durMs > l.at[idx] ? durMs : l.at[idx] + 5000);
@@ -475,12 +513,6 @@ final class LyricScroll extends View {
             s = durMs > 0 && rows > 0 ? durMs / rows : 4000;
         }
         return Math.max(1500L, Math.min(s, 20000L));
-    }
-
-    private void stop() {
-        if (anim != null) { anim.cancel(); anim = null; }
-        animate().cancel();
-        setAlpha(1f);
     }
 
     @Override protected float getLeftFadingEdgeStrength() {
@@ -512,8 +544,15 @@ final class LyricScroll extends View {
         c.drawText(l.line[active], -off, baseline, p);
     }
 
+    @Override protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        advance();
+    }
+
     @Override protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        stop();
+        removeCallbacks(frame);
+        animate().cancel();
+        setAlpha(1f);
     }
 }
