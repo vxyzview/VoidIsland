@@ -126,6 +126,18 @@ public class Check {
         ok("13:07".equals(Parse.timeOfDay(13, 7, true)), "time 24h: 13 -> 13:07");
         ok("3:03".equals(Parse.timeOfDay(15, 3, false)), "time 12h: 15 -> 3:03");
         ok("23:59".equals(Parse.timeOfDay(23, 59, true)), "time 24h: 23:59");
+        // --- Parse: the clock card's "text clock" line, seconds wake-up and day progress
+        ok("Quarter to eleven".equals(Parse.timeWords(10, 45)), "words: 10:45 -> Quarter to eleven");
+        ok("Twenty to eleven".equals(Parse.timeWords(10, 40)), "words: 10:40 -> Twenty to eleven");
+        ok("Just after twenty to eleven".equals(Parse.timeWords(10, 42)), "words: 10:42 hedges with Just after");
+        ok("Almost quarter to eleven".equals(Parse.timeWords(10, 43)), "words: 10:43 hedges with Almost");
+        ok("Quarter past three".equals(Parse.timeWords(15, 15)), "words: 15:15 -> Quarter past three");
+        ok("Half past twelve".equals(Parse.timeWords(12, 30)), "words: 12:30 -> Half past twelve");
+        ok("Nine o'clock".equals(Parse.timeWords(9, 0)) && "Noon".equals(Parse.timeWords(12, 0)) && "Midnight".equals(Parse.timeWords(0, 0)), "words: o'clock / noon / midnight");
+        ok("Almost midnight".equals(Parse.timeWords(23, 58)) && "Just after one o'clock".equals(Parse.timeWords(13, 2)), "words: rounding across the hour");
+        for (int hh = 0; hh < 24; hh++) for (int mm = 0; mm < 60; mm++) { String w = Parse.timeWords(hh, mm); if (w.length() < 4 || !Character.isUpperCase(w.charAt(0))) { ok(false, "words: every minute reads something"); hh = 99; break; } }
+        ok(Parse.nextWallSecondMs(0L) == 1005L && Parse.nextWallSecondMs(999L) == 6L, "clock card: wakes when the second turns");
+        ok(Parse.dayFrac(0, 0, 0) == 0f && Parse.dayFrac(12, 0, 0) == 0.5f && Parse.dayFrac(23, 59, 59) < 1f, "clock card: day progress 0..1");
 
         // --- Lyrics: LRC/plain parsing and line lookup (the music card's lyrics row)
         Lyrics.Loaded s0 = Lyrics.parse("[ti:Demo]\n[offset:0]\n[00:01.00]First\n[00:10.50]Second\n[00:30]Third\n", null);

@@ -11,7 +11,10 @@ import android.media.session.PlaybackState;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.RelativeSizeSpan;
 import android.text.format.DateFormat;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -27,6 +30,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.text.DateFormatSymbols;
 import java.util.Calendar;
 
 import org.json.JSONArray;
@@ -203,7 +207,29 @@ final class Cards {
     }
 
     private static CharSequence dateText() {
-        return DateFormat.format("EEE, MMM d", System.currentTimeMillis());
+        return DateFormat.format("EEEE, MMM d", System.currentTimeMillis());
+    }
+
+    /** "10:42" with an accent colon and, in 12 h, a small dim "PM" after it ({@code suffix} = its size relative to the digits). */
+    static CharSequence bigTime(int hour24, int minute, boolean use24, int accent, float suffix) {
+        String time = Parse.timeOfDay(hour24, minute, use24);
+        SpannableStringBuilder sb = new SpannableStringBuilder(time);
+        int colon = time.indexOf(':');
+        if (colon >= 0) sb.setSpan(new ForegroundColorSpan(accent), colon, colon + 1, SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
+        if (!use24) {
+            String[] ap = new DateFormatSymbols().getAmPmStrings();
+            String mark = " " + (hour24 % 24 >= 12 ? ap[1] : ap[0]);
+            int from = sb.length();
+            sb.append(mark);
+            sb.setSpan(new RelativeSizeSpan(suffix), from, sb.length(), SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
+            sb.setSpan(new ForegroundColorSpan(SUB), from, sb.length(), SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        return sb;
+    }
+
+    /** setText for styled text that does nothing when the characters already read the same. */
+    static void putSpan(TextView t, CharSequence s) {
+        if (!s.toString().contentEquals(t.getText())) t.setText(s);
     }
 
     static long position(IslandEvent e) {
@@ -365,12 +391,25 @@ final class Cards {
                 break;
             }
             case IslandEvent.CLOCK: {
+                // a live mini analog face on the left, the time on the right with a small dim AM/PM and an accent colon
                 final boolean use24 = DateFormat.is24HourFormat(c);
-                out.addView(new IconView(c, IconView.CLOCK, acc(e)), fl(g, g, Gravity.START | side, m));
-                final TextView t = tv(c, clockText(use24), 13f, WHITE, true);
+                final int ac = acc(e);
+                final ClockFaceView face = new ClockFaceView(c);
+                face.style(ac, false);
+                out.addView(face, fl(g, g, Gravity.START | side, m));
+                final TextView t = tv(c, "", 13f, WHITE, true);
                 t.setFontFeatureSettings("tnum");
                 out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
-                e.tC = new Runnable() { @Override public void run() { put(t, clockText(use24)); } };
+                final Runnable refresh = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        int hr = cal.get(Calendar.HOUR_OF_DAY), mn = cal.get(Calendar.MINUTE);
+                        face.time(hr, mn, 0);
+                        putSpan(t, bigTime(hr, mn, use24, ac, 0.62f));
+                    }
+                };
+                refresh.run();
+                e.tC = refresh;
                 break;
             }
             default: {
@@ -697,27 +736,78 @@ final class Cards {
         return root;
     }
 
+    /**
+     * Expanded clock: big time (accent colon, small AM/PM), the time in words, an analog face with a seconds hand, the date and
+     * week number, this week with today circled in the accent, and how much of the day is gone.
+     */
     private static View clockCard(final Context c, final IslandEvent e) {
         final boolean use24 = DateFormat.is24HourFormat(c);
+        final int ac = acc(e), acOn = S.accentOverride ? S.accentOn : Col.onColor(ac);
         LinearLayout root = col(c);
-        root.setGravity(Gravity.CENTER);
-        root.setPadding(px(c), py(c) + dp(c, 6), px(c), py(c) + dp(c, 8));
-        final TextView time = tv(c, clockText(use24), 36f, WHITE, true);
+        root.setPadding(px(c), py(c), px(c), py(c));
+
+        LinearLayout top = row(c);
+        LinearLayout left = col(c);
+        final TextView time = tv(c, "", 46f, WHITE, true);
         time.setFontFeatureSettings("tnum");
-        time.setGravity(Gravity.CENTER);
-        final TextView date = tv(c, dateText(), 13f, SUB, false);
-        date.setGravity(Gravity.CENTER);
-        date.setPadding(0, dp(c, 2), 0, 0);
-        root.addView(time);
-        root.addView(date);
-        e.tE = new Runnable() {
+        final TextView words = tv(c, "", 13.5f, SUB, false);
+        words.setPadding(0, dp(c, 4), 0, 0);
+        left.addView(time);
+        left.addView(words);
+        top.addView(left, lpw(0, WRAP, 1f));
+        final ClockFaceView face = new ClockFaceView(c);
+        face.style(ac, true);
+        top.addView(face, lp(dp(c, 76), dp(c, 76)));
+        root.addView(top);
+
+        LinearLayout dl = row(c);
+        dl.setPadding(0, dp(c, 12), 0, 0);
+        final TextView date = tv(c, "", 15f, WHITE, true);
+        final TextView week = tv(c, "", 12.5f, SUB, false);
+        dl.addView(date, lpw(0, WRAP, 1f));
+        dl.addView(week);
+        root.addView(dl);
+
+        final WeekStrip strip = new WeekStrip(c);
+        strip.style(ac, acOn);
+        LinearLayout.LayoutParams sp = lp(ViewGroup.LayoutParams.MATCH_PARENT, dp(c, 54));
+        sp.topMargin = dp(c, 6);
+        root.addView(strip, sp);
+
+        LinearLayout pr = row(c);
+        pr.setPadding(0, dp(c, 4), 0, 0);
+        final SeekView bar = new SeekView(c);
+        bar.setInteractive(false);
+        bar.setColor(ac);
+        final TextView pct = tv(c, "", 12f, WHITE, true);
+        pct.setFontFeatureSettings("tnum");
+        pr.addView(tv(c, "Day", 11.5f, SUB, false));
+        LinearLayout.LayoutParams bp = lpw(0, dp(c, 18), 1f);
+        bp.setMarginStart(dp(c, 10));
+        bp.setMarginEnd(dp(c, 10));
+        pr.addView(bar, bp);
+        pr.addView(pct);
+        root.addView(pr);
+
+        final Runnable tick = new Runnable() {
             @Override public void run() {
-                put(time, clockText(use24));
-                date.setText(dateText());
+                Calendar cal = Calendar.getInstance();
+                int hr = cal.get(Calendar.HOUR_OF_DAY), mn = cal.get(Calendar.MINUTE), sc = cal.get(Calendar.SECOND);
+                face.time(hr, mn, sc);
+                putSpan(time, bigTime(hr, mn, use24, ac, 0.34f));
+                put(words, Parse.timeWords(hr, mn));
+                put(date, dateText().toString());
+                put(week, "Week " + cal.get(Calendar.WEEK_OF_YEAR));
+                strip.update(cal.getTimeInMillis());
+                float f = Parse.dayFrac(hr, mn, sc);
+                bar.setFrac(f);
+                put(pct, Math.round(f * 100f) + "%");
             }
         };
+        tick.run();
+        e.tE = tick;
         e.uE = new IslandEvent.Updater() {
-            @Override public boolean update() { e.tE.run(); return true; }
+            @Override public boolean update() { tick.run(); return true; }
         };
         return root;
     }

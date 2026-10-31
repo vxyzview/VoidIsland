@@ -136,6 +136,38 @@ final class Parse {
         return String.format(Locale.US, "%d:%02d", h, minute);
     }
 
+    /** Milliseconds until the wall clock's second changes (the expanded clock card shows a seconds hand). */
+    static long nextWallSecondMs(long now) {
+        return 1000L - (now % 1000L) + 5L;
+    }
+
+    /** How much of the day has passed, 0..1 (the expanded clock card's progress bar). */
+    static float dayFrac(int hour, int minute, int second) {
+        float f = (hour * 3600 + minute * 60 + second) / 86400f;
+        return f < 0f ? 0f : (f > 1f ? 1f : f);
+    }
+
+    private static final String[] HOUR_WORDS = {"twelve", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven"};
+    private static final String[] PART_WORDS = {"", "five past", "ten past", "quarter past", "twenty past", "twenty-five past", "half past",
+        "twenty-five to", "twenty to", "quarter to", "ten to", "five to"};
+
+    /**
+     * The time the way you would say it ("Quarter to eleven"), to the nearest five minutes. Off-beat minutes are
+     * hedged: "Almost" just before, "Just after" just past. 12:00 / 00:00 read "Noon" / "Midnight".
+     */
+    static String timeWords(int hour24, int minute) {
+        int h = ((hour24 % 24) + 24) % 24, m = ((minute % 60) + 60) % 60;
+        int r = ((m + 2) / 5) * 5, diff = m - r;
+        int hh = (r > 30 ? h + 1 : h) % 24;
+        if (r == 60) r = 0;
+        String lead = diff < 0 ? "Almost " : (diff > 0 ? "Just after " : "");
+        String body;
+        if (r == 0) body = hh == 0 ? "midnight" : (hh == 12 ? "noon" : HOUR_WORDS[hh % 12] + " o'clock");
+        else body = PART_WORDS[r / 5] + " " + HOUR_WORDS[hh % 12];
+        String all = lead + body;
+        return Character.toUpperCase(all.charAt(0)) + all.substring(1);
+    }
+
     static String initial(CharSequence name) {
         if (name == null) return "?";
         for (int i = 0; i < name.length(); i++) {

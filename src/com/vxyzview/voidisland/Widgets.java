@@ -20,6 +20,10 @@ import android.view.View;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 
+import java.text.DateFormatSymbols;
+import java.util.Calendar;
+import java.util.Locale;
+
 /** Small custom views used inside the island. All draw on the render thread (hardware canvas), no layout work per frame. */
 
 /** Rounded / circular image or a coloured tile with a letter. */
@@ -554,5 +558,138 @@ final class LyricScroll extends View {
         removeCallbacks(frame);
         animate().cancel();
         setAlpha(1f);
+    }
+}
+
+/**
+ * Little analog clock: ring, hour ticks (big sizes only), an accent hour hand, a text-coloured minute hand and,
+ * on the expanded card, a thin accent seconds hand. It only repaints when the time it was given changes.
+ */
+final class ClockFaceView extends View {
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final float d;
+    private int hour, min, sec;
+    private boolean showSec;
+    private int accent = Color.WHITE;
+
+    ClockFaceView(Context c) {
+        super(c);
+        d = c.getResources().getDisplayMetrics().density;
+    }
+
+    void style(int accent, boolean showSeconds) {
+        this.accent = accent;
+        this.showSec = showSeconds;
+        invalidate();
+    }
+
+    void time(int h, int m, int s) {
+        if (h == hour && m == min && s == sec) return;
+        hour = h;
+        min = m;
+        sec = s;
+        invalidate();
+    }
+
+    private void hand(Canvas c, float cx, float cy, float deg, float len, float tail, float width, int color) {
+        double a = Math.toRadians(deg);
+        float sx = (float) Math.sin(a), sy = -(float) Math.cos(a);
+        p.setStrokeWidth(width);
+        p.setColor(color);
+        c.drawLine(cx - sx * tail, cy - sy * tail, cx + sx * len, cy + sy * len, p);
+    }
+
+    @Override protected void onDraw(Canvas c) {
+        float w = getWidth(), h = getHeight(), s = Math.min(w, h), cx = w / 2f, cy = h / 2f;
+        float sw = Math.max(1.4f * d, s * 0.07f), r = s / 2f - sw / 2f;
+        boolean big = s >= 44f * d;
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        p.setStrokeWidth(sw);
+        p.setColor(Cards.outline());
+        c.drawCircle(cx, cy, r, p);
+        p.setStrokeWidth(Math.max(1f * d, sw * 0.6f));
+        int ticks = big ? 12 : 1;   // small face: just the 12 o'clock mark
+        for (int i = 0; i < ticks; i++) {
+            double a = Math.toRadians(i * 30.0);
+            float sx = (float) Math.sin(a), sy = -(float) Math.cos(a);
+            float outer = r - sw * 1.3f, len = big ? (i % 3 == 0 ? s * 0.09f : s * 0.045f) : s * 0.1f;
+            c.drawLine(cx + sx * outer, cy + sy * outer, cx + sx * (outer - len), cy + sy * (outer - len), p);
+        }
+        boolean secs = showSec && sec >= 0;
+        float hourA = ((hour % 12) + min / 60f) * 30f;
+        float minA = (min + (secs ? sec / 60f : 0f)) * 6f;
+        hand(c, cx, cy, hourA, r * 0.50f, 0f, sw * 1.35f, accent);
+        hand(c, cx, cy, minA, r * 0.78f, 0f, sw, Cards.WHITE);
+        if (secs) hand(c, cx, cy, sec * 6f, r * 0.86f, r * 0.18f, Math.max(1f * d, sw * 0.55f), accent);
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(accent);
+        c.drawCircle(cx, cy, sw * 1.1f, p);
+    }
+}
+
+/** The seven days of the current week: weekday letter above the date number, today in a filled accent circle. */
+final class WeekStrip extends View {
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final float d;
+    private final String[] letter = new String[7];
+    private final int[] num = new int[7];
+    private int today = -1, key = -1, accent = Color.WHITE, onAccent = Color.BLACK;
+    private final Typeface medium = Typeface.create("sans-serif-medium", Typeface.NORMAL);
+    private final Typeface regular = Typeface.create("sans-serif", Typeface.NORMAL);
+
+    WeekStrip(Context c) {
+        super(c);
+        d = c.getResources().getDisplayMetrics().density;
+        p.setTextAlign(Paint.Align.CENTER);
+    }
+
+    void style(int accent, int onAccent) {
+        this.accent = accent;
+        this.onAccent = onAccent;
+        invalidate();
+    }
+
+    /** Re-reads the week; does nothing (and does not repaint) until the day changes. */
+    void update(long now) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis(now);
+        int k = cal.get(Calendar.YEAR) * 400 + cal.get(Calendar.DAY_OF_YEAR);
+        if (k == key) return;
+        key = k;
+        int back = (cal.get(Calendar.DAY_OF_WEEK) - cal.getFirstDayOfWeek() + 7) % 7;
+        today = back;
+        cal.add(Calendar.DAY_OF_MONTH, -back);
+        String[] names = DateFormatSymbols.getInstance().getShortWeekdays();
+        for (int i = 0; i < 7; i++) {
+            String n = names[cal.get(Calendar.DAY_OF_WEEK)];
+            letter[i] = n == null || n.length() == 0 ? "?" : n.substring(0, 1).toUpperCase(Locale.getDefault());
+            num[i] = cal.get(Calendar.DAY_OF_MONTH);
+            cal.add(Calendar.DAY_OF_MONTH, 1);
+        }
+        invalidate();
+    }
+
+    @Override protected void onDraw(Canvas c) {
+        if (key < 0) return;
+        float w = getWidth(), h = getHeight(), cell = w / 7f, ts = Cards.TS;
+        float rad = Math.min(cell / 2f - 2f * d, 15f * d), cy = h - rad - 1f * d;
+        for (int i = 0; i < 7; i++) {
+            float cx = cell * (i + 0.5f);
+            boolean now = i == today;
+            p.setTypeface(medium);
+            p.setTextSize(11f * d * ts);
+            p.setColor(now ? accent : Cards.SUB);
+            c.drawText(letter[i], cx, cy - rad - 5f * d, p);
+            if (now) {
+                p.setStyle(Paint.Style.FILL);
+                p.setColor(accent);
+                c.drawCircle(cx, cy, rad, p);
+            }
+            p.setTypeface(now ? medium : regular);
+            p.setTextSize(13f * d * ts);
+            p.setColor(now ? onAccent : Cards.WHITE);
+            c.drawText(String.valueOf(num[i]), cx, cy + 13f * d * ts * 0.35f, p);
+        }
     }
 }
