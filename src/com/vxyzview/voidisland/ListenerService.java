@@ -35,8 +35,8 @@ public final class ListenerService extends NotificationListenerService {
     }
 
     @Override public void onNotificationRemoved(StatusBarNotification sbn, RankingMap rm, int reason) {
-        // our own absorb hides the original while the island shows it — that removal must not clear the banner
-        if (sbn == null || reason == REASON_SNOOZED) return;
+        // our own absorb removes the original while the island shows it — that removal must not clear the banner
+        if (sbn == null || reason == REASON_SNOOZED || reason == REASON_LISTENER_CANCEL) return;
         Bus.removeByNkey(sbn.getKey(), false);
     }
 
@@ -60,11 +60,11 @@ public final class ListenerService extends NotificationListenerService {
         } catch (Throwable t) { /* one weird notification must never take the service down */ }
     }
 
-    /** The island is the presentation for text banners: the original rests for a few seconds, then returns to the shade. */
+    /** The island is the only presentation for text banners: the original notification is removed so nothing shows twice. */
     private void absorb(IslandEvent e, String nkey, boolean initial) {
         if (!Prefs.b(this, Prefs.K_ABSORB, true) || !Absorb.applies(e.type, e.live, initial)) return;
         try {
-            snoozeNotification(nkey, Absorb.delayMs(e.durationMs));
+            cancelNotification(nkey);
         } catch (Throwable t) { /* stale key or access lost: the original simply keeps showing */ }
     }
 }

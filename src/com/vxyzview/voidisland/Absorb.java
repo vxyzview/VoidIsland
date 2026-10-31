@@ -1,6 +1,6 @@
 package com.vxyzview.voidisland;
 
-/** One-shot notifications belong to the island while it shows them: the original rests, then returns to the shade. */
+/** One-shot notifications belong to the island: the original is removed so the banner is not shown twice. */
 final class Absorb {
     private Absorb() {}
 

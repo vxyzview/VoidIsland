@@ -556,7 +556,7 @@ public final class MainActivity extends Activity {
         m.toggle(sh, "Island enabled", null, Prefs.K_ON, true, null);
         m.toggle(sh, "Clock when idle", "Show the time on an empty island", Prefs.K_CLOCK, true, null);
         m.toggle(sh, "Music & media", "Album art, seek bar, controls", Prefs.K_MEDIA, true, null);
-        m.toggle(sh, "Music lyrics", "The playing song's lyrics scroll on the pill (from LRCLIB)", Prefs.K_LYRICS, true, null);
+        m.toggle(sh, "Music lyrics", "The playing song's lyrics show on the pill, long lines slide sideways (from LRCLIB)", Prefs.K_LYRICS, true, null);
         m.toggle(sh, "Calls", "Answer and decline from the island", Prefs.K_CALL, true, null);
         m.toggle(sh, "Payments", "Payment and transfer confirmations", Prefs.K_PAY, true, null);
         m.toggle(sh, "Notifications", "Banners, downloads, timers, maps", Prefs.K_NOTIF, true, null);
@@ -568,7 +568,7 @@ public final class MainActivity extends Activity {
         m.toggle(ru, "Hide in landscape", null, Prefs.K_LAND, true, null);
         m.toggle(ru, "Hide idle clock in apps", "While an app is open only the clock pill hides — banners, music and timers keep showing", Prefs.K_HIDEAPP, true, null);
         m.toggle(ru, "Hide music & call pill inside their own app", null, Prefs.K_INAPP, true, null);
-        m.toggle(ru, "Only show notifications on the island", "While a message or payment shows up here, its original notification rests for a few seconds so it does not pop twice. It returns to the shade afterwards \u2014 nothing is lost", Prefs.K_ABSORB, true, null);
+        m.toggle(ru, "Only show notifications on the island", "Messages and payments shown on the island are removed from the normal notification shade, so nothing pops up twice. Calls, timers, maps, downloads and music keep their own notification", Prefs.K_ABSORB, true, null);
         m.toggle(ru, "Show on lock screen", "Only when the island is above the status bar", Prefs.K_LOCK, false, null);
         m.toggle(ru, "Haptic feedback", null, Prefs.K_HAPTIC, true, null);
         m.slider(ru, "Banner time", Prefs.K_DUR, 2, 9, 5, 1000, unit(" s"), null);

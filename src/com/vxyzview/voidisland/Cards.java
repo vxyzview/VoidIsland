@@ -225,7 +225,7 @@ final class Cards {
                 eq.setColor(acc(e));
                 eq.setPlaying(e.playing);
                 out.addView(eq, fl(Math.round(g * 0.9f), Math.round(g * 0.75f), Gravity.END | side, m));
-                // The whole song rides the pill too: art left, the lyrics scroll past on the right;
+                // The song rides the pill too: art left, the current lyric line on the right (a long line slides sideways);
                 // the equalizer bars take over only while no lyric is known.
                 final LyricScroll ls = new LyricScroll(c);
                 final int lw = Math.max(dp(c, 36), dp(c, S.cW) - g - dp(c, S.cPad * 2) - dp(c, 2));
