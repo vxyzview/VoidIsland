@@ -6,6 +6,12 @@ final class Spring {
     float k = 300f, c = 30f, eps = 0.3f;
     boolean active;
 
+    /**
+     * System animation speed shared by every spring: 1 = normal, 2 = twice as fast (animation scale 0.5x),
+     * POSITIVE_INFINITY = no animation at all (scale 0 / "Remove animations"): springs jump straight to their target.
+     */
+    static float rate = 1f;
+
     /** stiffness k, damping ratio zeta (1 = critical, below 1 = bouncy). */
     void tune(float stiffness, float zeta) {
         k = stiffness;
@@ -19,6 +25,8 @@ final class Spring {
     /** @return true while still moving */
     boolean step(float dt) {
         if (!active) return false;
+        if (rate == Float.POSITIVE_INFINITY) { value = target; velocity = 0f; active = false; return false; }
+        dt *= rate;
         while (dt > 0f) {
             float h = dt > 0.0041667f ? 0.0041667f : dt;
             dt -= h;

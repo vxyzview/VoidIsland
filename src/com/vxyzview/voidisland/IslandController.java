@@ -361,10 +361,11 @@ final class IslandController implements IslandView.Host {
         }
     }
 
-    void post(IslandEvent e) {
-        if (!attached) return;
-        if (!allowed(e) || Prefs.has(svc, Prefs.K_BLOCK, e.pkg)) return;
-        if (e.type == IslandEvent.NOTIF && e.pkg != null && e.pkg.equals(fg)) return; // don't banner the app you're in
+    /** @return true when the event was taken and the island is not suppressed right now, i.e. it will really be seen. */
+    boolean post(IslandEvent e) {
+        if (!attached) return false;
+        if (!allowed(e) || Prefs.has(svc, Prefs.K_BLOCK, e.pkg)) return false;
+        if (e.type == IslandEvent.NOTIF && e.pkg != null && e.pkg.equals(fg)) return false; // don't banner the app you're in
         if (e.live) {
             IslandEvent old = live.get(e.key);
             if (old == null) live.put(e.key, e);
@@ -380,6 +381,7 @@ final class IslandController implements IslandView.Host {
             }
         }
         evaluate();
+        return !suppressed();
     }
 
     void remove(String key) {

@@ -28,6 +28,9 @@ final class Prefs {
     // motion
     static final String K_SPEED = "speed", K_BOUNCE = "bounce";
 
+    /** Removing originals from the shade is opt-in: a banner you miss is not waiting in the shade, so it starts off. */
+    static final boolean ABSORB_DEF = false;
+
     private static volatile SharedPreferences cached;
 
     static SharedPreferences sp(Context c) {

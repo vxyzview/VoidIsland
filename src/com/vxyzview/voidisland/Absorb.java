@@ -9,6 +9,15 @@ final class Absorb {
         return !initial && !live && (type == IslandEvent.NOTIF || type == IslandEvent.PAYMENT);
     }
 
+    /**
+     * The one rule for removing an original notification. It is only ever removed when the person opted in, the app is
+     * not on the "keep in shade" list, AND the island really took the banner and can show it right now. If the island is
+     * off, crashed, hidden (landscape, lock screen, shade open) or ignoring the app, the original stays where it is.
+     */
+    static boolean shouldRemove(boolean optedIn, boolean keptInShade, boolean islandShowing, int type, boolean live, boolean initial) {
+        return optedIn && !keptInShade && islandShowing && applies(type, live, initial);
+    }
+
     /** How long the original rests: the banner's life plus a margin, never under 6s (the heads-up may still be animating). */
     static long delayMs(long bannerMs) { return Math.max(6000, bannerMs + 3000); }
 }

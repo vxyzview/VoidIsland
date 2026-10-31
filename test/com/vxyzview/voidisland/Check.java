@@ -26,6 +26,38 @@ public class Check {
         int n = 0; while (j.step(0.05f) && n < 200) n++;
         ok(j.value == 100f && n < 60, "stable with 50ms frame hitches");
 
+        // --- system animation scale: springs follow it, and "Remove animations" (scale 0) means no motion
+        float keepRate = Spring.rate;
+        Spring.rate = 2f;   // animation scale 0.5x: twice as fast
+        Spring fast = new Spring(); fast.snap(150f); fast.tune(330f, 0.60f); fast.to(340f);
+        float tf = 0; int ff = 0;
+        while (fast.step(1f / 60f) && ff < 600) { ff++; tf += 1f / 60f; }
+        ok(tf < t && fast.value == 340f, "animation scale 0.5x settles sooner and still lands exactly");
+        Spring.rate = 0.5f;   // animation scale 2x: slower but stable
+        Spring slow = new Spring(); slow.snap(150f); slow.tune(330f, 0.60f); slow.to(340f);
+        int fs = 0;
+        while (slow.step(1f / 60f) && fs < 2000) fs++;
+        ok(slow.value == 340f && fs > frames, "animation scale 2x is slower but lands exactly");
+        Spring.rate = Float.POSITIVE_INFINITY;   // animation scale 0
+        Spring none = new Spring(); none.snap(150f); none.tune(330f, 0.60f); none.to(340f);
+        boolean still = none.step(1f / 60f);
+        ok(!still && none.value == 340f && none.velocity == 0f, "animation scale 0 jumps straight to the target");
+        Spring.rate = keepRate;
+
+        // --- Absorb opt-in: the original is only removed when the island really shows the banner
+        ok(Absorb.shouldRemove(true, false, true, IslandEvent.NOTIF, false, false), "absorb: opted in + island showing removes the original");
+        ok(!Absorb.shouldRemove(false, false, true, IslandEvent.NOTIF, false, false), "absorb: off by default means nothing is removed");
+        ok(!Absorb.shouldRemove(true, false, false, IslandEvent.NOTIF, false, false), "absorb: island not showing (off, hidden, ignoring the app) keeps the original");
+        ok(!Absorb.shouldRemove(true, true, true, IslandEvent.NOTIF, false, false), "absorb: keep-in-shade apps are never touched");
+        ok(!Absorb.shouldRemove(true, false, true, IslandEvent.CALL, true, false), "absorb: live things still keep their notification");
+        ok(!Prefs.ABSORB_DEF, "absorb: starts off");
+
+        // --- KeepAlive: which phones get the background-running help
+        ok(KeepAlive.aggressive("Xiaomi") && KeepAlive.aggressive("POCO") && KeepAlive.aggressive("realme") && KeepAlive.aggressive("OnePlus"), "keepalive: Xiaomi family and Oppo family detected");
+        ok(KeepAlive.aggressive("vivo") && KeepAlive.aggressive("HUAWEI") && KeepAlive.aggressive("HONOR") && KeepAlive.aggressive("samsung"), "keepalive: Vivo, Huawei, Honor and Samsung detected");
+        ok(!KeepAlive.aggressive("Google") && !KeepAlive.aggressive("motorola") && !KeepAlive.aggressive(null) && !KeepAlive.aggressive(""), "keepalive: stock-like ROMs get no extra prompt");
+        ok("Xiaomi".equals(KeepAlive.family("Redmi")) && KeepAlive.hint("Google").length() == 0 && KeepAlive.hint("Xiaomi").length() > 0, "keepalive: brand name and hint text");
+
         // --- Parse
         ok("Rp 25.000".equals(Parse.amount("Pembayaran Rp 25.000 berhasil.")), "amount: Rp 25.000");
         ok("$12.50".equals(Parse.amount("You paid $12.50 at Starbucks")), "amount: $12.50");

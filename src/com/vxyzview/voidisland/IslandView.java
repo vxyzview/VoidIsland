@@ -5,6 +5,7 @@ import android.graphics.Canvas;
 import android.graphics.Outline;
 import android.graphics.Paint;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.view.Choreographer;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
@@ -272,8 +273,16 @@ final class IslandView extends ViewGroup {
 
     // ------------------------------------------------------------------ animation loop
 
+    /** Follows Settings > Developer options > Animator duration scale (0 = "Remove animations" = no motion). */
+    private void syncAnimScale() {
+        float sc = 1f;
+        try { sc = Settings.Global.getFloat(getContext().getContentResolver(), Settings.Global.ANIMATOR_DURATION_SCALE, 1f); } catch (Throwable t) { /* keep normal speed */ }
+        Spring.rate = sc <= 0f ? Float.POSITIVE_INFINITY : 1f / Math.max(0.1f, Math.min(10f, sc));
+    }
+
     private void start() {
         if (!running) {
+            syncAnimScale();
             running = true;
             last = 0;
             Choreographer.getInstance().postFrameCallback(frame);

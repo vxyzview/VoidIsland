@@ -3,6 +3,7 @@ package com.vxyzview.voidisland;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.Dialog;
+import android.content.DialogInterface;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
@@ -596,6 +597,45 @@ final class M3 {
         return f;
     }
 
+    /**
+     * Small Material 3 confirm dialog. {@code onNo} also runs when the dialog is dismissed any other way (back, tap outside),
+     * so a caller that must undo something can rely on exactly one of the two callbacks firing.
+     */
+    void confirmDialog(Activity a, String title, String body, String yes, final Runnable onYes, String no, final Runnable onNo) {
+        final Dialog dlg = new Dialog(a);
+        dlg.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        final boolean[] answered = new boolean[1];
+        LinearLayout box = col();
+        box.setBackground(shape(containerHigh, 28));
+        box.setPadding(dp(24), dp(24), dp(24), dp(16));
+        box.addView(text(title, 22f, false, onSurface));
+        TextView b = text(body, 14.5f, false, onSurfaceVariant);
+        b.setPadding(0, dp(14), 0, dp(4));
+        b.setLineSpacing(0f, 1.12f);
+        box.addView(b);
+        LinearLayout btns = row();
+        btns.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        btns.setPadding(0, dp(12), 0, 0);
+        btns.addView(button(no, 3, new Runnable() { @Override public void run() { dlg.dismiss(); } }));
+        btns.addView(button(yes, 3, new Runnable() {
+            @Override public void run() {
+                answered[0] = true;
+                dlg.dismiss();
+                if (onYes != null) onYes.run();
+            }
+        }));
+        box.addView(btns);
+        dlg.setContentView(box);
+        dlg.setOnDismissListener(new DialogInterface.OnDismissListener() {
+            @Override public void onDismiss(DialogInterface d) { if (!answered[0] && onNo != null) onNo.run(); }
+        });
+        if (dlg.getWindow() != null) {
+            dlg.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dlg.getWindow().setLayout(Math.min(Math.round(c.getResources().getDisplayMetrics().widthPixels * 0.9f), dp(360)), WRAP);
+        }
+        dlg.show();
+    }
+
     /** HSV colour picker dialog. */
     void colorDialog(Activity a, int initial, final OnColor cb) {
         final Dialog dlg = new Dialog(a);
@@ -694,6 +734,20 @@ final class M3Switch extends View {
         this.t = on ? 1f : 0f;
         this.cb = cb;
         invalidate();
+    }
+
+    /** Moves the switch to {@code v} with the usual animation but without calling the callback (undoing a refused change). */
+    void revert(boolean v) {
+        if (on == v) return;
+        on = v;
+        if (va != null) va.cancel();
+        va = ValueAnimator.ofFloat(t, on ? 1f : 0f);
+        va.setDuration(220);
+        va.setInterpolator(M3.STANDARD);
+        va.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override public void onAnimationUpdate(ValueAnimator a) { t = (Float) a.getAnimatedValue(); invalidate(); }
+        });
+        va.start();
     }
 
     void toggle() {

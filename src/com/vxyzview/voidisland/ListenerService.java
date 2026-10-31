@@ -54,16 +54,19 @@ public final class ListenerService extends NotificationListenerService {
             } else {
                 e.nkey = sbn.getKey();
                 if (!e.live) Bus.removeByNkey(sbn.getKey(), true);
-                Bus.post(e);
-                absorb(e, sbn.getKey(), initial);
+                boolean showing = Bus.post(e);
+                absorb(e, sbn.getKey(), initial, showing);
             }
         } catch (Throwable t) { /* one weird notification must never take the service down */ }
     }
 
-    /** The island is the only presentation for text banners: the original notification is removed so nothing shows twice. */
-    private void absorb(IslandEvent e, String nkey, boolean initial) {
-        if (!Prefs.b(this, Prefs.K_ABSORB, true) || !Absorb.applies(e.type, e.live, initial)) return;
-        if (Prefs.has(this, Prefs.K_KEEP, e.pkg)) return;   // "keep in shade" apps stay in the shade too
+    /**
+     * Opt-in ("Only show notifications on the island"): the original is removed so nothing shows twice, but only when the
+     * island really took the banner (see {@link Absorb#shouldRemove}). Otherwise the notification is left alone.
+     */
+    private void absorb(IslandEvent e, String nkey, boolean initial, boolean islandShowing) {
+        boolean kept = Prefs.has(this, Prefs.K_KEEP, e.pkg);   // "keep in shade" apps stay in the shade too
+        if (!Absorb.shouldRemove(Prefs.b(this, Prefs.K_ABSORB, Prefs.ABSORB_DEF), kept, islandShowing, e.type, e.live, initial)) return;
         try {
             cancelNotification(nkey);
         } catch (Throwable t) { /* stale key or access lost: the original simply keeps showing */ }

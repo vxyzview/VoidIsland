@@ -19,9 +19,11 @@ final class Bus {
 
     static boolean active() { return ctl != null; }
 
-    static void post(IslandEvent e) {
-        if (ctl != null) ctl.post(e);
-        else if (e.live) pending.put(e.key, e); // live things (music, calls) are replayed once the island exists
+    /** @return true only when the island took the event and can show it right now (false when it is not running). */
+    static boolean post(IslandEvent e) {
+        if (ctl != null) return ctl.post(e);
+        if (e.live) pending.put(e.key, e); // live things (music, calls) are replayed once the island exists
+        return false;
     }
 
     static void remove(String key) {

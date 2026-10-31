@@ -126,6 +126,7 @@ public final class MainActivity extends Activity {
             Prefs.sp(this).edit().putLong(Prefs.K_POKE, System.currentTimeMillis()).apply();
         }
         if (page != 1) showPage(page, true);
+        h.post(new Runnable() { @Override public void run() { askKeepAlive(); } });
     }
 
     @Override protected void onPause() {
@@ -255,6 +256,26 @@ public final class MainActivity extends Activity {
         return new Runnable() { @Override public void run() { go(new Intent(action)); } };
     }
 
+    /** The phone maker's own autostart screen if this ROM has one we know, otherwise this app's info page. */
+    private void openAutostart() {
+        for (Intent i : KeepAlive.autostartScreens(Build.MANUFACTURER)) {
+            try { startActivity(i); return; } catch (Throwable t) { /* private to this ROM or gone in this version: try the next */ }
+        }
+        go(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
+    }
+
+    /** Once, after setup is done, on phones whose battery saver is known to close background apps. */
+    private void askKeepAlive() {
+        if (isFinishing() || !KeepAlive.aggressiveHere() || Prefs.b(this, "keepalive_asked", false)) return;
+        if (!a11yOn() || !notifOn() || KeepAlive.batteryUnrestricted(this)) return;
+        Prefs.sp(this).edit().putBoolean("keepalive_asked", true).apply();
+        m.confirmDialog(this, "Keep the island running",
+            KeepAlive.familyHere() + " phones often close background apps, and then the island simply disappears. "
+                + KeepAlive.hint(Build.MANUFACTURER) + " You can do this later from Home > Setup.",
+            "Open settings", new Runnable() { @Override public void run() { openAutostart(); } },
+            "Later", null);
+    }
+
     private void put(String key, int v) { Prefs.sp(this).edit().putInt(key, v).apply(); }
 
     // ------------------------------------------------------------------ HOME
@@ -303,8 +324,15 @@ public final class MainActivity extends Activity {
         su.addView(setupItem(IconView.BT, "Bluetooth names", "Optional: show which device connected", btOn(), "Allow", new Runnable() {
             @Override public void run() { if (Build.VERSION.SDK_INT >= 31) requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, 7); }
         }));
-        su.addView(m.item(IconView.BOLT, "Battery: unrestricted", "Optional: stops the system from putting the island to sleep",
-            m.button("Open", 1, open(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)), open(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)));
+        String fam = KeepAlive.familyHere();
+        su.addView(setupItem(IconView.BOLT, "Battery: unrestricted",
+            (fam != null ? "Recommended on " + fam + " phones: " : "Optional: ") + "stops the system from putting the island to sleep",
+            KeepAlive.batteryUnrestricted(this), "Open", open(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)));
+        if (fam != null) {
+            Runnable autostart = new Runnable() { @Override public void run() { openAutostart(); } };
+            su.addView(m.item(IconView.CLOCK, "Autostart & background", KeepAlive.hint(Build.MANUFACTURER),
+                m.button("Open", 1, autostart), autostart));
+        }
         TextView tip = m.body("Switch greyed out on Android 13+? Open App info, tap \u22ee, then Allow restricted settings.");
         tip.setPadding(0, dp(10), 0, dp(10));
         su.addView(tip);
@@ -561,7 +589,7 @@ public final class MainActivity extends Activity {
         m.toggle(sh, "Island enabled", null, Prefs.K_ON, true, null);
         m.toggle(sh, "Clock when idle", "Show the time on an empty island", Prefs.K_CLOCK, true, null);
         m.toggle(sh, "Music & media", "Album art, seek bar, controls", Prefs.K_MEDIA, true, null);
-        m.toggle(sh, "Music lyrics", "The playing song's lyrics show on the pill, long lines slide sideways (from LRCLIB)", Prefs.K_LYRICS, true, null);
+        m.toggle(sh, "Music lyrics", "The playing song's lyrics show on the pill, long lines slide sideways. Looked up on lrclib.net, which receives the song title, artist and length. Lyrics are never saved to storage", Prefs.K_LYRICS, true, null);
         m.slider(sh, "Lyrics size", Prefs.K_LYRSIZE, 9, 16, 13, 1, unit(" sp"), null);
         m.slider(sh, "Lyrics timing", Prefs.K_LYROFF, -10, 10, 2, 100, new M3.Fmt() {
             @Override public String f(int v) { return (v > 0 ? "+" : "") + (v * 100) + " ms"; }
@@ -578,7 +606,23 @@ public final class MainActivity extends Activity {
         m.toggle(ru, "Hide in landscape", null, Prefs.K_LAND, true, null);
         m.toggle(ru, "Hide idle clock in apps", "While an app is open only the clock pill hides — banners, music and timers keep showing", Prefs.K_HIDEAPP, true, null);
         m.toggle(ru, "Hide music & call pill inside their own app", null, Prefs.K_INAPP, true, null);
-        m.toggle(ru, "Only show notifications on the island", "Messages and payments shown on the island are removed from the normal notification shade, so nothing pops up twice. Calls, timers, maps, downloads and music keep their own notification", Prefs.K_ABSORB, true, null);
+        final M3Switch[] absorbSw = new M3Switch[1];
+        absorbSw[0] = m.toggle(ru, "Only show notifications on the island",
+            "Off by default. Messages and payments shown on the island are removed from the notification shade, so nothing pops up twice, but a banner you miss is gone. Calls, timers, maps, downloads and music keep their own notification",
+            Prefs.K_ABSORB, Prefs.ABSORB_DEF, new Runnable() {
+                @Override public void run() {
+                    if (!Prefs.b(MainActivity.this, Prefs.K_ABSORB, Prefs.ABSORB_DEF)) return;   // switched off: nothing to confirm
+                    m.confirmDialog(MainActivity.this, "Remove banners from the shade?",
+                        "Messages and payments the island shows will be removed from the normal notification shade. If you look away and miss the banner, the message will not be waiting in the shade.\n\n"
+                            + "Nothing is removed while the island is off, hidden, or ignoring that app, and apps on Keep in shade are never touched.",
+                        "Turn on", null, "Cancel", new Runnable() {
+                            @Override public void run() {
+                                Prefs.sp(MainActivity.this).edit().putBoolean(Prefs.K_ABSORB, false).apply();
+                                if (absorbSw[0] != null) absorbSw[0].revert(false);
+                            }
+                        });
+                }
+            });
         m.toggle(ru, "Show on lock screen", "Only when the island is above the status bar", Prefs.K_LOCK, false, null);
         m.toggle(ru, "Haptic feedback", null, Prefs.K_HAPTIC, true, null);
         m.slider(ru, "Banner time", Prefs.K_DUR, 2, 9, 5, 1000, unit(" s"), null);
