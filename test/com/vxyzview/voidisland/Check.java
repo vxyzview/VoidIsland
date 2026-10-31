@@ -111,6 +111,17 @@ public class Check {
         Lyrics.remember("Who", "Does", p0);
         ok(Lyrics.cached("who", "does") == p0, "lyrics: cache lookup ignores case");
 
+        // --- Pill lyric scroll: the pill shows the whole song, so lookups must return an index, not just text
+        ok(s0.indexAt(900, 0) == -1, "scroll: nothing before the first stamp");
+        ok(s0.indexAt(1500, 0) == 0 && s0.indexAt(65000, 0) == 2, "scroll: synced index, past the last stamp stays on the last line");
+        ok(p0.indexAt(0, 100000) == 0 && p0.indexAt(60000, 100000) == 1, "scroll: plain index follows song progress");
+        ok(p0.indexAt(5000, 0) == -1, "scroll: plain text needs the song duration");
+        float[] tops = {0f, 30f, 70f};
+        ok(Lyrics.snapOffset(0, tops, 30f) == 0f, "scroll: first row sits at the top");
+        ok(Lyrics.snapOffset(1, tops, 30f) == 35f, "scroll: active row centres in the window");
+        ok(Lyrics.snapOffset(1, tops, 60f) == 10f, "scroll: window taller than the song clamps to the last edge");
+        ok(Lyrics.snapOffset(0, new float[]{0f, 20f}, 30f) == 0f, "scroll: song shorter than the pill does not scroll");
+
         System.out.println(fails == 0 ? "ALL CHECKS PASSED" : (fails + " FAILED"));
         System.exit(fails == 0 ? 0 : 1);
     }

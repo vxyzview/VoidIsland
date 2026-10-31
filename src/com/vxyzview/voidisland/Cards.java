@@ -225,20 +225,25 @@ final class Cards {
                 eq.setColor(acc(e));
                 eq.setPlaying(e.playing);
                 out.addView(eq, fl(Math.round(g * 0.9f), Math.round(g * 0.75f), Gravity.END | side, m));
-                // The playing song's current line rides the pill too: art left, lyric right;
+                // The whole song rides the pill too: art left, the lyrics scroll past on the right;
                 // the equalizer bars take over only while no lyric is known.
-                final TextView lt = tv(c, "", 13f, WHITE, true);
-                lt.setMaxWidth(Math.max(dp(c, 36), dp(c, S.cW) - g - dp(c, S.cPad * 2) - dp(c, 2)));
-                lt.setVisibility(View.INVISIBLE);
-                out.addView(lt, fl(WRAP, WRAP, Gravity.END | side, m));
+                final LyricScroll ls = new LyricScroll(c);
+                final int lw = Math.max(dp(c, 36), dp(c, S.cW) - g - dp(c, S.cPad * 2) - dp(c, 2));
+                ls.bind(null, lw, WHITE, SUB, 13f);
+                ls.setVisibility(View.INVISIBLE);
+                out.addView(ls, fl(WRAP, WRAP, Gravity.END | side, m));
                 final String[] lkey = {""};
                 final Lyrics.Loaded[] lnow = {null};
                 final Runnable show = new Runnable() {
                     @Override public void run() {
                         Lyrics.Loaded l = lnow[0];
-                        String s = l == null ? null : l.textAt(position(e), e.durMs);
-                        if (s == null) { lt.setText(""); lt.setVisibility(View.INVISIBLE); eq.setVisibility(View.VISIBLE); }
-                        else { lt.setText(s); lt.setVisibility(View.VISIBLE); eq.setVisibility(View.GONE); }
+                        if (l == null) { ls.tick(0, 0); ls.setVisibility(View.INVISIBLE); eq.setVisibility(View.VISIBLE); }
+                        else {
+                            ls.bind(l, lw, WHITE, SUB, 13f);
+                            ls.tick(position(e), e.durMs);
+                            ls.setVisibility(View.VISIBLE);
+                            eq.setVisibility(View.GONE);
+                        }
                     }
                 };
                 e.tC = new Runnable() { @Override public void run() { show.run(); } };
@@ -629,11 +634,6 @@ final class Cards {
         top.addView(eq, lp(dp(c, 22), dp(c, 20)));
         root.addView(top);
 
-        final TextView lyr = tv(c, "", 14f, SUB, false);
-        lyr.setPadding(0, dp(c, 4), 0, 0);
-        lyr.setVisibility(View.INVISIBLE);   // kept reserved (never GONE): the card's height is measured once
-        root.addView(lyr, lpw(ViewGroup.LayoutParams.MATCH_PARENT, WRAP, 1f));
-
         LinearLayout sr = row(c);
         sr.setPadding(0, dp(c, 14), 0, 0);
         final TextView el = tv(c, "0:00", 11.5f, SUB, false);
@@ -670,17 +670,6 @@ final class Cards {
         ctl.addView(next, lp(dp(c, 64), dp(c, 52)));
         root.addView(ctl);
 
-        final String[] lkey = {""};          // the song the lyrics row is currently about (track|artist|durS)
-        final Lyrics.Loaded[] lnow = {null};
-        final Runnable showLyric = new Runnable() {
-            @Override public void run() {
-                Lyrics.Loaded l = lnow[0];
-                if (l == null) { lyr.setVisibility(View.INVISIBLE); return; }
-                String line = l.textAt(position(e), e.durMs);
-                if (line == null) { lyr.setText(""); lyr.setVisibility(View.INVISIBLE); }
-                else { lyr.setText(line); lyr.setVisibility(View.VISIBLE); }
-            }
-        };
         e.tE = new Runnable() {
             @Override public void run() {
                 long dur = e.durMs, pos = position(e);
@@ -691,7 +680,6 @@ final class Cards {
                 } else {
                     seek.setFrac(0f);
                 }
-                showLyric.run();
             }
         };
         e.uE = new IslandEvent.Updater() {
@@ -707,7 +695,6 @@ final class Cards {
                 el.setVisibility(can ? View.VISIBLE : View.INVISIBLE);
                 rem.setVisibility(can ? View.VISIBLE : View.INVISIBLE);
                 e.tE.run();
-                lyricsLoad(c, e, lkey, lnow, showLyric);
                 return true;
             }
         };

@@ -11,7 +11,10 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.SystemClock;
+import android.text.StaticLayout;
+import android.text.TextPaint;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
@@ -346,5 +349,129 @@ final class BatteryView extends View {
             float g = h * 0.62f;
             IconView.glyph(c, p, IconView.BOLT, Col.onColor(color), bodyW / 2f - g / 2f, h / 2f - g / 2f, g);
         }
+    }
+}
+
+/** The compact pill's lyric window: the whole song as one clipped column, the active line anchored in view while the rest slides past. */
+final class LyricScroll extends View {
+    private static final float LINE = 1.34f;      // a single-line row is roughly this multiple of the font size
+    private final TextPaint p = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+    private Lyrics.Loaded l;
+    private StaticLayout[] lay = new StaticLayout[0];
+    private float[] tops = new float[1];          // row start heights; tops[rows] = the column's full height
+    private int rows, windowH, maxW, widest, padW;
+    private int colHot, colDim;
+    private int active = -1;                      // line the window is anchored on (-1 = nothing playing yet)
+    private float off;                            // the column's current rise
+    private ValueAnimator anim;
+    private final ValueAnimator.AnimatorUpdateListener ride = new ValueAnimator.AnimatorUpdateListener() {
+        @Override public void onAnimationUpdate(ValueAnimator a) {
+            off = (Float) a.getAnimatedValue();
+            invalidate();
+        }
+    };
+
+    LyricScroll(Context c) {
+        super(c);
+        p.setTextAlign(Paint.Align.LEFT);
+        p.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+    }
+
+    /** Bind to a song (or null to clear); the text box and colours may change any time without a rebuild. */
+    void bind(Lyrics.Loaded l, int maxW, int hot, int dim, float sp) {
+        colHot = hot;
+        colDim = dim;
+        float px = sp * getResources().getDisplayMetrics().scaledDensity;
+        if (this.l == l && this.maxW == maxW && p.getTextSize() == px) { invalidate(); return; }
+        this.l = l;
+        this.maxW = maxW;
+        padW = Math.round(36f * getResources().getDisplayMetrics().density);
+        p.setTextSize(px);
+        windowH = Math.round(px * LINE);
+        active = -1;
+        off = 0;
+        if (anim != null) anim.cancel();
+        rows = 0;
+        widest = 0;
+        tops = new float[]{0f};
+        if (l != null && l.line.length > 0) {
+            rows = l.line.length;
+            lay = new StaticLayout[rows];
+            tops = new float[rows + 1];
+            float top = 0f;
+            for (int i = 0; i < rows; i++) {
+                lay[i] = StaticLayout.Builder.obtain(l.line[i], 0, l.line[i].length(), p, Math.max(1, maxW))
+                    .setIncludePad(false).build();
+                tops[i] = top;
+                top += lay[i].getHeight() + Math.round(px * 0.3f);
+                int w = coarseWidth(lay[i]);
+                if (w > widest) widest = w;
+            }
+            tops[rows] = top;
+        }
+        invalidate();
+        requestLayout();
+    }
+
+    /** Follow the song: the active line changes, the column glides to its new anchor. */
+    void tick(long pos, long durMs) {
+        int idx = l == null ? -1 : l.indexAt(pos, durMs);
+        if (idx == active) return;
+        active = idx;
+        if (idx < 0) return;
+        startAnim(Lyrics.snapOffset(idx, tops, windowH));
+        invalidate();
+    }
+
+    private void startAnim(float to) {
+        if (anim != null) anim.cancel();
+        anim = ValueAnimator.ofFloat(off, to);
+        anim.setInterpolator(new DecelerateInterpolator());
+        anim.setDuration(380);
+        anim.addUpdateListener(ride);
+        anim.start();
+    }
+
+    private static int coarseWidth(StaticLayout s) {
+        int w = 0;
+        for (int i = 0; i < s.getLineCount(); i++) w = Math.max(w, (int) Math.ceil(s.getLineWidth(i)));
+        return w;
+    }
+
+    @Override protected void onSizeChanged(int w, int h, int ow, int oh) {
+        super.onSizeChanged(w, h, ow, oh);
+        GradientDrawable g = new GradientDrawable();   // outline shape only: the rounded clip lives in the outline, no per-frame paths
+        g.setColor(0);
+        g.setCornerRadius(h / 2f);
+        setBackground(g);
+        setClipToOutline(true);
+    }
+
+    @Override protected void onMeasure(int wSpec, int hSpec) {
+        int lo = padW, hi = Math.max(1, maxW);
+        if (lo <= 0) { lo = Math.max(1, windowH); hi = Math.max(lo, hi); }
+        int w = Math.min(Math.max(Math.max(widest, lo), 1), Math.max(hi, lo));
+        setMeasuredDimension(resolveSizeAndState(w, wSpec, 0), resolveSizeAndState(Math.max(1, windowH), hSpec, 0));
+    }
+
+    @Override protected void onDraw(Canvas c) {
+        if (rows == 0 || getWidth() == 0) return;
+        c.save();
+        c.translate(0, -off);
+        for (int i = 0; i < rows; i++) {
+            if (tops[i + 1] < off - 4) continue;                 // above the window
+            if (tops[i] > off + windowH + 4) break;              // below the window
+            p.setColor(i == active ? colHot : colDim);
+            c.save();
+            c.translate(0, tops[i]);
+            lay[i].draw(c);
+            c.restore();
+        }
+        c.restore();
+    }
+
+    @Override protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        if (anim != null) anim.cancel();
     }
 }

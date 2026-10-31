@@ -19,22 +19,37 @@ final class Lyrics {
 
         /** The line playing at {@code ms}, or null when nothing should be on screen yet. */
         String textAt(long ms, long durMs) {
-            int i;
+            int i = indexAt(ms, durMs);
+            return i >= 0 ? line[i] : null;
+        }
+
+        /** The index of the line playing at {@code ms}, or -1 when nothing is yet (also -1 for "no duration" plain text). */
+        int indexAt(long ms, long durMs) {
             if (synced) {
                 int lo = 0, hi = at.length - 1, r = -1;
                 while (lo <= hi) {
                     int mid = (lo + hi) >>> 1;
                     if (at[mid] <= ms) { r = mid; lo = mid + 1; } else hi = mid - 1;
                 }
-                i = r;
-            } else {
-                if (line.length == 0 || durMs <= 0) return null;
-                i = (int) ((ms / (float) durMs) * line.length);
-                if (i >= line.length) i = line.length - 1;
-                if (i < 0) i = 0;
+                return r;
             }
-            return i >= 0 ? line[i] : null;
+            if (line.length == 0 || durMs <= 0) return -1;
+            int i = (int) ((ms / (float) durMs) * line.length);
+            if (i >= line.length) i = line.length - 1;
+            if (i < 0) i = 0;
+            return i;
         }
+    }
+
+    /** Parse/LRC plumbing above; below: column scroll math, shared by the pill's lyric window. */
+
+    /** Column offset that centres row {@code i} in a {@code windowH}-tall window, clamped so the song never scrolls past its edges. */
+    static float snapOffset(int i, float[] tops, float windowH) {
+        float o = tops[i] + (tops[i + 1] - tops[i]) / 2f - windowH / 2f;
+        float max = tops[tops.length - 1] - windowH;
+        if (o > max) o = max;
+        if (o < 0) o = 0;
+        return o;
     }
 
     private static final HashMap<String, Loaded> CACHE = new HashMap<String, Loaded>();
