@@ -1,12 +1,13 @@
 package com.vxyzview.voidisland;
 
 import android.app.PendingIntent;
+import android.app.RemoteInput;
 import android.graphics.Bitmap;
 import android.media.session.MediaController;
 
 /** One thing the island can show (a call, a song, a payment, a toast...). Plain data + the hooks its views register. */
 final class IslandEvent {
-    static final int MEDIA = 0, CALL = 1, NAV = 2, TIMER = 3, PROGRESS = 4, PAYMENT = 5, CHARGE = 6, NOTIF = 7, SYSTEM = 8, PREVIEW = 9, CLOCK = 10;
+    static final int MEDIA = 0, CALL = 1, NAV = 2, TIMER = 3, PROGRESS = 4, PAYMENT = 5, CHARGE = 6, NOTIF = 7, SYSTEM = 8, PREVIEW = 9, CLOCK = 10, LIVE = 11;
 
     interface Updater { /** @return false if the views must be rebuilt instead */ boolean update(); }
 
@@ -32,6 +33,13 @@ final class IslandEvent {
     String[] actLabels = new String[0];
     PendingIntent[] actIntents = new PendingIntent[0];
     Runnable[] actRuns = new Runnable[0];
+
+    // quick reply (messaging notifications that carry an inline-reply action)
+    PendingIntent replyIntent;
+    RemoteInput replyInput;
+
+    // live activity (ride / food / score)
+    int liveKind;
 
     // media
     MediaController mc;
@@ -65,6 +73,7 @@ final class IslandEvent {
         icon = o.icon; art = o.art; accent = o.accent; iconType = o.iconType;
         when = o.when; countDown = o.countDown; chrono = o.chrono; progress = o.progress;
         contentIntent = o.contentIntent; actLabels = o.actLabels; actIntents = o.actIntents; actRuns = o.actRuns;
+        replyIntent = o.replyIntent; replyInput = o.replyInput; liveKind = o.liveKind;
         mc = o.mc; playing = o.playing; posMs = o.posMs; durMs = o.durMs; posAt = o.posAt; actions = o.actions; speed = o.speed;
         level = o.level; charging = o.charging; success = o.success; incoming = o.incoming;
         dirty = true;

@@ -27,7 +27,11 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/** Per-app switch: which apps are allowed to appear on the island. */
+/**
+ * Per-app switches in three flavours (intent extra "mode"):
+ * 0 = which apps may appear on the island, 1 = apps whose notifications also stay in the shade,
+ * 2 = apps the quiet-hours rule applies to (none switched on = all apps).
+ */
 public final class AppsActivity extends Activity {
     /** One launcher app: label resolved once, up front, so sorting and scrolling never hit the PackageManager. */
     private static final class App {
@@ -53,7 +57,10 @@ public final class AppsActivity extends Activity {
     private final ArrayList<App> apps = new ArrayList<App>();
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final LruCache<String, Bitmap> icons = new LruCache<String, Bitmap>(80);
-    private Set<String> blocked;
+    static final String EXTRA_MODE = "mode";
+    private Set<String> sel;          // the apps stored in the preference behind this screen
+    private String prefKey;
+    private boolean inverted;         // mode 0 stores the apps that are OFF, so its switch reads the opposite way
     private PackageManager pm;
     private M3 m;
     private Adapter adapter;
@@ -65,7 +72,10 @@ public final class AppsActivity extends Activity {
         m = new M3(this);
         pm = getPackageManager();
         iconPx = m.dp(40);
-        blocked = new HashSet<String>(Prefs.blocked(this));
+        int mode = getIntent().getIntExtra(EXTRA_MODE, 0);
+        prefKey = mode == 1 ? Prefs.K_KEEP : (mode == 2 ? Prefs.K_QAPPS : Prefs.K_BLOCK);
+        inverted = mode == 0;
+        sel = Prefs.set(this, prefKey);
         getWindow().setBackgroundDrawable(new ColorDrawable(m.surface));
         getWindow().setStatusBarColor(m.surface);
         getWindow().setNavigationBarColor(m.surfaceLow);
@@ -79,10 +89,12 @@ public final class AppsActivity extends Activity {
         LinearLayout bar = m.row();
         bar.addView(m.iconButton(IconView.BACK, "Back", new Runnable() { @Override public void run() { finish(); } }), m.lp(m.dp(48), m.dp(48)));
         root.addView(bar);
-        TextView t = m.text("Apps", 32f, false, m.onSurface);
+        TextView t = m.text(mode == 1 ? "Keep in shade" : (mode == 2 ? "Quiet hours apps" : "Apps"), 32f, false, m.onSurface);
         t.setPadding(m.dp(4), m.dp(8), 0, 0);
         root.addView(t);
-        TextView s = m.text("Switch off apps you never want on the island.", 14f, false, m.onSurfaceVariant);
+        TextView s = m.text(mode == 1 ? "Switch on apps whose notifications should also stay in the normal notification shade, like banking or one-time codes."
+            : (mode == 2 ? "Quiet hours only apply to the apps switched on. Leave them all off to apply quiet hours to every app."
+            : "Switch off apps you never want on the island."), 14f, false, m.onSurfaceVariant);
         s.setPadding(m.dp(4), m.dp(6), 0, m.dp(10));
         root.addView(s);
 
@@ -171,10 +183,11 @@ public final class AppsActivity extends Activity {
             final App a = apps.get(i);
             h.pkg = a.pkg;
             h.name.setText(a.label);
-            h.sw.bind(!blocked.contains(a.pkg), new M3.OnSel() {
+            h.sw.bind(sel.contains(a.pkg) != inverted, new M3.OnSel() {
                 @Override public void on(int on) {
-                    if (on == 1) blocked.remove(a.pkg); else blocked.add(a.pkg);
-                    Prefs.setBlocked(AppsActivity.this, blocked);
+                    boolean stored = (on == 1) != inverted;   // is this app in the stored set after the flip?
+                    if (stored) sel.add(a.pkg); else sel.remove(a.pkg);
+                    Prefs.setSet(AppsActivity.this, prefKey, sel);
                 }
             });
             Bitmap cached = icons.get(a.pkg);

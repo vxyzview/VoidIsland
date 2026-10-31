@@ -122,6 +122,30 @@ public class Check {
         ok(Lyrics.snapOffset(1, tops, 60f) == 10f, "scroll: window taller than the song clamps to the last edge");
         ok(Lyrics.snapOffset(0, new float[]{0f, 20f}, 30f) == 0f, "scroll: song shorter than the pill does not scroll");
 
+        // --- Island rules: quiet hours (may wrap midnight), per-app scope, one banner per chat
+        ok(Rules.inQuiet(23 * 60, 22 * 60, 7 * 60) && Rules.inQuiet(3 * 60, 22 * 60, 7 * 60), "rules: quiet window wraps past midnight");
+        ok(!Rules.inQuiet(12 * 60, 22 * 60, 7 * 60) && !Rules.inQuiet(7 * 60, 22 * 60, 7 * 60), "rules: outside the window, end is exclusive");
+        ok(Rules.inQuiet(13 * 60, 12 * 60, 14 * 60) && !Rules.inQuiet(14 * 60, 12 * 60, 14 * 60), "rules: same-day window");
+        ok(!Rules.inQuiet(5, 600, 600), "rules: equal start and end means off");
+        java.util.HashSet<String> qa = new java.util.HashSet<String>();
+        ok(Rules.quietCovers("a.b", qa) && Rules.quietCovers("a.b", null), "rules: empty app list covers every app");
+        qa.add("x.y");
+        ok(Rules.quietCovers("x.y", qa) && !Rules.quietCovers("a.b", qa), "rules: listed apps only");
+        Rules.resetChats();
+        ok(!Rules.chatRepeat("wa|Ann", 1000L, 60000L), "rules: first banner of a chat shows");
+        ok(Rules.chatRepeat("wa|Ann", 30000L, 60000L), "rules: follow-up inside the window stays quiet");
+        ok(!Rules.chatRepeat("wa|Bob", 30000L, 60000L), "rules: another chat is independent");
+        ok(!Rules.chatRepeat("wa|Ann", 70000L, 60000L), "rules: chat pops again after the window");
+        ok("07:30".equals(Rules.hhmm(450)) && "00:00".equals(Rules.hhmm(1440)) && "23:30".equals(Rules.hhmm(-30)), "rules: clock text");
+
+        // --- Live activities: judged by the app
+        ok(Live.kind("com.grabtaxi.passenger") == Live.RIDE && Live.kind("me.lyft.android") == Live.RIDE, "live: ride apps");
+        ok(Live.kind("com.ubercab.eats") == Live.FOOD && Live.kind("com.ubercab") == Live.RIDE, "live: Uber Eats is food, Uber is a ride");
+        ok(Live.kind("com.espn.score_center") == Live.SPORT, "live: score apps");
+        ok(Live.kind("com.shopee.id") == Live.FOOD, "live: prefix match");
+        ok(Live.kind("com.whatsapp") == Live.NONE && Live.kind(null) == Live.NONE && Live.kind("") == Live.NONE, "live: ordinary apps are not live activities");
+        ok(Live.kind("com.some.foodpanda.app") == Live.FOOD && Live.kind("io.city.taxi") == Live.RIDE, "live: keyword fallback");
+
         System.out.println(fails == 0 ? "ALL CHECKS PASSED" : (fails + " FAILED"));
         System.exit(fails == 0 ? 0 : 1);
     }

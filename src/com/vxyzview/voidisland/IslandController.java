@@ -313,6 +313,7 @@ final class IslandController implements IslandView.Host {
             case IslandEvent.PAYMENT: return Prefs.b(svc, Prefs.K_PAY, true);
             case IslandEvent.CHARGE: return Prefs.b(svc, Prefs.K_CHG, true);
             case IslandEvent.SYSTEM: return Prefs.b(svc, Prefs.K_SYS, true) || "toast".equals(e.key);
+            case IslandEvent.LIVE: return Prefs.b(svc, Prefs.K_LIVEACT, true);
             case IslandEvent.PREVIEW: return true;
             case IslandEvent.CLOCK: return Prefs.b(svc, Prefs.K_CLOCK, true) && !(Prefs.b(svc, Prefs.K_HIDEAPP, true) && appOpen);
             default: return Prefs.b(svc, Prefs.K_NOTIF, true);

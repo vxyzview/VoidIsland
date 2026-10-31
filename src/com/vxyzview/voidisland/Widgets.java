@@ -419,34 +419,50 @@ final class LyricScroll extends View {
         requestLayout();
     }
 
-    /** Follow the song: when the active line changes, show it and (if it is too wide) start sliding it. */
-    void tick(long pos, long durMs) {
+    private static final long TICK = 400L;       // the island refreshes the pill about this often
+    private long lineStart, wait, scrollMs;      // when the active line begins, and the slide's timing inside it
+
+    /**
+     * Follow the song. A new line fades in; a line wider than the pill then slides in step with the
+     * real playback position: it holds still while paused and jumps to the right spot after a seek.
+     */
+    void tick(long pos, long durMs, boolean playing) {
         int idx = l == null ? -1 : l.indexAt(pos, durMs);
-        if (idx == active) return;
-        active = idx;
-        stop();
-        off = 0;
-        overflow = 0;
-        if (idx < 0 || idx >= rows) { invalidate(); return; }
-        int w = getWidth() > 0 ? getWidth() : viewW;
-        overflow = Math.max(0f, lineW[idx] - w);
-        setAlpha(0f);
-        animate().alpha(1f).setDuration(220).start();
-        if (overflow > 0f) {
-            float dens = getResources().getDisplayMetrics().density;
+        if (idx != active) {
+            active = idx;
+            stop();
+            off = 0;
+            overflow = 0;
+            if (idx < 0 || idx >= rows) { invalidate(); return; }
+            int w = getWidth() > 0 ? getWidth() : viewW;
+            overflow = Math.max(0f, lineW[idx] - w);
+            setAlpha(0f);
+            animate().alpha(1f).setDuration(220).start();
             long span = lineSpan(idx, durMs);
-            long wait = Math.min(700L, span / 5);
+            lineStart = l.synced ? l.at[idx] : (rows > 0 && durMs > 0 ? durMs * idx / rows : 0L);
+            wait = Math.min(700L, span / 5);
+            float dens = getResources().getDisplayMetrics().density;
             float minDur = overflow / (0.22f * dens);                 // never faster than ~220dp/s
             float maxDur = overflow / (0.03f * dens);                 // never slower than ~30dp/s
             float dur = Math.min(Math.max(span * 0.75f - wait, minDur), maxDur);
-            anim = ValueAnimator.ofFloat(0f, overflow);
-            anim.setInterpolator(new LinearInterpolator());
-            anim.setStartDelay(wait);
-            anim.setDuration(Math.max(500L, (long) dur));
-            anim.addUpdateListener(ride);
-            anim.start();
+            scrollMs = Math.max(500L, (long) dur);
         }
-        invalidate();
+        if (idx < 0 || overflow <= 0f) return;
+        float target = overflow * fraction(pos);
+        if (anim != null) { anim.cancel(); anim = null; }
+        if (!playing) { off = target; invalidate(); return; }       // paused: sit exactly where the song is
+        float ahead = overflow * fraction(pos + TICK);                // glide to where the song will be at the next tick
+        anim = ValueAnimator.ofFloat(off, ahead);
+        anim.setInterpolator(new LinearInterpolator());
+        anim.setDuration(Math.abs(ahead - off) > overflow * 0.3f ? 160L : TICK);   // a big jump (seek) catches up quickly
+        anim.addUpdateListener(ride);
+        anim.start();
+    }
+
+    /** How far through its slide the line is at song position {@code pos} (0 = start, 1 = end). */
+    private float fraction(long pos) {
+        float f = (pos - lineStart - wait) / (float) scrollMs;
+        return f < 0f ? 0f : (f > 1f ? 1f : f);
     }
 
     /** How long (ms) the line stays on screen: until the next stamp, or an even share of the song for plain text. */

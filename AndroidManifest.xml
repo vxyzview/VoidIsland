@@ -44,6 +44,13 @@
             android:exported="false"
             android:label="Choose apps" />
 
+        <activity
+            android:name=".ReplyActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/ReplyTheme" />
+
         <service
             android:name=".IslandService"
             android:exported="true"

@@ -237,10 +237,10 @@ final class Cards {
                 final Runnable show = new Runnable() {
                     @Override public void run() {
                         Lyrics.Loaded l = lnow[0];
-                        if (l == null) { ls.tick(0, 0); ls.setVisibility(View.INVISIBLE); eq.setVisibility(View.VISIBLE); }
+                        if (l == null) { ls.tick(0, 0, false); ls.setVisibility(View.INVISIBLE); eq.setVisibility(View.VISIBLE); }
                         else {
                             ls.bind(l, lw, WHITE, SUB, 13f);
-                            ls.tick(position(e), e.durMs);
+                            ls.tick(position(e), e.durMs, e.playing);
                             ls.setVisibility(View.VISIBLE);
                             eq.setVisibility(View.GONE);
                         }
@@ -299,6 +299,28 @@ final class Cards {
                 };
                 break;
             }
+            case IslandEvent.LIVE: {
+                final RoundImage ri = new RoundImage(c);
+                ri.set(e.icon, g * 0.3f);
+                out.addView(ri, fl(g, g, Gravity.START | side, m));
+                final int lmw = Math.max(dp(c, 36), dp(c, S.cW) - g - dp(c, S.cPad * 2) - dp(c, 2));
+                if (e.progress >= 0) {
+                    final RingView rg = new RingView(c);
+                    rg.set(e.progress / 100f, acc(e));
+                    out.addView(rg, fl(g, g, Gravity.END | side, m));
+                    e.uC = new IslandEvent.Updater() {
+                        @Override public boolean update() { rg.set(Math.max(0, e.progress) / 100f, acc(e)); return e.progress >= 0; }
+                    };
+                } else {
+                    final TextView lt = tv(c, e.title, 12.5f, WHITE, true);
+                    lt.setMaxWidth(lmw);
+                    out.addView(lt, fl(WRAP, WRAP, Gravity.END | side, m));
+                    e.uC = new IslandEvent.Updater() {
+                        @Override public boolean update() { lt.setText(e.title); return e.progress < 0; }
+                    };
+                }
+                break;
+            }
             case IslandEvent.PREVIEW: {
                 out.addView(new IconView(c, IconView.NOTE, PURPLE), fl(g, g, Gravity.START | side, m));
                 EqView eq = new EqView(c);
@@ -346,6 +368,7 @@ final class Cards {
             case IslandEvent.PAYMENT: return payment(c, e);
             case IslandEvent.CHARGE: return charge(c, e);
             case IslandEvent.PROGRESS: return progress(c, e);
+            case IslandEvent.LIVE: return live(c, e);
             case IslandEvent.TIMER: return timer(c, e);
             case IslandEvent.CLOCK: return clockCard(c, e);
             case IslandEvent.SYSTEM: return system(c, e);
@@ -365,6 +388,23 @@ final class Cards {
             LinearLayout.LayoutParams p = lpw(0, dp(c, 40), 1f);
             if (i > 0) p.setMarginStart(dp(c, 8));
             r.addView(b, p);
+        }
+        return r;
+    }
+
+    /** "Reply" (opens the quick-reply box) next to the notification's first other action, if it has one. */
+    private static View replyRow(final Context c, final IslandEvent e) {
+        LinearLayout r = row(c);
+        r.setPadding(0, dp(c, 12), 0, 0);
+        r.addView(button(c, "Reply", BTN, -1, new Runnable() {
+            @Override public void run() { ReplyActivity.start(c, e); }
+        }), lpw(0, dp(c, 40), 1f));
+        if (e.actLabels.length > 0) {
+            LinearLayout.LayoutParams p = lpw(0, dp(c, 40), 1f);
+            p.setMarginStart(dp(c, 8));
+            r.addView(button(c, e.actLabels[0], BTN, -1, new Runnable() {
+                @Override public void run() { fire(e, 0); }
+            }), p);
         }
         return r;
     }
@@ -391,7 +431,8 @@ final class Cards {
         if (e.text != null && e.text.length() > 0) t.addView(body);
         top.addView(t, lpw(0, WRAP, 1f));
         root.addView(top);
-        if (e.actLabels.length > 0) root.addView(actionsRow(c, e, 2));
+        if (e.replyIntent != null && e.replyInput != null) root.addView(replyRow(c, e));
+        else if (e.actLabels.length > 0) root.addView(actionsRow(c, e, 2));
         e.uE = new IslandEvent.Updater() {
             @Override public boolean update() { title.setText(e.title); body.setText(e.text); ic.set(e.icon, dp(c, 11)); return true; }
         };
@@ -525,6 +566,57 @@ final class Cards {
         root.addView(t, lpw(0, WRAP, 1f));
         e.uE = new IslandEvent.Updater() {
             @Override public boolean update() { title.setText(e.title); sub.setText(e.sub); return true; }
+        };
+        return root;
+    }
+
+    /** Ride / food / score card: app icon, what it is, the status text, an optional progress bar and the app's own actions. */
+    private static View live(final Context c, final IslandEvent e) {
+        final boolean hadBar = e.progress >= 0;
+        LinearLayout root = col(c);
+        root.setPadding(px(c), py(c), px(c), py(c));
+        LinearLayout top = row(c);
+        final RoundImage ic = new RoundImage(c);
+        ic.set(e.icon, dp(c, 10));
+        top.addView(ic, lp(dp(c, 44), dp(c, 44)));
+        LinearLayout t = col(c);
+        t.setPadding(dp(c, 12), 0, dp(c, 8), 0);
+        String kindLabel = Live.label(e.liveKind);
+        String head = e.appName != null && e.appName.length() > 0 ? (kindLabel.length() > 0 ? e.appName + " \u00b7 " + kindLabel : e.appName) : kindLabel;
+        if (head.length() > 0) {
+            TextView k = tv(c, head, 11f, acc(e), true);
+            k.setPadding(0, 0, 0, dp(c, 2));
+            t.addView(k);
+        }
+        final TextView title = tv(c, e.title, 16f, WHITE, true);
+        final TextView body = tv(c, e.text, 13.5f, SUB, false);
+        body.setMaxLines(2);
+        t.addView(title);
+        if (e.text != null && e.text.length() > 0) { body.setPadding(0, dp(c, 2), 0, 0); t.addView(body); }
+        top.addView(t, lpw(0, WRAP, 1f));
+        final TextView pct = tv(c, Math.max(0, e.progress) + "%", 16f, WHITE, true);
+        pct.setFontFeatureSettings("tnum");
+        if (hadBar) top.addView(pct);
+        root.addView(top);
+        final SeekView bar = new SeekView(c);
+        bar.setInteractive(false);
+        bar.setColor(acc(e));
+        bar.setFrac(Math.max(0, e.progress) / 100f);
+        if (hadBar) {
+            LinearLayout.LayoutParams bp = lp(ViewGroup.LayoutParams.MATCH_PARENT, dp(c, 18));
+            bp.topMargin = dp(c, 10);
+            root.addView(bar, bp);
+        }
+        if (e.actLabels.length > 0) root.addView(actionsRow(c, e, 2));
+        e.uE = new IslandEvent.Updater() {
+            @Override public boolean update() {
+                if ((e.progress >= 0) != hadBar) return false;
+                title.setText(e.title);
+                body.setText(e.text);
+                pct.setText(Math.max(0, e.progress) + "%");
+                bar.setFrac(Math.max(0, e.progress) / 100f);
+                return true;
+            }
         };
         return root;
     }

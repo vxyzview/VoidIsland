@@ -3,6 +3,7 @@ package com.vxyzview.voidisland;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.RemoteInput;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
@@ -10,6 +11,7 @@ import android.os.Bundle;
 import android.os.Parcelable;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.HashMap;
 
 /** Turns an Android notification into the right island event: call, timer, navigation, download, payment or plain banner. */
@@ -56,6 +58,37 @@ final class Classifier {
         e.actLabels = ls.toArray(new String[0]);
         e.actIntents = ps.toArray(new PendingIntent[0]);
         e.actRuns = new Runnable[ls.size()];
+    }
+
+    /** The first inline-reply action that takes free text, so the island can offer a "Reply" button. */
+    private static void reply(IslandEvent e, Notification n) {
+        if (n.actions == null) return;
+        for (Notification.Action a : n.actions) {
+            if (a == null || a.actionIntent == null) continue;
+            RemoteInput[] ri = a.getRemoteInputs();
+            if (ri == null) continue;
+            for (RemoteInput r : ri) {
+                if (r.getAllowFreeFormInput()) { e.replyIntent = a.actionIntent; e.replyInput = r; return; }
+            }
+        }
+    }
+
+    /** Island-only rules for text banners: quiet hours, group chats, one banner per chat. True = keep this one off the island. */
+    private static boolean ruleQuiet(Context c, String pkg, Bundle x, CharSequence title) {
+        if (Prefs.b(c, Prefs.K_QUIET, false)) {
+            Calendar cal = Calendar.getInstance();
+            int now = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE);
+            if (Rules.inQuiet(now, Prefs.i(c, Prefs.K_QFROM, 22 * 60), Prefs.i(c, Prefs.K_QTO, 7 * 60))
+                && Rules.quietCovers(pkg, Prefs.set(c, Prefs.K_QAPPS))) return true;
+        }
+        CharSequence conv = x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE);
+        boolean group = x.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION) || !empty(conv);
+        if (group && Prefs.b(c, Prefs.K_NOGROUP, false)) return true;
+        if (Prefs.b(c, Prefs.K_ONEPERCHAT, false)) {
+            String chat = pkg + "|" + (empty(conv) ? String.valueOf(title) : conv.toString());
+            if (Rules.chatRepeat(chat, System.currentTimeMillis(), Rules.CHAT_WINDOW_MS)) return true;
+        }
+        return false;
     }
 
     private static boolean duplicate(String nkey, String sig) {
@@ -143,6 +176,24 @@ final class Classifier {
             return e;
         }
 
+        // ---- live activities: rides, food delivery, live scores (judged by the app that posted it)
+        int lk = Live.kind(pkg);
+        if (lk != Live.NONE && ongoing && (!empty(title) || !empty(text)) && Prefs.b(c, Prefs.K_LIVEACT, true)) {
+            IslandEvent e = new IslandEvent("l:" + nkey, IslandEvent.LIVE);
+            e.live = true; e.priority = 60; e.pkg = pkg; e.appName = app;
+            e.liveKind = lk;
+            e.accent = Live.accent(lk);
+            e.title = empty(title) ? app : title;
+            e.text = text;
+            e.icon = Img.appIcon(c, pkg);
+            int lmax = x.getInt(Notification.EXTRA_PROGRESS_MAX), lprog = x.getInt(Notification.EXTRA_PROGRESS);
+            boolean indet = x.getBoolean(Notification.EXTRA_PROGRESS_INDETERMINATE);
+            e.progress = lmax > 0 && !indet ? Math.max(0, Math.min(100, Math.round(lprog * 100f / lmax))) : -1;
+            e.contentIntent = n.contentIntent;
+            actions(e, n);
+            return e;
+        }
+
         // ---- downloads / uploads / anything with a real progress bar
         int max = x.getInt(Notification.EXTRA_PROGRESS_MAX), prog = x.getInt(Notification.EXTRA_PROGRESS);
         if (max > 0 && prog < max && (ongoing || !initial)) {
@@ -186,6 +237,7 @@ final class Classifier {
 
         // ---- everything else: a banner
         if (!Prefs.b(c, Prefs.K_NOTIF, true)) return null;
+        if (ruleQuiet(c, pkg, x, title)) return null;
         IslandEvent e = new IslandEvent("n:" + nkey, IslandEvent.NOTIF);
         e.pkg = pkg; e.appName = app; e.nkey = nkey;
         e.title = empty(title) ? app : title;
@@ -195,6 +247,7 @@ final class Classifier {
         e.durationMs = Prefs.i(c, Prefs.K_DUR, 5000);
         e.contentIntent = n.contentIntent;
         actions(e, n);
+        reply(e, n);
         return e;
     }
 }

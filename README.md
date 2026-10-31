@@ -2,6 +2,15 @@
 
 Dynamic Island for Android (by vxyzview) — notifications, media and calls on a floating island. Pure Java, no Gradle.
 
+## Features
+
+- Notifications, calls, music, timers, navigation and downloads on a floating island.
+- **Lyrics** on the music pill: one line at a time; long lines slide sideways in step with the song (pause, seek and all).
+- **Only on the island**: messages and payments shown on the island are removed from the shade. Apps on the *Keep in shade* list keep theirs.
+- **Quick reply**: expand a message banner and tap *Reply* to answer without opening the app.
+- **Island rules**: quiet hours (optionally only for chosen apps), mute group chats, one banner per chat.
+- **Live activities**: rides, food delivery and live scores stay on the island while they run.
+
 ## Install
 
 Grab an APK from [Releases](https://github.com/vxyzview/VoidIsland/releases) and sideload it (Android 8+ / API 26+).

@@ -63,6 +63,7 @@ public final class ListenerService extends NotificationListenerService {
     /** The island is the only presentation for text banners: the original notification is removed so nothing shows twice. */
     private void absorb(IslandEvent e, String nkey, boolean initial) {
         if (!Prefs.b(this, Prefs.K_ABSORB, true) || !Absorb.applies(e.type, e.live, initial)) return;
+        if (e.pkg != null && Prefs.set(this, Prefs.K_KEEP).contains(e.pkg)) return;   // "keep in shade" apps stay in the shade too
         try {
             cancelNotification(nkey);
         } catch (Throwable t) { /* stale key or access lost: the original simply keeps showing */ }

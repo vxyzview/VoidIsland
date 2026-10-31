@@ -13,7 +13,9 @@ final class Prefs {
     static final String K_ON = "on", K_MEDIA = "f_media", K_NOTIF = "f_notif", K_CALL = "f_call", K_PAY = "f_pay",
         K_CHG = "f_chg", K_SYS = "f_sys", K_TOAST = "f_toast", K_LAND = "hide_land", K_INAPP = "hide_inapp", K_HIDEAPP = "hide_app",
         K_HAPTIC = "haptic", K_DUR = "dur", K_ABSORB = "absorb", K_BLOCK = "blocked", K_QS = "qs", K_LOCK = "lock_show", K_POKE = "poke",
-        K_CLOCK = "f_clock", K_LYRICS = "f_lyric", K_THEME = "app_theme";
+        K_CLOCK = "f_clock", K_LYRICS = "f_lyric", K_THEME = "app_theme",
+        K_LIVEACT = "f_live", K_KEEP = "keep_apps", K_QUIET = "quiet_on", K_QFROM = "quiet_from", K_QTO = "quiet_to",
+        K_QAPPS = "quiet_apps", K_NOGROUP = "no_group", K_ONEPERCHAT = "one_per_chat";
     // shape + size
     static final String K_SHAPE = "shape", K_ESHAPE = "e_shape", K_CW = "c_w", K_CH = "c_h", K_CR = "c_r", K_CPAD = "c_pad", K_GLYPH = "glyph",
         K_EW = "e_w", K_ER = "e_r", K_PADX = "pad_x", K_PADY = "pad_y", K_TS = "t_scale";
@@ -33,9 +35,13 @@ final class Prefs {
 
     static int i(Context c, String k, int def) { return sp(c).getInt(k, def); }
 
-    static Set<String> blocked(Context c) { return new HashSet<String>(sp(c).getStringSet(K_BLOCK, new HashSet<String>())); }
+    static Set<String> set(Context c, String key) { return new HashSet<String>(sp(c).getStringSet(key, new HashSet<String>())); }
 
-    static void setBlocked(Context c, Set<String> s) { sp(c).edit().putStringSet(K_BLOCK, s).apply(); }
+    static void setSet(Context c, String key, Set<String> s) { sp(c).edit().putStringSet(key, s).apply(); }
+
+    static Set<String> blocked(Context c) { return set(c, K_BLOCK); }
+
+    static void setBlocked(Context c, Set<String> s) { setSet(c, K_BLOCK, s); }
 
     /** Every key that changes how the island LOOKS (sizes, shape, colours...). Used for presets and reset. */
     static final String[] STYLE_KEYS = {K_SHAPE, K_ESHAPE, K_CW, K_CH, K_CR, K_CPAD, K_GLYPH, K_EW, K_ER, K_PADX, K_PADY, K_TS, K_Y, K_X,

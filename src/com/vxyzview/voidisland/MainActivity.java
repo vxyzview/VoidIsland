@@ -358,6 +358,11 @@ public final class MainActivity extends Activity {
         return new Runnable() { @Override public void run() { changed(expanded); } };
     }
 
+    /** Slider steps of 30 minutes shown as a clock time ("22:00"). */
+    private M3.Fmt hourFmt() {
+        return new M3.Fmt() { @Override public String f(int v) { return Rules.hhmm(v * 30); } };
+    }
+
     private M3.Fmt unit(final String u) {
         return new M3.Fmt() { @Override public String f(int v) { return v + u; } };
     }
@@ -560,6 +565,7 @@ public final class MainActivity extends Activity {
         m.toggle(sh, "Calls", "Answer and decline from the island", Prefs.K_CALL, true, null);
         m.toggle(sh, "Payments", "Payment and transfer confirmations", Prefs.K_PAY, true, null);
         m.toggle(sh, "Notifications", "Banners, downloads, timers, maps", Prefs.K_NOTIF, true, null);
+        m.toggle(sh, "Live activities", "Rides, food delivery and live scores stay on the island while they run", Prefs.K_LIVEACT, true, null);
         m.toggle(sh, "Charging & battery", "Plugged in, full, low battery", Prefs.K_CHG, true, null);
         m.toggle(sh, "Phone events", "Silent mode, DND, headphones, Bluetooth, flashlight", Prefs.K_SYS, true, null);
         m.toggle(sh, "App toasts", "Short messages apps pop up", Prefs.K_TOAST, false, null);
@@ -573,9 +579,22 @@ public final class MainActivity extends Activity {
         m.toggle(ru, "Haptic feedback", null, Prefs.K_HAPTIC, true, null);
         m.slider(ru, "Banner time", Prefs.K_DUR, 2, 9, 5, 1000, unit(" s"), null);
 
+        LinearLayout qr = m.card(p, "Island rules");
+        m.toggle(qr, "Quiet hours", "Keep banners off the island during these hours. They stay in the shade, untouched", Prefs.K_QUIET, false, null);
+        m.slider(qr, "Quiet from", Prefs.K_QFROM, 0, 47, 44, 30, hourFmt(), null);
+        m.slider(qr, "Quiet until", Prefs.K_QTO, 0, 47, 14, 30, hourFmt(), null);
+        qr.addView(m.item(IconView.APPS, "Quiet hours apps", "Only these apps go quiet. Leave empty for all apps", null, new Runnable() {
+            @Override public void run() { startActivity(new Intent(MainActivity.this, AppsActivity.class).putExtra(AppsActivity.EXTRA_MODE, 2)); }
+        }));
+        m.toggle(qr, "Mute group chats", "Group conversations do not pop up on the island", Prefs.K_NOGROUP, false, null);
+        m.toggle(qr, "One banner per chat", "Only the first message of a chat pops up; follow-ups within 5 minutes stay quiet", Prefs.K_ONEPERCHAT, false, null);
+
         LinearLayout ap = m.card(p, "Apps");
         ap.addView(m.item(IconView.APPS, "Choose apps", "Switch off apps you never want on the island", null, new Runnable() {
             @Override public void run() { startActivity(new Intent(MainActivity.this, AppsActivity.class)); }
+        }));
+        ap.addView(m.item(IconView.APPS, "Keep in shade", "Apps that also keep their normal notification, like banking or one-time codes", null, new Runnable() {
+            @Override public void run() { startActivity(new Intent(MainActivity.this, AppsActivity.class).putExtra(AppsActivity.EXTRA_MODE, 1)); }
         }));
     }
 
