@@ -2,7 +2,6 @@ package com.vxyzview.voidisland;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Color;
 
 /** Everything about how the island looks and behaves, read once from preferences. Sizes are dp, colours are ARGB. */
 final class Style {
@@ -107,7 +106,8 @@ final class Style {
 
     /**
      * The other Material 3 (dark scheme) roles, so the whole island follows the theme and not just the accent:
-     * tonal buttons = secondary container, "good" things (accept, success, active call) = tertiary, "bad" = error,
+     * tonal buttons = secondary container, "good" things (charging, payment success, accept, active call) = the SAME
+     * accent as everything else (a separate tertiary hue made charging / payment look like a different theme), "bad" = error,
      * tiles = a surface-container tone, text = on-surface / on-surface-variant. The island itself stays black.
      */
     private void deriveRoles(Context c) {
@@ -115,8 +115,8 @@ final class Style {
         tert = 0xFF30D158; tertOn = 0xFFFFFFFF; err = 0xFFFF453A; errOn = 0xFFFFFFFF;   // Auto: the classic green / red
         if (accMode == 1) {
             err = 0xFFF2B8B5; errOn = 0xFF601410;   // M3 error roles are fixed, they are not part of the wallpaper palette
-            tert = Pal.get(c, "accent3", 200, 0xFFEFB8C8);
-            tertOn = Pal.get(c, "accent3", 800, 0xFF492532);
+            tert = accent;     // "good" = the wallpaper accent itself, so every card shares one colour
+            tertOn = accentOn;
             btn = Pal.get(c, "accent2", 700, 0xFF4A4458);
             btnOn = Pal.get(c, "accent2", 100, 0xFFE8DEF8);
             if (colMode != 2) tile = Pal.get(c, "neutral1", 800, 0xFF322F35);
@@ -126,11 +126,8 @@ final class Style {
             }
         } else if (accMode == 2) {
             err = 0xFFF2B8B5; errOn = 0xFF601410;
-            float[] hsv = new float[3];
-            Color.colorToHSV(accent, hsv);
-            hsv[0] = (hsv[0] + 60f) % 360f;   // tertiary = the custom accent turned a third of the way round the wheel
-            tert = Color.HSVToColor(hsv) | 0xFF000000;
-            tertOn = Col.onColor(tert);
+            tert = accent;     // "good" = the custom accent itself (no second hue)
+            tertOn = accentOn;
             btn = accentCont;
             btnOn = accentOnCont;
         }

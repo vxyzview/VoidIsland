@@ -52,6 +52,8 @@ final class Bus {
         if (ctl != null) ctl.setShade(open);
     }
 
+    static void clockNow() { if (ctl != null) ctl.clockNow(); }
+
     static void keyguard() { if (ctl != null) ctl.refreshLock(); }
 
     static boolean appLayer() { return ctl != null && ctl.isAppLayer(); }

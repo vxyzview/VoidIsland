@@ -36,7 +36,12 @@ final class SystemEvents {
             try {
                 String a = i.getAction();
                 if (a == null) return;
-                if (Intent.ACTION_SCREEN_ON.equals(a) || Intent.ACTION_SCREEN_OFF.equals(a) || Intent.ACTION_USER_PRESENT.equals(a)) Bus.keyguard();
+                if (Intent.ACTION_SCREEN_ON.equals(a) || Intent.ACTION_SCREEN_OFF.equals(a) || Intent.ACTION_USER_PRESENT.equals(a)) {
+                    Bus.keyguard();
+                    if (Intent.ACTION_SCREEN_ON.equals(a)) Bus.clockNow();
+                }
+                else if (Intent.ACTION_TIME_TICK.equals(a) || Intent.ACTION_TIME_CHANGED.equals(a) || Intent.ACTION_TIMEZONE_CHANGED.equals(a)
+                    || Intent.ACTION_DATE_CHANGED.equals(a)) Bus.clockNow();
                 else if (Intent.ACTION_BATTERY_CHANGED.equals(a)) battery(i);
                 else if (AudioManager.RINGER_MODE_CHANGED_ACTION.equals(a)) ringer();
                 else if (NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED.equals(a)) dnd();
@@ -63,6 +68,10 @@ final class SystemEvents {
         f.addAction(Intent.ACTION_SCREEN_ON);
         f.addAction(Intent.ACTION_SCREEN_OFF);
         f.addAction(Intent.ACTION_USER_PRESENT);
+        f.addAction(Intent.ACTION_TIME_TICK);        // keeps the idle clock exact: the island's own timer stops while the phone sleeps
+        f.addAction(Intent.ACTION_TIME_CHANGED);
+        f.addAction(Intent.ACTION_TIMEZONE_CHANGED);
+        f.addAction(Intent.ACTION_DATE_CHANGED);
         c.registerReceiver(rx, f);
         try {
             cm = (CameraManager) c.getSystemService(Context.CAMERA_SERVICE);

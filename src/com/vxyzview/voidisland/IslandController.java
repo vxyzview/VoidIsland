@@ -24,6 +24,7 @@ import android.view.WindowManager;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -50,7 +51,8 @@ final class IslandController implements IslandView.Host {
     private boolean landscape;
     private float cutCx = Float.NaN, cutCy = Float.NaN;
 
-    private String homePkg = "";   // the launcher: the one "app" the island stays visible in
+    private final HashSet<String> homes = new HashSet<String>();   // every launcher package: the only "apps" the idle clock stays visible in
+    private long homeAt;           // when the launcher list was last read (uptime ms)
     private boolean appOpen;       // true while a real app (not launcher, not keyboard) is in the foreground
 
     /** Synthetic event shown while nothing else is on the island (icon + time). */
@@ -132,15 +134,29 @@ final class IslandController implements IslandView.Host {
         attachWindow();
     }
 
-    /** Which package owns the home screen (launcher). Everything else being foreground counts as "an app is open". */
+    /**
+     * Which packages are the home screen (launchers). Everything else being foreground counts as "an app is open".
+     * The default launcher AND every other installed one count, and the system chooser ("android") never does: one
+     * flaky lookup used to make the island think an app was open on the home screen and hide the idle clock.
+     */
     private void readHome() {
+        homes.clear();
+        homeAt = SystemClock.uptimeMillis();
         try {
-            ResolveInfo r = svc.getPackageManager().resolveActivity(
-                new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), PackageManager.MATCH_DEFAULT_ONLY);
-            homePkg = r == null || r.activityInfo == null ? "" : r.activityInfo.packageName;
+            PackageManager pm = svc.getPackageManager();
+            Intent home = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
+            addHome(pm.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY));
+            List<ResolveInfo> all = pm.queryIntentActivities(home, 0);
+            if (all != null) for (ResolveInfo x : all) addHome(x);
         } catch (Throwable t) {
-            homePkg = ""; // detection failed: never treat an unknown window as "an app is open"
+            // detection failed: homes stays as far as it got; empty means "never treat an unknown window as an app being open"
         }
+    }
+
+    private void addHome(ResolveInfo r) {
+        if (r == null || r.activityInfo == null) return;
+        String p = r.activityInfo.packageName;
+        if (p != null && p.length() > 0 && !p.equals("android")) homes.add(p);
     }
 
     private boolean wantApp(Style s) {
@@ -192,7 +208,14 @@ final class IslandController implements IslandView.Host {
         live.put(clock.key, clock);   // the idle clock lives in the map so expand/swipe treat it like any other pill
         locked = isLocked();
         view.post(new Runnable() {
-            @Override public void run() { readCutout(); position(); updateLayout(); }
+            @Override public void run() {
+                try {
+                    readCutout();
+                    position();
+                    updateLayout();
+                    evaluate();   // show the idle clock right away: nothing else would trigger the first evaluation after a (re)connect
+                } catch (Throwable t) { fault(); }
+            }
         });
     }
 
@@ -471,12 +494,20 @@ final class IslandController implements IslandView.Host {
 
     void refresh() { evaluate(); }
 
+    /** The wall clock moved (minute tick, screen on, time / zone change): the idle clock must show the real time now, not at its next timer. */
+    void clockNow() {
+        try {
+            if (attached && shown == clock && shownMode != IslandView.HIDDEN) startTick(0);
+        } catch (Throwable t) { fault(); }
+    }
+
     void expandKey(String key) { expandLive(live.get(key)); }
 
     void setForeground(String pkg) {
         if (pkg == null || pkg.equals(fg)) return;
         fg = pkg;
-        boolean nowApp = homePkg.length() > 0 && fg.length() > 0 && !fg.equals(homePkg);
+        if (SystemClock.uptimeMillis() - homeAt > 60000L) readHome();   // the user may have changed their launcher
+        boolean nowApp = !homes.isEmpty() && fg.length() > 0 && !homes.contains(fg);
         if (nowApp != appOpen) appOpen = nowApp;
         evaluate();
     }
