@@ -391,6 +391,7 @@ final class IslandController implements IslandView.Host {
             if (key.equals(pinnedKey)) pinnedKey = null;
         }
         if (popup != null && popup.key.equals(key)) { popup = null; h.removeCallbacks(popupEnd); }
+        for (Iterator<IslandEvent> it = queue.iterator(); it.hasNext();) if (it.next().key.equals(key)) it.remove();
         evaluate();
     }
 

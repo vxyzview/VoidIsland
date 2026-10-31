@@ -775,6 +775,9 @@ public final class MainActivity extends Activity {
     }
 
     private void clearDemos() {
-        for (String k : new String[]{"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "toast", "preview"}) Bus.remove(k);
+        h.removeCallbacks(rmPreview);
+        for (String k : new String[]{"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "toast", "preview"}) {
+            try { Bus.remove(k); } catch (Throwable t) { /* keep clearing the rest; never take the app (and the island) down */ }
+        }
     }
 }

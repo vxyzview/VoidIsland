@@ -65,6 +65,11 @@ public final class IslandService extends AccessibilityService {
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent ev) {
+        // an exception here would kill the process and switch the accessibility service off: never let one escape
+        try { handleEvent(ev); } catch (Throwable t) { /* ignore: the next event starts clean */ }
+    }
+
+    private void handleEvent(AccessibilityEvent ev) {
         if (ev == null || ctl == null) return;
         CharSequence p = ev.getPackageName();
         if (p == null) return;

@@ -167,6 +167,9 @@ final class IslandView extends ViewGroup {
     void present(final IslandEvent ev, final int m, boolean fade) {
         pendingRun = null;
         pendingSwap = null;
+        // A swap-out (content fading to 0) may have been interrupted by this newer change. Its swap-in was just discarded,
+        // so bring the content back now; otherwise the island stays faded to nothing until the service is restarted.
+        if (swap.target < 1f) { swap.tune(520f, 1f); swap.to(1f); start(); }
         final int tw, th, exH;
         final View ex;
         if (m == EXPANDED) {
@@ -290,6 +293,8 @@ final class IslandView extends ViewGroup {
     }
 
     private boolean stepAll(float dt) {
+        // swap may only be heading to 0 while a swap-in is waiting for it; anything else would leave the island blank for good
+        if (swap.target == 0f && pendingSwap == null) { swap.tune(520f, 1f); swap.to(1f); }
         boolean a = sw.step(dt);
         a |= sh.step(dt);
         a |= sr.step(dt);
