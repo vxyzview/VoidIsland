@@ -44,7 +44,8 @@ final class IslandView extends ViewGroup {
     final int padX;
     int padB, drop;
     private final Layer compact, expanded;
-    private final Spring sw = new Spring(), sh = new Spring(), sr = new Spring(), st = new Spring(), swap = new Spring(), press = new Spring();
+    private final Spring sw = new Spring(), sh = new Spring(), sr = new Spring(), st = new Spring(), sg = new Spring(),
+        swap = new Spring(), press = new Spring();
     private final float[] geo = new float[5];
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
 
@@ -105,7 +106,7 @@ final class IslandView extends ViewGroup {
         stroke.setStyle(Paint.Style.STROKE);
         setOutlineProvider(new ViewOutlineProvider() {
             @Override public void getOutline(View v, Outline o) {
-                Geo.surface(style.shape, v.getWidth(), sw.value, st.value, sh.value, sr.value, geo);
+                Geo.surface(shapeFor(mode), v.getWidth(), sw.value, st.value, sh.value, sr.value, sg.value, geo);
                 if (geo[2] <= geo[0] || geo[3] <= geo[1]) { o.setEmpty(); return; }
                 o.setRoundRect(Math.round(geo[0]), Math.round(geo[1]), Math.round(geo[2]), Math.round(geo[3]), geo[4]);
             }
@@ -133,8 +134,8 @@ final class IslandView extends ViewGroup {
         cRpx = dp(s.cR);
         eRpx = dp(s.eR);
         borderPx = dp(s.borderW);
-        // the card sits a little lower than the pill (like iOS); a notch stays glued to the top edge
-        drop = s.shape == Style.NOTCH ? 0 : (s.mDrop < 0 ? (appLayer ? statusBarPx + dp(2) : dp(8)) : dp(s.mDrop));
+        // the card sits a little lower than the pill (like iOS); an expanded notch stays glued to the top edge
+        drop = s.eShape == Style.NOTCH ? 0 : (s.mDrop < 0 ? (appLayer ? statusBarPx + dp(2) : dp(8)) : dp(s.mDrop));
         padB = dp(18) + drop;
         haptics = s.haptic;
         setBackgroundColor(s.bg);
@@ -144,6 +145,7 @@ final class IslandView extends ViewGroup {
             sh.snap(dot);
             sr.snap(dot / 2f);
             st.snap(0f);
+            sg.snap(0f);
             winW = even(dot + 2 * padX);
             winH = dot + padB;
         }
@@ -241,10 +243,14 @@ final class IslandView extends ViewGroup {
         requestLayout();
     }
 
+    /** The shape governing a given state: compact and expanded set it independently. */
+    private int shapeFor(int md) { return md == EXPANDED ? style.eShape : style.cShape; }
+
     private void retarget(int m, int tw, int th) {
         boolean grow = tw > sw.target + 2 || th > sh.target + 2;
         mode = m;
-        float rad = Geo.radius(style.shape, m, th, cRpx, eRpx, dot);
+        int shp = shapeFor(m);
+        float rad = Geo.radius(shp, m, th, cRpx, eRpx, dot);
         float k = style.speed / 100f, z = 1f - 0.5f * style.bounce / 100f;     // bounce 80 -> damping ratio 0.6
         float zc = Math.min(1f, z + 0.2f);
         if (m == HIDDEN) {
@@ -255,10 +261,12 @@ final class IslandView extends ViewGroup {
             sw.tune(420f * k, zc); sh.tune(420f * k, zc); sr.tune(380f * k, Math.min(1f, zc + 0.1f));
         }
         st.tune((m == EXPANDED ? 330f : 430f) * k, m == EXPANDED ? z + 0.02f : zc);
+        sg.tune((m == EXPANDED ? 330f : 430f) * k, m == EXPANDED ? z + 0.02f : zc);   // glue rides st's clock so pill/notch morphs stay together
         sw.to(tw);
         sh.to(th);
         sr.to(rad);
         st.to(m == EXPANDED ? drop : 0f);
+        sg.to(shp == Style.NOTCH ? rad : 0f);   // glue (notch top pushed above the edge) only when the shown shape is a notch
         start();
     }
 
@@ -277,6 +285,7 @@ final class IslandView extends ViewGroup {
         a |= sh.step(dt);
         a |= sr.step(dt);
         a |= st.step(dt);
+        a |= sg.step(dt);
         a |= press.step(dt);
         a |= swap.step(dt);
         if (pendingSwap != null && swap.target == 0f && swap.value < 0.04f) {
@@ -322,7 +331,7 @@ final class IslandView extends ViewGroup {
     @Override protected void dispatchDraw(Canvas c) {
         super.dispatchDraw(c);
         if (borderPx > 0 && (style.borderCol >>> 24) != 0) {
-            Geo.surface(style.shape, getWidth(), sw.value, st.value, sh.value, sr.value, geo);
+            Geo.surface(shapeFor(mode), getWidth(), sw.value, st.value, sh.value, sr.value, sg.value, geo);
             stroke.setStrokeWidth(borderPx * 2f); // half of it falls outside the clip, so this shows exactly borderPx
             c.drawRoundRect(geo[0], geo[1], geo[2], geo[3], geo[4], geo[4], stroke);
         }

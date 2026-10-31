@@ -57,12 +57,14 @@ public class Check {
         ok(Geo.radius(Geo.BOX, Geo.COMPACT, 12f, 30f, 22f, 32f) == 6f, "box radius clamps to half height");
         ok(Geo.radius(Geo.NOTCH, Geo.COMPACT, 28f, 14f, 28f, 32f) == 14f, "notch compact bottom radius");
         ok(Geo.radius(Geo.PILL, Geo.HIDDEN, 32f, 16f, 38f, 30f) == 15f, "hidden = dot");
-        Geo.surface(Geo.PILL, 400f, 150f, 0f, 32f, 16f, g);
+        Geo.surface(Geo.PILL, 400f, 150f, 0f, 32f, 16f, 0f, g);
         ok(g[0] == 125f && g[2] == 275f && g[1] == 0f && g[3] == 32f && g[4] == 16f, "pill rect centred in window");
-        Geo.surface(Geo.NOTCH, 400f, 130f, 0f, 28f, 14f, g);
+        Geo.surface(Geo.NOTCH, 400f, 130f, 0f, 28f, 14f, 14f, g);
         ok(g[1] == -14f && g[3] == 28f && g[4] == 14f, "notch pushed up so top corners are off-screen");
         ok(g[4] * 2f <= g[3] - g[1], "notch radius fits its height");
-        Geo.surface(Geo.BOX, 400f, 20f, 0f, 100f, 38f, g);
+        Geo.surface(Geo.NOTCH, 400f, 130f, 0f, 28f, 14f, 7f, g);   // pill->notch morph: glue springs, the top follows it
+        ok(g[1] == -7f && g[3] == 28f && g[4] == 14f, "notch glue springs smoothly");
+        Geo.surface(Geo.BOX, 400f, 20f, 0f, 100f, 38f, 0f, g);
         ok(g[4] == 10f, "box radius clamps to half the width");
 
         // --- ShadeMatch

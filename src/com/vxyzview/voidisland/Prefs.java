@@ -15,7 +15,7 @@ final class Prefs {
         K_HAPTIC = "haptic", K_DUR = "dur", K_BLOCK = "blocked", K_QS = "qs", K_LOCK = "lock_show", K_POKE = "poke",
         K_CLOCK = "f_clock", K_LYRICS = "f_lyric", K_THEME = "app_theme";
     // shape + size
-    static final String K_SHAPE = "shape", K_CW = "c_w", K_CH = "c_h", K_CR = "c_r", K_CPAD = "c_pad", K_GLYPH = "glyph",
+    static final String K_SHAPE = "shape", K_ESHAPE = "e_shape", K_CW = "c_w", K_CH = "c_h", K_CR = "c_r", K_CPAD = "c_pad", K_GLYPH = "glyph",
         K_EW = "e_w", K_ER = "e_r", K_PADX = "pad_x", K_PADY = "pad_y", K_TS = "t_scale";
     // margins
     static final String K_Y = "y_off", K_X = "x_off", K_DROP = "m_drop", K_SIDE = "m_side";
@@ -38,6 +38,6 @@ final class Prefs {
     static void setBlocked(Context c, Set<String> s) { sp(c).edit().putStringSet(K_BLOCK, s).apply(); }
 
     /** Every key that changes how the island LOOKS (sizes, shape, colours...). Used for presets and reset. */
-    static final String[] STYLE_KEYS = {K_SHAPE, K_CW, K_CH, K_CR, K_CPAD, K_GLYPH, K_EW, K_ER, K_PADX, K_PADY, K_TS, K_Y, K_X,
+    static final String[] STYLE_KEYS = {K_SHAPE, K_ESHAPE, K_CW, K_CH, K_CR, K_CPAD, K_GLYPH, K_EW, K_ER, K_PADX, K_PADY, K_TS, K_Y, K_X,
         K_DROP, K_SIDE, K_COLMODE, K_BG, K_BGA, K_TXTMODE, K_TXT, K_ACCMODE, K_ACC, K_BW, K_BCOL, K_SPEED, K_BOUNCE};
 }

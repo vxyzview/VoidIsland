@@ -77,15 +77,18 @@ final class PreviewView extends View {
         p.setColor(0xFF000000);
         c.drawCircle(left + mockW / 2f, top0 + 14f * u, 6f * u, p);
 
-        // ---- the island, in device-dp units scaled by u
-        int shape = st.shape;
+        // ---- the island, in device-dp units scaled by u (compact and expanded each carry their own shape)
+        int cShape = st.cShape, eShape = st.eShape;
         float cW = st.cW, cH = st.cH, eW = Math.min(st.eW, 392f - 2f * Math.max(12, st.mSide)), eH = 150f;
-        float topC = shape == Style.NOTCH ? 0f : Math.max(2f, 14f - cH / 2f) + st.mTop;
-        float drop = shape == Style.NOTCH ? 0f : (st.mDrop < 0 ? 8f : st.mDrop);
+        float topC = cShape == Style.NOTCH ? 0f : Math.max(2f, 14f - cH / 2f) + st.mTop;
+        float drop = eShape == Style.NOTCH ? 0f : (st.mDrop < 0 ? 8f : st.mDrop);
         float tt = Math.max(0f, t);
         float w = lerp(cW, eW, tt), h = lerp(cH, eH, tt), tp = topC + drop * Math.min(1f, tt);
-        float rad = lerp(Geo.radius(shape, Geo.COMPACT, cH, st.cR, st.eR, cH), Geo.radius(shape, Geo.EXPANDED, eH, st.cR, st.eR, cH), Math.min(1f, tt));
-        Geo.surface(shape, mockW, w * u, tp * u, h * u, rad * u, g);
+        float tt1 = Math.min(1f, tt);
+        float radC = Geo.radius(cShape, Geo.COMPACT, cH, st.cR, st.eR, cH), radE = Geo.radius(eShape, Geo.EXPANDED, eH, st.cR, st.eR, cH);
+        float rad = lerp(radC, radE, tt1);
+        float glue = lerp(cShape == Style.NOTCH ? radC : 0f, eShape == Style.NOTCH ? radE : 0f, tt1);   // the analogue of the real island's springed sg
+        Geo.surface(tt < 0.5f ? cShape : eShape, mockW, w * u, tp * u, h * u, rad * u, glue * u, g);
         float ox = left + st.mX * u, oy = top0;
         c.save();
         c.clipRect(left, top0, left + mockW, H);   // a notch stays glued to the top edge of the phone

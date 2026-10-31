@@ -19,13 +19,12 @@ final class Geo {
 
     /**
      * Rounded rect to clip/draw: out = {left, top, right, bottom, radius}, horizontally centred in a window of width winW.
-     * A notch is pushed up by its radius so the rounding of its TOP corners lands above the screen edge:
-     * square on top, round at the bottom, no path needed.
+     * For a notch the caller passes {@code glue = radius}: the top corners spring above the screen edge,
+     * square on top, round at the bottom, no path needed. Glue is springed so pill/notch morphs stay smooth.
      */
-    static void surface(int shape, float winW, float width, float top, float height, float rad, float[] out) {
-        float l = (winW - width) / 2f, r = (winW + width) / 2f, t = top, b = top + height, rr;
+    static void surface(int shape, float winW, float width, float top, float height, float rad, float glue, float[] out) {
+        float l = (winW - width) / 2f, r = (winW + width) / 2f, t = top - glue, b = top + height, rr;
         if (shape == NOTCH) {
-            t = top - rad;
             rr = Math.min(rad, (b - t) / 2f);
         } else {
             rr = Math.min(rad, Math.min((r - l) / 2f, (b - t) / 2f));

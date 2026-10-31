@@ -8,8 +8,8 @@ final class Style {
     static final int PILL = 0, NOTCH = 1, BOX = 2;
     static final int QS_UNDER = 0, QS_HIDE = 1, QS_TOP = 2;
 
-    // shape + size
-    int shape = PILL;
+    // shape + size (compact and expanded are set independently)
+    int cShape = PILL, eShape = PILL;
     int cW = 150, cH = 32, cR = 16, cPad = 9, glyph = 100;
     int eW = 340, eR = 38, padX = 20, padY = 16, tScale = 100;
     // margins (mDrop < 0 = automatic)
@@ -32,7 +32,9 @@ final class Style {
     static Style load(Context c) {
         SharedPreferences sp = Prefs.sp(c);
         Style s = new Style();
-        s.shape = clamp(sp.getInt(Prefs.K_SHAPE, s.shape), 0, 2);
+        s.cShape = clamp(sp.getInt(Prefs.K_SHAPE, s.cShape), 0, 2);
+        int es = sp.getInt(Prefs.K_ESHAPE, -1);            // never set yet: expanded follows the compact shape
+        s.eShape = es >= 0 && es <= 2 ? es : s.cShape;
         s.cW = clamp(sp.getInt(Prefs.K_CW, s.cW), 80, 300);
         s.cH = clamp(sp.getInt(Prefs.K_CH, s.cH), 20, 64);
         s.cR = clamp(sp.getInt(Prefs.K_CR, s.cR), 0, 40);

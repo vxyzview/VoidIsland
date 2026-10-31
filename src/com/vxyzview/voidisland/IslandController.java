@@ -242,7 +242,7 @@ final class IslandController implements IslandView.Host {
     /** Auto-aligns to the camera hole when there is one (notch: glued to the top edge), then applies the margins. */
     private void position() {
         int top;
-        if (style.shape == Style.NOTCH) {
+        if (style.cShape == Style.NOTCH) {
             top = 0;
         } else {
             float cy = Float.isNaN(cutCy) ? dp(14) : cutCy;

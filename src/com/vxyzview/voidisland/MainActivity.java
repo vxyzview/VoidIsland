@@ -271,13 +271,13 @@ public final class MainActivity extends Activity {
         SharedPreferences.Editor e = Prefs.sp(this).edit();
         for (String k : Prefs.STYLE_KEYS) e.remove(k);
         if ("notch".equals(name)) {
-            e.putInt(Prefs.K_SHAPE, Style.NOTCH).putInt(Prefs.K_CW, 130).putInt(Prefs.K_CH, 28).putInt(Prefs.K_CR, 14)
+            e.putInt(Prefs.K_SHAPE, Style.NOTCH).putInt(Prefs.K_ESHAPE, Style.NOTCH).putInt(Prefs.K_CW, 130).putInt(Prefs.K_CH, 28).putInt(Prefs.K_CR, 14)
                 .putInt(Prefs.K_EW, 330).putInt(Prefs.K_ER, 30);
         } else if ("mini".equals(name)) {
             e.putInt(Prefs.K_CW, 112).putInt(Prefs.K_CH, 26).putInt(Prefs.K_CPAD, 7).putInt(Prefs.K_GLYPH, 90)
                 .putInt(Prefs.K_EW, 300).putInt(Prefs.K_ER, 30).putInt(Prefs.K_TS, 92);
         } else if ("box".equals(name)) {
-            e.putInt(Prefs.K_SHAPE, Style.BOX).putInt(Prefs.K_CW, 140).putInt(Prefs.K_CH, 34).putInt(Prefs.K_CR, 10)
+            e.putInt(Prefs.K_SHAPE, Style.BOX).putInt(Prefs.K_ESHAPE, Style.BOX).putInt(Prefs.K_CW, 140).putInt(Prefs.K_CH, 34).putInt(Prefs.K_CR, 10)
                 .putInt(Prefs.K_EW, 340).putInt(Prefs.K_ER, 20);
         } else if ("you".equals(name)) {
             e.putInt(Prefs.K_COLMODE, 1).putInt(Prefs.K_ACCMODE, 1).putInt(Prefs.K_ER, 32);
@@ -315,29 +315,40 @@ public final class MainActivity extends Activity {
         qs.addView(hs);
 
         LinearLayout sh = m.card(p, "Shape");
-        sh.addView(m.segmented(new String[]{"Pill", "Notch", "Box"}, s.shape, new M3.OnSel() {
+        sh.addView(label("Compact shape"));
+        sh.addView(m.segmented(new String[]{"Pill", "Notch", "Box"}, s.cShape, new M3.OnSel() {
             @Override public void on(int i) { put(Prefs.K_SHAPE, i); showPage(1, true); changed(previewExpanded); }
-        }));
-        String[] desc = {"A rounded capsule floating around the camera, like the iPhone Dynamic Island.",
+        }), m.top(M3.MATCH, M3.WRAP, 8));
+        String[] cDesc = {"A rounded capsule floating around the camera, like the iPhone Dynamic Island.",
             "Glued to the top edge with rounded bottom corners, like a display notch.",
             "A rounded rectangle with a corner radius you choose."};
-        TextView sd = m.body(desc[s.shape]);
-        sd.setPadding(0, dp(12), 0, 0);
-        sh.addView(sd);
+        TextView cd0 = m.body(cDesc[s.cShape]);
+        cd0.setPadding(0, dp(10), 0, 0);
+        sh.addView(cd0);
+        sh.addView(label("Expanded shape"));
+        sh.addView(m.segmented(new String[]{"Pill", "Notch", "Box"}, s.eShape, new M3.OnSel() {
+            @Override public void on(int i) { put(Prefs.K_ESHAPE, i); showPage(1, true); changed(previewExpanded); }
+        }), m.top(M3.MATCH, M3.WRAP, 14));
+        String[] eDesc = {"The card floats just below the camera, with its own corner shape.",
+            "An expanded notch \u2014 glued to the top edge, rounded at the bottom. Works best with a compact notch.",
+            "A rounded rectangle card with a corner radius you choose."};
+        TextView ed0 = m.body(eDesc[s.eShape]);
+        ed0.setPadding(0, dp(10), 0, 0);
+        sh.addView(ed0);
 
         LinearLayout cp = m.card(p, "Compact pill");
         m.slider(cp, "Pill width", Prefs.K_CW, 80, 300, 150, 1, unit(" dp"), after(false));
         m.slider(cp, "Pill height", Prefs.K_CH, 20, 64, 32, 1, unit(" dp"), after(false));
-        if (s.shape != Style.PILL) m.slider(cp, s.shape == Style.NOTCH ? "Notch corner radius" : "Pill corner radius", Prefs.K_CR, 0, 40, 16, 1, unit(" dp"), after(false));
+        if (s.cShape != Style.PILL) m.slider(cp, s.cShape == Style.NOTCH ? "Notch corner radius" : "Box corner radius", Prefs.K_CR, 0, 40, 16, 1, unit(" dp"), after(false));
         m.slider(cp, "Pill padding", Prefs.K_CPAD, 0, 24, 9, 1, unit(" dp"), after(false));
         m.slider(cp, "Icon size", Prefs.K_GLYPH, 50, 130, 100, 1, unit("%"), after(false));
-        if (s.shape != Style.NOTCH) m.slider(cp, "Top margin", Prefs.K_Y, -30, 80, 0, 1, unit(" dp"), after(false));
+        if (s.cShape != Style.NOTCH) m.slider(cp, "Top margin", Prefs.K_Y, -30, 80, 0, 1, unit(" dp"), after(false));
         m.slider(cp, "Horizontal position", Prefs.K_X, -200, 200, 0, 1, unit(" dp"), after(false));
 
         LinearLayout ec = m.card(p, "Expanded card");
         m.slider(ec, "Card width", Prefs.K_EW, 220, 440, 340, 1, unit(" dp"), after(true));
         m.slider(ec, "Card corner radius", Prefs.K_ER, 0, 60, 38, 1, unit(" dp"), after(true));
-        if (s.shape != Style.NOTCH) {
+        if (s.eShape != Style.NOTCH) {
             m.slider(ec, "Card drop (gap below the pill)", Prefs.K_DROP, -1, 60, -1, 1, new M3.Fmt() {
                 @Override public String f(int v) { return v < 0 ? "Auto" : v + " dp"; }
             }, after(true));
