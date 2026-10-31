@@ -2,6 +2,7 @@ package com.vxyzview.voidisland;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 
 /** Everything about how the island looks and behaves, read once from preferences. Sizes are dp, colours are ARGB. */
 final class Style {
@@ -28,6 +29,10 @@ final class Style {
     boolean accentOverride = false;
     // accent family (filled button / tonal button): only meaningful while accentOverride is on
     int accentOn = 0xFF381E72, accentCont = 0xFF4F378B, accentOnCont = 0xFFEADDFF;
+    // the rest of the Material 3 roles, also only meaningful while accentOverride is on:
+    // tonal button (secondary container) + its label, "good" (tertiary) and "bad" (error) with their on-colours
+    int btnOn = 0xFFFFFFFF;
+    int tert = 0xFF30D158, tertOn = 0xFFFFFFFF, err = 0xFFFF453A, errOn = 0xFFFFFFFF;
 
     private static int clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -96,6 +101,38 @@ final class Style {
             accentOnCont = Col.onContainer(accent);
         } else {
             accent = 0xFFB388FF;
+        }
+        deriveRoles(c);
+    }
+
+    /**
+     * The other Material 3 (dark scheme) roles, so the whole island follows the theme and not just the accent:
+     * tonal buttons = secondary container, "good" things (accept, success, active call) = tertiary, "bad" = error,
+     * tiles = a surface-container tone, text = on-surface / on-surface-variant. The island itself stays black.
+     */
+    private void deriveRoles(Context c) {
+        btnOn = text;
+        tert = 0xFF30D158; tertOn = 0xFFFFFFFF; err = 0xFFFF453A; errOn = 0xFFFFFFFF;   // Auto: the classic green / red
+        if (accMode == 1) {
+            err = 0xFFF2B8B5; errOn = 0xFF601410;   // M3 error roles are fixed, they are not part of the wallpaper palette
+            tert = Pal.get(c, "accent3", 200, 0xFFEFB8C8);
+            tertOn = Pal.get(c, "accent3", 800, 0xFF492532);
+            btn = Pal.get(c, "accent2", 700, 0xFF4A4458);
+            btnOn = Pal.get(c, "accent2", 100, 0xFFE8DEF8);
+            if (colMode != 2) tile = Pal.get(c, "neutral1", 800, 0xFF322F35);
+            if (colMode == 0 && textMode == 0) {   // black island: M3 on-surface / on-surface-variant instead of pure white
+                text = Pal.get(c, "neutral1", 100, 0xFFE6E1E5);
+                sub = Pal.get(c, "neutral2", 200, 0xFFCAC4D0);
+            }
+        } else if (accMode == 2) {
+            err = 0xFFF2B8B5; errOn = 0xFF601410;
+            float[] hsv = new float[3];
+            Color.colorToHSV(accent, hsv);
+            hsv[0] = (hsv[0] + 60f) % 360f;   // tertiary = the custom accent turned a third of the way round the wheel
+            tert = Color.HSVToColor(hsv) | 0xFF000000;
+            tertOn = Col.onColor(tert);
+            btn = accentCont;
+            btnOn = accentOnCont;
         }
     }
 }

@@ -134,15 +134,15 @@ final class PreviewView extends View {
             p.setColor(Col.alpha(st.sub, ea * 0.8f));
             r.set(x0 + 70f * u, y0 + 30f * u, x0 + 70f * u + 80f * u, y0 + 38f * u);
             c.drawRoundRect(r, 4f * u, 4f * u, p);
-            p.setColor(Col.alpha(st.text, ea * 0.22f));
+            p.setColor(Col.alpha(st.accentOverride ? st.btn : st.text, st.accentOverride ? ea : ea * 0.22f));   // unfilled track = M3 secondary container
             r.set(x0, y0 + 70f * u, x0 + cw, y0 + 74f * u);
             c.drawRoundRect(r, 2f * u, 2f * u, p);
-            p.setColor(Col.alpha(st.text, ea));
+            p.setColor(Col.alpha(st.accentOverride ? st.accent : st.text, ea));
             r.set(x0, y0 + 70f * u, x0 + cw * 0.4f, y0 + 74f * u);
             c.drawRoundRect(r, 2f * u, 2f * u, p);
             float mid = x0 + cw / 2f, cyy = y0 + 98f * u;
-            c.drawCircle(mid, cyy, 12f * u, p);
-            p.setColor(Col.alpha(st.sub, ea));
+            c.drawCircle(mid, cyy, 12f * u, p);   // play: filled accent with a theme accent
+            p.setColor(Col.alpha(st.accentOverride ? st.btnOn : st.sub, ea));   // skip: secondary tint
             c.drawCircle(mid - 46f * u, cyy, 7f * u, p);
             c.drawCircle(mid + 46f * u, cyy, 7f * u, p);
         }

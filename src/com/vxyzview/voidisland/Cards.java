@@ -40,6 +40,7 @@ final class Cards {
         BLUE = 0xFF0A84FF, YELLOW = 0xFFFFD60A, PURPLE = 0xFFB388FF;
     // Theme colours: "WHITE" is simply the island's text colour (white on black by default, dark on a light island).
     static int WHITE = 0xFFFFFFFF, SUB = 0xB3FFFFFF, BTN = 0x2EFFFFFF, TILE = 0x24FFFFFF;
+    static int BTN_ON = 0xFFFFFFFF;   // label colour on a tonal (BTN) button
     static float TS = 1f;
     static Style S = new Style();
 
@@ -49,10 +50,31 @@ final class Cards {
         SUB = s.sub;
         BTN = s.btn;
         TILE = s.tile;
+        BTN_ON = s.btnOn;
         TS = s.tScale / 100f;
     }
 
+    /** Unfilled part of a seek bar / progress bar / ring: M3 secondary container with a theme accent, faint text colour otherwise. */
+    static int track() { return S.accentOverride ? S.btn : Col.alpha(WHITE, 0.2f); }
+
+    /** Outline of the battery: M3 on-secondary-container tint with a theme accent, half-strength text colour otherwise. */
+    static int outline() { return S.accentOverride ? Col.alpha(S.btnOn, 0.6f) : Col.alpha(WHITE, 0.5f); }
+
+    /** "Good" colour (accepted call, success, active call): Material 3 tertiary with a theme accent, classic green otherwise. */
+    static int pos() { return S.accentOverride ? S.tert : GREEN; }
+
+    /** "Bad" colour (decline, failure): Material 3 error with a theme accent, classic red otherwise. */
+    static int neg() { return S.accentOverride ? S.err : RED; }
+
     static int acc(IslandEvent e) { return S.accentOverride ? S.accent : e.accent; }
+
+    /** Like {@link #acc} but keeps meaning: a red event (low battery) turns M3 error, a green one (charging) turns M3 tertiary. */
+    static int tone(IslandEvent e) {
+        if (!S.accentOverride) return e.accent;
+        if (e.accent == RED) return S.err;
+        if (e.accent == GREEN) return S.tert;
+        return S.accent;
+    }
 
     /** The theme accent (Material You or custom) when one is chosen, otherwise the content's own colour. */
     static int accOr(int own) { return S.accentOverride ? S.accent : own; }
@@ -60,7 +82,7 @@ final class Cards {
     /** Button for the card's action rows. With a theme accent: the first one is a filled accent button, the rest are tonal (Material 3 style). */
     private static View actionBtn(Context c, String label, boolean primary, Runnable run) {
         if (!S.accentOverride) return button(c, label, BTN, -1, run);
-        return primary ? button(c, label, S.accent, -1, S.accentOn, run) : button(c, label, S.accentCont, -1, S.accentOnCont, run);
+        return primary ? button(c, label, S.accent, -1, S.accentOn, run) : button(c, label, S.btn, -1, S.btnOn, run);
     }
 
     static int px(Context c) { return dp(c, S.padX); }
@@ -128,7 +150,7 @@ final class Cards {
 
     static View button(Context c, String label, int bgColor, int icon, final Runnable run) {
         boolean semantic = bgColor == RED || bgColor == GREEN;
-        return button(c, label, bgColor, icon, semantic ? 0xFFFFFFFF : WHITE, run);
+        return button(c, label, bgColor, icon, semantic ? 0xFFFFFFFF : (bgColor == BTN ? BTN_ON : WHITE), run);
     }
 
     static View button(Context c, String label, int bgColor, int icon, int fg, final Runnable run) {
@@ -274,9 +296,9 @@ final class Cards {
                 break;
             }
             case IslandEvent.CALL: {
-                out.addView(new IconView(c, IconView.PHONE, GREEN), fl(g, g, Gravity.START | side, m));
+                out.addView(new IconView(c, IconView.PHONE, pos()), fl(g, g, Gravity.START | side, m));
                 if (e.chrono && !e.incoming) {
-                    final TextView t = tv(c, timerText(e), 13f, GREEN, true);
+                    final TextView t = tv(c, timerText(e), 13f, pos(), true);
                     t.setFontFeatureSettings("tnum");
                     out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
                     e.tC = new Runnable() { @Override public void run() { put(t, timerText(e)); } };
@@ -357,7 +379,7 @@ final class Cards {
                     ri.set(e.icon, g * 0.3f);
                     out.addView(ri, fl(g, g, Gravity.START | side, m));
                 } else {
-                    out.addView(new IconView(c, e.iconType >= 0 ? e.iconType : IconView.BELL, e.accent), fl(g, g, Gravity.START | side, m));
+                    out.addView(new IconView(c, e.iconType >= 0 ? e.iconType : IconView.BELL, tone(e)), fl(g, g, Gravity.START | side, m));
                 }
             }
         }
@@ -437,7 +459,7 @@ final class Cards {
         body.setMaxLines(2);
         body.setPadding(0, dp(c, 2), 0, 0);
         if (e.appName != null && e.appName.length() > 0) {
-            TextView app = tv(c, e.appName, 11f, 0x80FFFFFF, false);
+            TextView app = tv(c, e.appName, 11f, Col.alpha(WHITE, 0.5f), false);
             app.setPadding(0, 0, 0, dp(c, 2));
             t.addView(app);
         }
@@ -464,13 +486,13 @@ final class Cards {
         top.addView(av, lp(dp(c, 48), dp(c, 48)));
         LinearLayout t = col(c);
         t.setPadding(dp(c, 14), 0, dp(c, 8), 0);
-        final TextView st = tv(c, e.text, 13f, inc ? GREEN : SUB, false);
+        final TextView st = tv(c, e.text, 13f, inc ? pos() : SUB, false);
         final TextView nm = tv(c, e.title, 20f, WHITE, true);
         nm.setPadding(0, dp(c, 2), 0, 0);
         t.addView(st);
         t.addView(nm);
         top.addView(t, lpw(0, WRAP, 1f));
-        final TextView time = hadTime && !inc ? tv(c, timerText(e), 17f, GREEN, true) : null;
+        final TextView time = hadTime && !inc ? tv(c, timerText(e), 17f, pos(), true) : null;
         if (time != null) {
             time.setFontFeatureSettings("tnum");
             top.addView(time);
@@ -490,11 +512,14 @@ final class Cards {
             final int idx = i;
             String label = e.actLabels[i];
             if (label == null || label.length() == 0) label = kind[i] < 0 ? "Decline" : "Accept";
-            int color = kind[i] < 0 ? RED : (kind[i] > 0 ? GREEN : BTN);
+            int color, fg;
+            if (kind[i] < 0) { color = neg(); fg = S.accentOverride ? S.errOn : 0xFFFFFFFF; }
+            else if (kind[i] > 0) { color = pos(); fg = S.accentOverride ? S.tertOn : 0xFFFFFFFF; }
+            else { color = BTN; fg = BTN_ON; }
             int icon = kind[i] < 0 ? IconView.HANGUP : (kind[i] > 0 ? IconView.PHONE : -1);
             LinearLayout.LayoutParams p = lpw(0, dp(c, 46), 1f);
             if (i > 0) p.setMarginStart(dp(c, 12));
-            br.addView(button(c, label, color, icon, new Runnable() { @Override public void run() { fire(e, idx); } }), p);
+            br.addView(button(c, label, color, icon, fg, new Runnable() { @Override public void run() { fire(e, idx); } }), p);
         }
         root.addView(br);
         e.uE = new IslandEvent.Updater() {
@@ -521,7 +546,7 @@ final class Cards {
         root.addView(head);
         LinearLayout mid = row(c);
         mid.setPadding(0, dp(c, 12), 0, 0);
-        int col = e.success ? GREEN : RED;
+        int col = e.success ? pos() : neg();
         mid.addView(new CheckView(c, col, e.success), lp(dp(c, 58), dp(c, 58)));
         LinearLayout t = col(c);
         t.setPadding(dp(c, 16), 0, 0, 0);
@@ -545,15 +570,15 @@ final class Cards {
     private static View charge(final Context c, final IslandEvent e) {
         LinearLayout root = row(c);
         root.setPadding(px(c), py(c), px(c), py(c));
-        root.addView(new BatteryView(c, e.level, e.charging, e.accent), lp(dp(c, 76), dp(c, 38)));
+        root.addView(new BatteryView(c, e.level, e.charging, tone(e)), lp(dp(c, 76), dp(c, 38)));
         LinearLayout t = col(c);
         t.setPadding(dp(c, 18), 0, 0, 0);
-        t.addView(tv(c, e.title, 14.5f, e.accent, true));
+        t.addView(tv(c, e.title, 14.5f, tone(e), true));
         TextView pct = tv(c, e.level + "%", 30f, WHITE, true);
         pct.setFontFeatureSettings("tnum");
         t.addView(pct);
         root.addView(t, lpw(0, WRAP, 1f));
-        if (e.charging) root.addView(new IconView(c, IconView.BOLT, e.accent), lp(dp(c, 26), dp(c, 26)));
+        if (e.charging) root.addView(new IconView(c, IconView.BOLT, tone(e)), lp(dp(c, 26), dp(c, 26)));
         return root;
     }
 
@@ -566,9 +591,9 @@ final class Cards {
             ri.set(e.icon, dp(c, 12));
             badge.addView(ri, new FrameLayout.LayoutParams(dp(c, 44), dp(c, 44)));
         } else {
-            badge.setBackground(bg((e.accent & 0x00FFFFFF) | 0x38000000, dp(c, 22)));
+            badge.setBackground(bg((tone(e) & 0x00FFFFFF) | 0x38000000, dp(c, 22)));
             FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(dp(c, 22), dp(c, 22), Gravity.CENTER);
-            badge.addView(new IconView(c, e.iconType >= 0 ? e.iconType : IconView.BELL, e.accent), p);
+            badge.addView(new IconView(c, e.iconType >= 0 ? e.iconType : IconView.BELL, tone(e)), p);
         }
         root.addView(badge, lp(dp(c, 44), dp(c, 44)));
         LinearLayout t = col(c);
@@ -765,7 +790,8 @@ final class Cards {
 
         LinearLayout ctl = row(c);
         ctl.setGravity(Gravity.CENTER);
-        final IconView prev = new IconView(c, IconView.PREV, WHITE), next = new IconView(c, IconView.NEXT, WHITE);
+        final int skipFg = S.accentOverride ? S.btnOn : WHITE;   // M3: the skip buttons use the tonal (secondary) tint
+        final IconView prev = new IconView(c, IconView.PREV, skipFg), next = new IconView(c, IconView.NEXT, skipFg);
         // Material 3 style: with a theme accent the play button is a filled accent pill with an on-accent glyph
         final int playFg = S.accentOverride ? S.accentOn : WHITE;
         final IconView play = new IconView(c, e.playing ? IconView.PAUSE : IconView.PLAY, playFg);

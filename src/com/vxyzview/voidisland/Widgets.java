@@ -155,7 +155,7 @@ final class SeekView extends View {
     @Override protected void onDraw(Canvas c) {
         float w = getWidth(), h = getHeight(), th = (dragging ? 9f : 5f) * d, y = h / 2f;
         r.set(0, y - th / 2f, w, y + th / 2f);
-        p.setColor(Col.alpha(Cards.WHITE, 0.2f));
+        p.setColor(Cards.track());
         c.drawRoundRect(r, th / 2f, th / 2f, p);
         float f = dragging ? dragFrac : frac;
         r.set(0, y - th / 2f, Math.max(th, w * f), y + th / 2f);
@@ -281,7 +281,7 @@ final class RingView extends View {
         float w = getWidth(), h = getHeight(), s = Math.min(w, h), sw = s * 0.14f;
         p.setStrokeWidth(sw);
         r.set((w - s) / 2f + sw / 2f, (h - s) / 2f + sw / 2f, (w + s) / 2f - sw / 2f, (h + s) / 2f - sw / 2f);
-        p.setColor(Col.alpha(Cards.WHITE, 0.2f));
+        p.setColor(Cards.track());
         c.drawArc(r, 0f, 360f, false, p);
         p.setColor(color);
         c.drawArc(r, -90f, 360f * frac, false, p);
@@ -336,7 +336,7 @@ final class BatteryView extends View {
         float w = getWidth(), h = getHeight(), nub = w * 0.07f, bodyW = w - nub - 2f, st = h * 0.09f;
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeWidth(st);
-        p.setColor(Col.alpha(Cards.WHITE, 0.5f));
+        p.setColor(Cards.outline());
         r.set(st / 2f, st / 2f, bodyW - st / 2f, h - st / 2f);
         c.drawRoundRect(r, h * 0.28f, h * 0.28f, p);
         p.setStyle(Paint.Style.FILL);
