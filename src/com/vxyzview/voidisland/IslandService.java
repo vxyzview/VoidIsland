@@ -32,6 +32,7 @@ public final class IslandService extends AccessibilityService {
     private final SharedPreferences.OnSharedPreferenceChangeListener prefs = new SharedPreferences.OnSharedPreferenceChangeListener() {
         @Override public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
             if (ctl != null) ctl.scheduleApply();
+            MediaTracker.poke();   // "Music & media" switched off removes the pill; switching it on must bring it back
         }
     };
 

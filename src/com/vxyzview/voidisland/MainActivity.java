@@ -125,6 +125,9 @@ public final class MainActivity extends Activity {
             lastOverlay = o;
             Prefs.sp(this).edit().putLong(Prefs.K_POKE, System.currentTimeMillis()).apply();
         }
+        if (notifOn() && !ListenerService.connected) {   // access is granted but the system dropped our listener (some ROMs do): ask for it back, music depends on it
+            try { android.service.notification.NotificationListenerService.requestRebind(new ComponentName(this, ListenerService.class)); } catch (Throwable t) { /* ignore */ }
+        }
         if (Weather.enabled(this) && Weather.hasPermission(this)) Weather.rememberLocation(this);   // cheap: reads the last known position
         if (page != 1) showPage(page, true);
         h.post(new Runnable() { @Override public void run() { askKeepAlive(); } });

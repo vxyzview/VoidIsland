@@ -30,6 +30,9 @@ final class MediaTracker {
         return sig.equals(ART_SIG.get(pkg)) && ART.get(pkg) != null;
     }
 
+    /** Settings changed (Music & media switched on again, ...): look at the sessions again right away. */
+    static void poke() { if (inst != null) inst.soon(); }
+
     static void art(String pkg, String sig, Bitmap b) {
         ART.put(pkg, b);
         ART_SIG.put(pkg, sig);
@@ -143,6 +146,7 @@ final class MediaTracker {
         }
         MediaController mc = best.mc;
         PlaybackState ps = mc.getPlaybackState();
+        if (ps == null) return;   // the session just went away between scoring and reading: the next callback sorts it out
         MediaMetadata md = mc.getMetadata();
         String pkg = mc.getPackageName();
 

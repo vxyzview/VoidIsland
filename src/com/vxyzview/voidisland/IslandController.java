@@ -125,6 +125,7 @@ final class IslandController implements IslandView.Host {
     void attach() {
         if (attached) return;
         style = Style.load(svc);
+        locked = isLocked();
         layerApp = wantApp(style);
         readHome();
         attachWindow();
@@ -164,6 +165,9 @@ final class IslandController implements IslandView.Host {
 
     private boolean wantApp(Style s) {
         if (s.qs != Style.QS_UNDER) return false;
+        // A TYPE_APPLICATION_OVERLAY window is never drawn over the keyguard, so "Show on lock screen" could not work on it.
+        // While the phone is locked (and the user wants the island there) borrow the accessibility layer, then go back under the panels.
+        if (s.lockShow && locked) return false;
         try { return Settings.canDrawOverlays(svc); } catch (Throwable t) { return false; }
     }
 
@@ -328,6 +332,7 @@ final class IslandController implements IslandView.Host {
     void applyPrefs() {
         if (!attached) return;
         style = Style.load(svc);
+        locked = isLocked();
         boolean app = wantApp(style);
         if (app != layerApp) { reattach(app); return; }
         readScreen();
@@ -363,10 +368,25 @@ final class IslandController implements IslandView.Host {
         evaluate();
     }
 
+    /** Screen on / off / unlocked: the keyguard flag settles a moment after the broadcast, so look again a little later. */
     void refreshLock() {
+        checkLock();
+        h.removeCallbacks(lockRecheck);
+        h.postDelayed(lockRecheck, 500);
+        h.postDelayed(lockRecheck, 1600);
+    }
+
+    private final Runnable lockRecheck = new Runnable() {
+        @Override public void run() { checkLock(); }
+    };
+
+    private void checkLock() {
+        if (!attached) return;
         boolean now = isLocked();
         if (now == locked) return;
         locked = now;
+        boolean app = wantApp(style);
+        if (app != layerApp) { reattach(app); return; }   // "Show on lock screen": accessibility layer while locked, under the panels otherwise
         evaluate();
     }
 
@@ -478,8 +498,10 @@ final class IslandController implements IslandView.Host {
     private boolean suppressed() {
         if (!Prefs.b(svc, Prefs.K_ON, true)) return true;
         if (landscape && Prefs.b(svc, Prefs.K_LAND, true)) return true;
+        // On the lock screen: the accessibility layer would draw over it (only when the user asked for that), the app layer is
+        // never visible there. Either way "not shown" has to be reported, or "Only show on the island" would delete the original.
+        if (locked && !style.lockShow) return true;
         if (!layerApp) {
-            if (locked && !style.lockShow) return true;                      // above-status-bar layer would draw over the lock screen
             if (style.qs != Style.QS_TOP && shadeOpen) return true;          // hide while Quick Settings / shade are open
         }
         return false;
