@@ -35,31 +35,49 @@ public final class IslandService extends AccessibilityService {
         }
     };
 
+    private int setupTries;
+    private final Runnable retrySetup = new Runnable() {
+        @Override public void run() { if (ctl == null) setup(); }
+    };
+
     @Override protected void onServiceConnected() {
         super.onServiceConnected();
         if (ctl != null) shutdown(); // reconnect without unbind: start clean
+        setupTries = 0;
         try {
             String v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
             if (v != null && v.length() > 0) Cards.appVersion = v;
         } catch (Throwable t) { /* keep the default */ }
+        setup();
+    }
+
+    /** Builds the island. A failure (window refused right after boot, say) is retried a few times instead of leaving the island dead. */
+    private void setup() {
         try {
             ctl = new IslandController(this);
             ctl.attach();
             Bus.attach(ctl);
             sys = new SystemEvents(this);
             sys.start();
-            try {
-                String im = Settings.Secure.getString(getContentResolver(), Settings.Secure.DEFAULT_INPUT_METHOD);
-                if (im != null) {
-                    int slash = im.indexOf('/');
-                    ime = slash >= 0 ? im.substring(0, slash) : im;
-                }
-            } catch (Throwable t) { /* no IME info: keyboards may tick the foreground, harmless */ }
+            readIme();
             Prefs.sp(this).registerOnSharedPreferenceChangeListener(prefs);
         } catch (Throwable t) {
-            // a broken overlay must never crash the accessibility service
-            if (ctl != null) { Bus.detach(ctl); ctl = null; }
+            // a broken overlay must never crash the accessibility service: clean up fully, then try again shortly
+            try { if (sys != null) { sys.stop(); sys = null; } } catch (Throwable ignored) { /* ignore */ }
+            if (ctl != null) { Bus.detach(ctl); try { ctl.detach(); } catch (Throwable ignored) { /* ignore */ } ctl = null; }
+            if (++setupTries <= 3) h.postDelayed(retrySetup, 3000L * setupTries);
         }
+    }
+
+    /** The current keyboard's package (it can be switched at any time, so this is re-read when an unknown window shows up). */
+    private void readIme() {
+        try {
+            String im = Settings.Secure.getString(getContentResolver(), Settings.Secure.DEFAULT_INPUT_METHOD);
+            if (im != null) {
+                int slash = im.indexOf('/');
+                ime = slash >= 0 ? im.substring(0, slash) : im;
+            }
+        } catch (Throwable t) { /* no IME info: keyboards may tick the foreground, harmless */ }
     }
 
     private void shade(boolean open) {
@@ -89,6 +107,7 @@ public final class IslandService extends AccessibilityService {
                     if (!fg.isEmpty()) { fg = ""; ctl.clearForeground(); }
                     return;
                 }
+                if (!pk.equals(fg) && !pk.equals(ime)) readIme();   // the keyboard may have been switched since we last looked
                 if (pk.equals(ime) || pk.equals("android") || cls.startsWith("android.")) return;
                 if (Bus.shadeOpen) shade(false); // another app's window changed, so the panel must be closed
                 if (!pk.equals(fg)) { fg = pk; ctl.setForeground(pk); }
@@ -143,6 +162,7 @@ public final class IslandService extends AccessibilityService {
         if (sys != null) { sys.stop(); sys = null; }
         if (ctl != null) { Bus.detach(ctl); ctl.detach(); ctl = null; }
         Bus.shadeOpen = false;
+        fg = "";   // a new controller starts with no foreground app, so this must not remember the old one
     }
 
     @Override public boolean onUnbind(Intent i) {

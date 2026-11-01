@@ -61,6 +61,14 @@ final class Parse {
         return (word && (pk || amt)) || (pk && amt);
     }
 
+    /**
+     * Like {@link #isPayment}, but a chat message never counts unless it comes from a payment app: "I paid $20 for the
+     * tickets" in a messenger is a message, not a payment.
+     */
+    static boolean isPaymentFrom(boolean messaging, String pkg, String title, String text) {
+        return isPayment(pkg, title, text) && (!messaging || payPkg(pkg));
+    }
+
     static boolean isFailure(String s) { return s != null && any(s.toLowerCase(Locale.ROOT), FAIL_WORDS); }
 
     static boolean isIncoming(String s) { return s != null && any(s.toLowerCase(Locale.ROOT), IN_WORDS); }

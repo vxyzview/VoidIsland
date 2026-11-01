@@ -162,6 +162,7 @@ public final class MainActivity extends Activity {
         }
         Page pg = pages[page];
         if (page != 1 && (pg == null || !pg.sig.equals(statusSig()))) showPage(page, true);
+        if (page == 2) { h.removeCallbacks(diagRun); h.post(diagRun); }   // onPause stopped it
         h.post(new Runnable() { @Override public void run() { askKeepAlive(); } });
     }
 
@@ -249,7 +250,7 @@ public final class MainActivity extends Activity {
     private void build(int p) {
         shown = p;
         Page pg = pages[p];
-        if (pg == null) {
+        if (pg == null || !pg.sig.equals(statusSig())) {   // never show a page built for an older setup state
             pg = make(p);
             pages[p] = pg;
         }
@@ -377,8 +378,8 @@ public final class MainActivity extends Activity {
 
         boolean a = a11yOn(), n = notifOn();
         int state = a && n ? 0 : a ? 1 : 2;   // 0 live · 1 one step to go · 2 setup needed
-        int heroBg = state == 0 ? m.primaryContainer : state == 1 ? m.tertiaryContainer : m.errorContainer;
-        int heroOn = state == 0 ? m.onPrimaryContainer : state == 1 ? m.onTertiaryContainer : m.onErrorContainer;
+        int heroBg = state == 0 ? m.primaryContainer : state == 1 ? m.secondaryContainer : m.errorContainer;
+        int heroOn = state == 0 ? m.onPrimaryContainer : state == 1 ? m.onSecondaryContainer : m.onErrorContainer;
         int heroGlyph = state == 0 ? IconView.CLOCK : state == 1 ? IconView.BELL : IconView.ACCESS;
         LinearLayout st = m.col();
         st.setBackground(m.shape(heroBg, 36));
@@ -443,7 +444,7 @@ public final class MainActivity extends Activity {
                 ty.addView(row, m.top(M3.MATCH, M3.WRAP, i == 0 ? 0 : 8));
             }
             final String code = dCd[i];
-            View b = m.richButton(dIc[i], dNm[i], (i / 2 + i % 2) % 3, new Runnable() { @Override public void run() { demo(code); } });
+            View b = m.richButton(dIc[i], dNm[i], (i / 2 + i % 2) % 2, new Runnable() { @Override public void run() { demo(code); } });
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, M3.WRAP, 1f);
             if (i % 2 == 1) bp.setMarginStart(dp(8));
             row.addView(b, bp);
@@ -697,17 +698,23 @@ public final class MainActivity extends Activity {
         m.toggle(ru, "Hide in landscape", null, Prefs.K_LAND, true, null);
         m.toggle(ru, "Hide idle clock in apps", "While an app is open only the clock pill hides — banners, music and timers keep showing", Prefs.K_HIDEAPP, true, null);
         m.toggle(ru, "Hide music & call pill inside their own app", null, Prefs.K_INAPP, true, null);
+        ru.addView(m.item(IconView.APPS, "Never auto-hide in these apps", "The island stays visible in the apps you pick, even in landscape", null, new Runnable() {
+            @Override public void run() { startActivity(new Intent(MainActivity.this, AppsActivity.class).putExtra(AppsActivity.EXTRA_MODE, 3)); }
+        }));
         final M3Switch[] absorbSw = new M3Switch[1];
         absorbSw[0] = m.toggle(ru, "Only show notifications on the island",
             "Off by default. Messages and payments shown on the island are removed from the notification shade, so nothing pops up twice, but a banner you miss is gone. Calls, timers, maps, downloads and music keep their own notification",
             Prefs.K_ABSORB, Prefs.ABSORB_DEF, new Runnable() {
                 @Override public void run() {
                     if (!Prefs.b(MainActivity.this, Prefs.K_ABSORB, Prefs.ABSORB_DEF)) return;   // switched off: nothing to confirm
+                    Prefs.absorbUnconfirmed = true;
                     m.confirmDialog(MainActivity.this, "Remove banners from the shade?",
                         "Messages and payments the island shows will be removed from the normal notification shade. If you look away and miss the banner, the message will not be waiting in the shade.\n\n"
                             + "Nothing is removed while the island is off, hidden, or ignoring that app, and apps on Keep in shade are never touched.",
-                        "Turn on", null, "Cancel", new Runnable() {
+                        "Turn on", new Runnable() { @Override public void run() { Prefs.absorbUnconfirmed = false; } },
+                        "Cancel", new Runnable() {
                             @Override public void run() {
+                                Prefs.absorbUnconfirmed = false;
                                 Prefs.sp(MainActivity.this).edit().putBoolean(Prefs.K_ABSORB, false).apply();
                                 if (absorbSw[0] != null) absorbSw[0].revert(false);
                             }

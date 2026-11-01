@@ -66,6 +66,10 @@ public class Check {
         ok(Parse.isPayment("id.dana", "DANA", "Pembayaran berhasil Rp 18.500"), "payment: DANA");
         ok(Parse.isPayment("com.google.android.apps.walletnfcrel", "Google Wallet", "Paid $4.20 at Blue Bottle"), "payment: Google Wallet");
         ok(!Parse.isPayment("com.whatsapp", "Budi", "see you at 5, bring 20 bucks"), "payment: chat is not payment");
+        ok(!Parse.isPaymentFrom(true, "com.whatsapp", "Alex", "I paid $20 for the tickets"), "payment: a chat message that mentions paying is still a message");
+        ok(!Parse.isPaymentFrom(true, "org.telegram.messenger", "Sam", "I'll pay you back $15 tomorrow"), "payment: telegram chat is not a payment");
+        ok(Parse.isPaymentFrom(false, "com.whatsapp", "Store", "Receipt for $9.99"), "payment: non-chat notification still classified as before");
+        ok(Parse.isPaymentFrom(true, "id.dana", "DANA", "Pembayaran berhasil Rp 18.500"), "payment: a payment app is trusted even with messaging-style");
         ok(!Parse.isPayment("com.news.app", "Markets", "Dollar steady at $1.08 in late trade"), "payment: news with $ is not payment");
         ok(Parse.isFailure("Payment failed"), "failure word");
         ok(Parse.isIncoming("Anda menerima Rp 50.000 dari Sari"), "incoming word");

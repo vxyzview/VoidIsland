@@ -48,7 +48,8 @@ VER=${2:-1.1}
 VCODE=${3:-2}
 
 rm -rf out && mkdir -p out/classes
-echo "[1/6] javac";   javac -source 8 -target 8 -Xlint:-options -encoding UTF-8 -bootclasspath "$AJ" -d out/classes $(find src -name '*.java') 2>&1 | grep -v '^Note:' || true
+echo "[1/6] javac";   javac -source 8 -target 8 -Xlint:-options -encoding UTF-8 -bootclasspath "$AJ" -d out/classes $(find src -name '*.java') > out/javac.log 2>&1 || { cat out/javac.log >&2; echo "error: javac failed" >&2; exit 1; }
+grep -v '^Note:' out/javac.log || true
 if [ "${DEXER##*/}" = dx ]; then
     echo "[2/6] dex";
     "$DEXER" --dex --min-sdk-version=26 --output=out/classes.dex out/classes

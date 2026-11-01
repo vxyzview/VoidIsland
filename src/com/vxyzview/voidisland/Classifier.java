@@ -284,10 +284,13 @@ final class Classifier {
 
         // ---- payments
         String tt = empty(title) ? "" : title.toString(), bt = empty(text) ? "" : text.toString();
-        if (Parse.isPayment(pkg, tt, bt)) {
+        boolean messaging = Notification.CATEGORY_MESSAGE.equals(cat) || x.containsKey(Notification.EXTRA_MESSAGES)
+            || x.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION) || !empty(x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE))
+            || String.valueOf(x.getCharSequence(Notification.EXTRA_TEMPLATE)).contains("MessagingStyle");
+        if (Parse.isPaymentFrom(messaging, pkg, tt, bt)) {
             if (!Prefs.b(c, Prefs.K_PAY, true)) return null;
             String all = tt + " " + bt;
-            IslandEvent e = new IslandEvent("pay", IslandEvent.PAYMENT);
+            IslandEvent e = new IslandEvent("pay:" + nkey, IslandEvent.PAYMENT);
             e.pkg = pkg; e.appName = app; e.nkey = nkey;
             e.success = !Parse.isFailure(all);
             e.incoming = Parse.isIncoming(all);

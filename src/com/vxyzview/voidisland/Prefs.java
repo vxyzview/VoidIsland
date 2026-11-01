@@ -16,7 +16,7 @@ final class Prefs {
         K_CLOCK = "f_clock", K_LYRICS = "f_lyric", K_THEME = "app_theme",
         K_LIVEACT = "f_live", K_KEEP = "keep_apps", K_QUIET = "quiet_on", K_QFROM = "quiet_from", K_QTO = "quiet_to",
         K_QAPPS = "quiet_apps", K_NOGROUP = "no_group", K_ONEPERCHAT = "one_per_chat",
-        K_LYROFF = "lyric_off", K_LYRSIZE = "lyric_size";
+        K_LYROFF = "lyric_off", K_LYRSIZE = "lyric_size", K_NOHIDE = "nohide_apps";
     // shape + size
     static final String K_SHAPE = "shape", K_ESHAPE = "e_shape", K_CW = "c_w", K_CH = "c_h", K_CR = "c_r", K_CPAD = "c_pad", K_GLYPH = "glyph",
         K_EW = "e_w", K_ER = "e_r", K_PADX = "pad_x", K_PADY = "pad_y", K_TS = "t_scale";
@@ -30,6 +30,9 @@ final class Prefs {
 
     /** Removing originals from the shade is opt-in: a banner you miss is not waiting in the shade, so it starts off. */
     static final boolean ABSORB_DEF = false;
+
+    /** True while the "Remove banners from the shade?" dialog is open: the switch is already saved, but nothing may be removed yet. */
+    static volatile boolean absorbUnconfirmed;
 
     private static volatile SharedPreferences cached;
 

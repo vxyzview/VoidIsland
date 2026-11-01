@@ -428,7 +428,7 @@ final class IslandController implements IslandView.Host {
             case IslandEvent.SYSTEM: return Prefs.b(svc, Prefs.K_SYS, true) || "toast".equals(e.key);
             case IslandEvent.LIVE: return Prefs.b(svc, Prefs.K_LIVEACT, true);
             case IslandEvent.PREVIEW: return true;
-            case IslandEvent.CLOCK: return Prefs.b(svc, Prefs.K_CLOCK, true) && !(Prefs.b(svc, Prefs.K_HIDEAPP, true) && appOpen);
+            case IslandEvent.CLOCK: return Prefs.b(svc, Prefs.K_CLOCK, true) && !(Prefs.b(svc, Prefs.K_HIDEAPP, true) && appOpen && !neverHide());
             default: return Prefs.b(svc, Prefs.K_NOTIF, true);
         }
     }
@@ -443,12 +443,17 @@ final class IslandController implements IslandView.Host {
             if (old == null) live.put(e.key, e);
             else old.copyFrom(e);
         } else {
+            // A banner the island cannot show right now (off, landscape, lock screen, shade open) is NOT queued: it would
+            // pop up minutes later, stale, and the caller would still think it had been shown. Its original stays in the shade.
+            if (suppressed()) return false;
             if (popup != null && popup.key.equals(e.key)) {
                 popup = e;
                 schedulePopup(e);
             } else {
                 for (Iterator<IslandEvent> it = queue.iterator(); it.hasNext();) if (it.next().key.equals(e.key)) it.remove();
-                if (queue.size() >= 4) queue.pollFirst();
+                // A full queue refuses the newcomer instead of silently dropping an older banner that may already have
+                // been taken out of the shade: the refused one simply keeps its original notification.
+                if (queue.size() >= 4) return false;
                 queue.addLast(e);
             }
         }
@@ -528,8 +533,13 @@ final class IslandController implements IslandView.Host {
 
     // ------------------------------------------------------------------ what to show
 
+    /** True while the foreground app is on the "Never auto-hide" list: the island ignores the hide rules (landscape, idle clock, own-app pill) there. */
+    private boolean neverHide() {
+        return fg.length() > 0 && Prefs.has(svc, Prefs.K_NOHIDE, fg);
+    }
+
     private boolean hiddenBySource(IslandEvent e) {
-        return Prefs.b(svc, Prefs.K_INAPP, true) && e.pkg != null && e.pkg.equals(fg)
+        return Prefs.b(svc, Prefs.K_INAPP, true) && e.pkg != null && e.pkg.equals(fg) && !neverHide()
             && (e.type == IslandEvent.MEDIA || e.type == IslandEvent.CALL);
     }
 
@@ -550,7 +560,7 @@ final class IslandController implements IslandView.Host {
 
     private boolean suppressed() {
         if (!Prefs.b(svc, Prefs.K_ON, true)) return true;
-        if (landscape && Prefs.b(svc, Prefs.K_LAND, true)) return true;
+        if (landscape && Prefs.b(svc, Prefs.K_LAND, true) && !neverHide()) return true;
         if (!layerApp) {
             if (locked && !style.lockShow) return true;                      // above-status-bar layer would draw over the lock screen
             if (style.qs != Style.QS_TOP && shadeOpen) return true;          // hide while Quick Settings / shade are open
