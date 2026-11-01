@@ -116,8 +116,33 @@ final class Lyrics {
 
     static synchronized void clearAll() { CACHE.clear(); MISS.clear(); }
 
+    /** Memory is tight: keep only the {@code keep} most recently used songs (the one playing stays) and forget the misses. */
+    static synchronized void trim(int keep) {
+        MISS.clear();
+        java.util.Iterator<Map.Entry<String, Loaded>> it = CACHE.entrySet().iterator();   // access order: least recently used first
+        while (CACHE.size() > Math.max(0, keep) && it.hasNext()) { it.next(); it.remove(); }
+    }
+
     private static String key(String track, String artist) {
         return (track == null ? "" : track.trim().toLowerCase()) + "|" + (artist == null ? "" : artist.trim().toLowerCase());
+    }
+
+    /** A song title without "(feat. X)", "[Remastered]" and a trailing " - Live / Remastered 2011" part: the looser lookup uses it. */
+    static String cleanTitle(String t) {
+        if (t == null) return "";
+        String s = t.replaceAll("\\s*[\\(\\[][^\\)\\]]*[\\)\\]]", "");
+        int dash = s.indexOf(" - ");
+        if (dash > 0) s = s.substring(0, dash);
+        s = s.trim();
+        return s.length() > 0 ? s : t.trim();
+    }
+
+    /** The first artist of "A, B", "A & B", "A feat. B" or "A - Topic" (players list several, LRCLIB usually has one). */
+    static String cleanArtist(String a) {
+        if (a == null) return "";
+        String s = a.replaceAll("(?i)\\s+-\\s+topic$", "");
+        s = s.split("(?i)\\s*(,|;|&|\\sfeat\\.?\\s|\\sft\\.?\\s|\\sx\\s)\\s*")[0].trim();
+        return s.length() > 0 ? s : a.trim();
     }
 
     /** Pure line extraction: prefer the LRC body (stamps, possibly several per line), else the plain text. */

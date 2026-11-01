@@ -47,6 +47,7 @@ final class RoundImage extends View {
 
     /** radiusPx < 0 means a full circle. */
     void set(Bitmap b, float radiusPx) {
+        if (b == bmp && radiusPx == rad && (sh != null || b == null)) return;   // same picture again: no new shader / texture upload
         bmp = b;
         rad = radiusPx;
         sh = null;
@@ -90,16 +91,23 @@ final class RoundImage extends View {
     }
 }
 
-/** Animated music bars. Runs at ~30fps only while visible and playing. */
+/** Animated music bars. Runs at ~20fps only while visible, playing and the display is on. */
 final class EqView extends View {
     private static final float[] SP = {5.1f, 7.3f, 6.2f, 8.4f};
     private static final float[] PH = {0f, 1.3f, 2.6f, 0.7f};
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF r = new RectF();
     private boolean playing = true;
+    private boolean dark;   // the display is off: nobody can see the bars, so the redraw loop sleeps
     private int color = Color.WHITE;
 
     EqView(Context c) { super(c); }
+
+    @Override public void onScreenStateChanged(int state) {
+        super.onScreenStateChanged(state);
+        dark = state == View.SCREEN_STATE_OFF;
+        if (!dark) invalidate();   // wake the loop again
+    }
 
     void setPlaying(boolean b) { playing = b; invalidate(); }
 
@@ -122,7 +130,7 @@ final class EqView extends View {
             r.set(x, (h - bh) / 2f, x + bw, (h + bh) / 2f);
             c.drawRoundRect(r, bw / 2f, bw / 2f, p);
         }
-        if (playing && isShown()) postInvalidateDelayed(33);
+        if (playing && !dark && isShown()) postInvalidateDelayed(50);   // ~20 fps is plenty for four bars
     }
 }
 
@@ -657,11 +665,16 @@ final class ClockFaceView extends View {
     }
 }
 
-/** A thin rounded line that fills with the minutes of the hour (never empty: a dot marks the start). */
+/**
+ * A thin rounded line that fills (with the minutes of the hour, or any 0..1 fraction). Never empty: a dot marks the start.
+ * With {@link #knob} it becomes a slider-like progress line: a slimmer track with a round head riding the end of the fill.
+ */
 final class MinuteBar extends View {
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF r = new RectF();
-    private int minute, accent = Color.WHITE;
+    private float frac;
+    private int accent = Color.WHITE;
+    private boolean knob;
 
     MinuteBar(Context c) { super(c); }
 
@@ -670,21 +683,44 @@ final class MinuteBar extends View {
         invalidate();
     }
 
-    void minute(int m) {
-        if (m == minute) return;
-        minute = m;
+    /** A round head (with a soft halo) on the end of the fill; the view's height is then the head's diameter. */
+    void knob(boolean on) {
+        this.knob = on;
+        invalidate();
+    }
+
+    void minute(int m) { frac(m / 60f); }
+
+    void frac(float f) {
+        f = f < 0f ? 0f : (f > 1f ? 1f : f);
+        if (Math.abs(f - frac) < 0.0015f) return;
+        frac = f;
         invalidate();
     }
 
     @Override protected void onDraw(Canvas c) {
         float w = getWidth(), h = getHeight();
         p.setStyle(Paint.Style.FILL);
+        if (!knob) {
+            p.setColor(Cards.track());
+            r.set(0f, 0f, w, h);
+            c.drawRoundRect(r, h / 2f, h / 2f, p);
+            p.setColor(accent);
+            r.set(0f, 0f, Math.max(h, w * frac), h);
+            c.drawRoundRect(r, h / 2f, h / 2f, p);
+            return;
+        }
+        float th = h * 0.36f, kr = h * 0.34f, top = (h - th) / 2f, x = kr * 1.6f + (w - kr * 3.2f) * frac;
         p.setColor(Cards.track());
-        r.set(0f, 0f, w, h);
-        c.drawRoundRect(r, h / 2f, h / 2f, p);
+        r.set(0f, top, w, top + th);
+        c.drawRoundRect(r, th / 2f, th / 2f, p);
         p.setColor(accent);
-        r.set(0f, 0f, Math.max(h, w * minute / 60f), h);
-        c.drawRoundRect(r, h / 2f, h / 2f, p);
+        r.set(0f, top, x, top + th);
+        c.drawRoundRect(r, th / 2f, th / 2f, p);
+        p.setColor(Col.alpha(accent, 0.28f));
+        c.drawCircle(x, h / 2f, h * 0.5f, p);   // halo
+        p.setColor(accent);
+        c.drawCircle(x, h / 2f, kr, p);
     }
 }
 

@@ -10,20 +10,44 @@ import android.media.session.MediaSessionManager;
 import android.media.session.PlaybackState;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.SystemClock;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Follows every active media session (Spotify, YouTube Music, ...) and mirrors the best one to the island. */
 final class MediaTracker {
-    private static final HashMap<String, Bitmap> ART = new HashMap<String, Bitmap>();
+    /** Artwork lifted from players' notifications: a handful of players at most, bounded by size so it can never creep up. */
+    private static final android.util.LruCache<String, Bitmap> ART = new android.util.LruCache<String, Bitmap>(1024 * 1024) {
+        @Override protected int sizeOf(String k, Bitmap b) { return Math.max(1, b.getByteCount()); }
+    };
     private static MediaTracker inst;
 
-    private static final HashMap<String, String> ART_SIG = new HashMap<String, String>();
+    private static final LinkedHashMap<String, String> ART_SIG = new LinkedHashMap<String, String>(8, 0.75f, true) {
+        @Override protected boolean removeEldestEntry(Map.Entry<String, String> eldest) { return size() > 8; }
+    };
+
+    /** Memory is tight: let go of the cached artwork (the picture on screen is held by its own event and stays). */
+    static void trim() {
+        ART.evictAll();
+        ART_SIG.clear();
+    }
+
+    /** The display came on: catch up with whatever the player did while it was off. */
+    static void screenOn() {
+        MediaTracker t = inst;
+        if (t != null) t.darkAt = 0;   // the cached answer is out of date now
+        if (t != null && t.stale) {   // straight to the refresh: the power state may still read "off" a moment after the broadcast
+            t.stale = false;
+            t.h.removeCallbacks(t.refresh);
+            t.h.postDelayed(t.refresh, 90);
+        }
+    }
 
     /** True when artwork for this exact track was already taken from {@code pkg}'s notification (players repost it every second or so). */
     static boolean artFresh(String pkg, String sig) {
@@ -46,6 +70,7 @@ final class MediaTracker {
     private final Handler h = new Handler(Looper.getMainLooper());
     private final ArrayList<Holder> holders = new ArrayList<Holder>();
     private MediaSessionManager msm;
+    private boolean stale;   // a player changed while the display was off: refreshed when it comes back on
     private String artKey = "";
     private Bitmap artBmp;
     private int accent = Color.WHITE;
@@ -84,10 +109,32 @@ final class MediaTracker {
         for (Holder x : holders) { try { x.mc.unregisterCallback(x.cb); } catch (Throwable t) { /* ignore */ } }
         holders.clear();
         h.removeCallbacksAndMessages(null);
+        artBmp = null;
+        artKey = "";
+        trim();
         Bus.remove("media");
     }
 
+    private long darkAt;          // when the display state was last asked (uptime ms; 0 = ask again)
+    private boolean darkNow;
+
+    /**
+     * No point rebuilding the island's music card for a dark screen. The system is asked directly rather than trusting a
+     * flag that could get stuck, but at most once a second: chatty players fire several callbacks a second.
+     */
+    private boolean dark() {
+        long now = SystemClock.uptimeMillis();
+        if (darkAt != 0 && now - darkAt < 1000L) return darkNow;
+        try {
+            PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+            darkNow = pm != null && !pm.isInteractive();
+        } catch (Throwable t) { darkNow = false; }
+        darkAt = now;
+        return darkNow;
+    }
+
     void soon() {
+        if (dark()) { stale = true; return; }
         h.removeCallbacks(refresh);
         h.postDelayed(refresh, 90);
     }
@@ -135,6 +182,7 @@ final class MediaTracker {
     }
 
     private void refreshNow() {
+        stale = false;
         Holder best = null;
         int bestScore = 0;
         for (Holder x : holders) {
@@ -177,8 +225,12 @@ final class MediaTracker {
             if (art == null) art = md.getBitmap(MediaMetadata.METADATA_KEY_ART);
             if (art == null) art = md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON);
         }
-        if (art == null) art = ART.get(pkg);
-        String key = pkg + "|" + e.title + "|" + e.text + "|" + (art == null ? 0 : System.identityHashCode(art));
+        boolean own = false;   // true = the picture is our cached copy (one stable instance), false = fresh from the session
+        if (art == null) { art = ART.get(pkg); own = art != null; }
+        // getMetadata() is a binder call: every refresh hands back a NEW Bitmap object for the same picture, so the object's
+        // identity says nothing. Re-scaling the art and re-reading its colour on every refresh was pure churn; size + track is enough.
+        int asig = art == null ? 0 : (own ? System.identityHashCode(art) : art.getWidth() * 31 + art.getHeight());
+        String key = pkg + "|" + e.title + "|" + e.text + "|" + own + asig;
         if (!key.equals(artKey)) {
             artKey = key;
             artBmp = Img.scaled(art, 256);

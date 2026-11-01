@@ -425,6 +425,68 @@ final class M3 {
         return box;
     }
 
+    /**
+     * Like {@link #segmented} but for more options than fit on one line: the labels wrap into rows of {@code perRow}, every row
+     * an outlined segmented bar, one selection across all of them. A short last row keeps the same button width.
+     */
+    LinearLayout segmentedGrid(final String[] labels, int sel, int perRow, final OnSel cb) {
+        final LinearLayout all = new LinearLayout(c);
+        all.setOrientation(LinearLayout.VERTICAL);
+        final TextView[] t = new TextView[labels.length];
+        final GradientDrawable[] fill = new GradientDrawable[labels.length];
+        final Runnable[] paint = new Runnable[1];
+        final int[] cur = {sel};
+        paint[0] = new Runnable() {
+            @Override public void run() {
+                for (int i = 0; i < t.length; i++) {
+                    boolean on = i == cur[0];
+                    fill[i].setColor(on ? secondaryContainer : 0);
+                    t[i].setTextColor(on ? onSecondaryContainer : onSurface);
+                }
+            }
+        };
+        for (int start = 0; start < labels.length; start += perRow) {
+            LinearLayout box = new LinearLayout(c);
+            box.setOrientation(LinearLayout.HORIZONTAL);
+            GradientDrawable bg = shape(0, 22);
+            bg.setStroke(dp(1), outlineVariant);
+            box.setBackground(bg);
+            box.setClipToOutline(true);
+            box.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+            for (int k = 0; k < perRow; k++) {
+                final int idx = start + k;
+                if (k > 0) {
+                    View div = new View(c);
+                    div.setBackgroundColor(outlineVariant);
+                    box.addView(div, lp(dp(1), MATCH));
+                }
+                if (idx >= labels.length) {   // pad the short last row so its buttons are as wide as the rest
+                    box.addView(new View(c), new LinearLayout.LayoutParams(0, dp(44), 1f));
+                    continue;
+                }
+                TextView tx = text(labels[idx], 13f, true, onSurface);
+                tx.setGravity(Gravity.CENTER);
+                tx.setSingleLine();
+                tx.setPadding(dp(2), 0, dp(2), 0);
+                GradientDrawable f = shape(0, 0);
+                tx.setBackground(new RippleDrawable(ColorStateList.valueOf(Col.alpha(onSurface, 0.16f)), f, shape(0xFFFFFFFF, 0)));
+                fill[idx] = f;
+                t[idx] = tx;
+                tx.setOnClickListener(new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        cur[0] = idx;
+                        paint[0].run();
+                        cb.on(idx);
+                    }
+                });
+                box.addView(tx, new LinearLayout.LayoutParams(0, dp(44), 1f));
+            }
+            all.addView(box, top(MATCH, WRAP, start == 0 ? 0 : 8));
+        }
+        paint[0].run();
+        return all;
+    }
+
     /** Small outlined pill chip. */
     TextView chip(String label, final Runnable r) {
         TextView t = text(label, 13.5f, true, onSurfaceVariant);

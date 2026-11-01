@@ -350,7 +350,7 @@ final class Cards {
                         Lyrics.Loaded l = lnow[0];
                         if (l == null) { e.tickHint = 1500; ls.tick(0, 0, false, 1f); ls.setVisibility(View.INVISIBLE); eq.setVisibility(View.VISIBLE); }
                         else {
-                            e.tickHint = e.playing ? 0 : 1000;   // lyrics only slide while the song plays
+                            e.tickHint = 1000;   // the lyric view schedules its own line changes and slide; this tick is only a re-anchor
                             ls.bind(l, lw, WHITE, SUB, Prefs.i(c, Prefs.K_LYRSIZE, 13));
                             // lyrics may be nudged earlier (+) or later (-) to match this player and phone
                             ls.tick(position(e) + Prefs.i(c, Prefs.K_LYROFF, 200), e.durMs, e.playing, e.speed);
@@ -366,6 +366,7 @@ final class Cards {
                         eq.setColor(acc(e));
                         eq.setPlaying(e.playing);
                         lyricsLoad(c, e, lkey, lnow, show);
+                        show.run();   // a seek / pause / speed change re-anchors the lyric right away, so the tick can stay slow
                         return true;
                     }
                 };
@@ -493,17 +494,22 @@ final class Cards {
 
     /**
      * The idle clock on the compact pill, in the style chosen under Style > Idle clock:
-     * 0 Dial (mini dial left, time + date right), 1 Center (time only, centred), 2 Split (hour left, minutes right, the camera
-     * between them), 3 Date (day left, time right), 4 Line (centred time over a line that fills with the hour).
+     * 0 Dial (mini dial left, time + date right), 1 Center (just the time, centred), 2 Split (hour left, minutes right, the camera
+     * between them), 3 Date (day left, time right), 4 Line (centred time over a line with a round head that fills as the hour goes),
+     * 5 Capsule (the time in a filled accent capsule), 6 Sky (a sun / moon glyph for the part of the day, time right),
+     * 7 Aura (the digits fade from the accent into the text colour), 8 Dots (the week as seven dots, today lit, time right).
      * Everything repaints once a minute through {@code e.tC}.
      */
+    static final int CLOCK_STYLES = 9;
+
     private static void compactClock(Context c, IslandEvent e, FrameLayout out, int h, int g, int m, int side) {
         final boolean use24 = DateFormat.is24HourFormat(c);
         final int ac = acc(e);
+        final float hdp = h / c.getResources().getDisplayMetrics().density;
         final boolean tall = h >= dp(c, (14.5f + 8.5f) * TS * 1.2f + 4f);   // room for two lines of text
         final Runnable refresh;
         switch (S.clockStyle) {
-            case 1: {
+            case 1: {   // Center
                 final TextView t = tv(c, "", 15.5f, WHITE, true);
                 t.setFontFeatureSettings("tnum");
                 t.setLetterSpacing(0.02f);
@@ -516,7 +522,7 @@ final class Cards {
                 };
                 break;
             }
-            case 2: {
+            case 2: {   // Split
                 final TextView hr = tv(c, "", 15.5f, WHITE, true);
                 final TextView mn = tv(c, "", 15.5f, ac, true);
                 hr.setFontFeatureSettings("tnum");
@@ -534,7 +540,7 @@ final class Cards {
                 };
                 break;
             }
-            case 3: {
+            case 3: {   // Date
                 final TextView t = tv(c, "", 14.5f, WHITE, true);
                 t.setFontFeatureSettings("tnum");
                 t.setLetterSpacing(0.02f);
@@ -564,20 +570,23 @@ final class Cards {
                 };
                 break;
             }
-            case 4: {
-                final TextView t = tv(c, "", 15.5f, WHITE, true);
+            case 4: {   // Line: the time over a slim line whose round head travels the hour. Always drawn, the text shrinks to make room.
+                final float barDp = 6f, gapDp = 1f;
+                final boolean bar = hdp >= 22f;
+                final float sp = Math.max(10f, Math.min(15.5f, (hdp - 6f - gapDp - (bar ? barDp : 0f)) / (1.2f * TS)));
+                final TextView t = tv(c, "", sp, WHITE, true);
                 t.setFontFeatureSettings("tnum");
                 t.setLetterSpacing(0.02f);
                 t.setGravity(Gravity.CENTER);
-                final boolean bar = h >= dp(c, 15.5f * TS * 1.2f + 3f + 2.5f + 8f);
                 final MinuteBar mb = bar ? new MinuteBar(c) : null;
                 LinearLayout box = col(c);
                 box.setGravity(Gravity.CENTER_HORIZONTAL);
                 box.addView(t, lp(WRAP, WRAP));
                 if (mb != null) {
                     mb.style(ac);
-                    LinearLayout.LayoutParams bl = lp(dp(c, 34f), dp(c, 2.5f));
-                    bl.topMargin = dp(c, 3f);
+                    mb.knob(true);
+                    LinearLayout.LayoutParams bl = lp(dp(c, 60f), dp(c, barDp));
+                    bl.topMargin = dp(c, gapDp);
                     box.addView(mb, bl);
                 }
                 out.addView(box, fl(WRAP, WRAP, Gravity.CENTER, 0));
@@ -586,12 +595,120 @@ final class Cards {
                         Calendar cal = Calendar.getInstance();
                         int mi = cal.get(Calendar.MINUTE);
                         putSpan(t, bigTime(cal.get(Calendar.HOUR_OF_DAY), mi, use24, ac, 0.58f));
-                        if (mb != null) mb.minute(mi);
+                        if (mb != null) mb.frac((mi + cal.get(Calendar.SECOND) / 60f) / 60f);
                     }
                 };
                 break;
             }
-            default: {
+            case 5: {   // Capsule: the time inside a filled accent capsule, AM / PM just outside it
+                final int on = S.accentOverride ? S.accentOn : Col.onColor(ac);
+                final TextView t = tv(c, "", 14f, on, true);
+                t.setFontFeatureSettings("tnum");
+                t.setLetterSpacing(0.02f);
+                t.setGravity(Gravity.CENTER);
+                final int vp = Math.round(Math.max(0f, Math.min(3.5f, (hdp - 6f - 16.8f * TS) / 2f)) * c.getResources().getDisplayMetrics().density);
+                t.setPadding(dp(c, 12), vp, dp(c, 12), vp);
+                t.setBackground(bg(ac, dp(c, 40)));
+                final TextView ap = use24 ? null : tv(c, "", 9.5f, SUB, true);
+                LinearLayout box = row(c);
+                box.addView(t, lp(WRAP, WRAP));
+                if (ap != null) {
+                    LinearLayout.LayoutParams al = lp(WRAP, WRAP);
+                    al.setMarginStart(dp(c, 5));
+                    box.addView(ap, al);
+                }
+                out.addView(box, fl(WRAP, WRAP, Gravity.CENTER, 0));
+                refresh = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        int hh = cal.get(Calendar.HOUR_OF_DAY);
+                        SpannableStringBuilder sb = new SpannableStringBuilder(Parse.timeOfDay(hh, cal.get(Calendar.MINUTE), use24));
+                        int colon = sb.toString().indexOf(':');
+                        if (colon >= 0) sb.setSpan(new ForegroundColorSpan(Col.alpha(on, 0.6f)), colon, colon + 1, SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        putSpan(t, sb);
+                        if (ap != null) putSpan(ap, ampm(hh));
+                    }
+                };
+                break;
+            }
+            case 6: {   // Sky: a sun or moon for the part of the day on the left, the time (and the part's name) on the right
+                final SkyGlyph sky = new SkyGlyph(c);
+                sky.style(accOr(YELLOW), accOr(0xFFD6E2FF));
+                out.addView(sky, fl(g, g, Gravity.START | side, m));
+                final TextView t = tv(c, "", 14.5f, WHITE, true);
+                t.setFontFeatureSettings("tnum");
+                t.setLetterSpacing(0.02f);
+                t.setGravity(Gravity.END);
+                final TextView pt = tall ? tv(c, "", 8.5f, ac, true) : null;
+                LinearLayout box = col(c);
+                box.setGravity(Gravity.END);
+                box.addView(t, lp(WRAP, WRAP));
+                if (pt != null) {
+                    pt.setLetterSpacing(0.1f);
+                    pt.setGravity(Gravity.END);
+                    LinearLayout.LayoutParams pl = lp(WRAP, WRAP);
+                    pl.topMargin = dp(c, 1);
+                    box.addView(pt, pl);
+                }
+                out.addView(box, fl(WRAP, WRAP, Gravity.END | side, m));
+                refresh = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        int hh = cal.get(Calendar.HOUR_OF_DAY);
+                        sky.hour(hh);
+                        putSpan(t, bigTime(hh, cal.get(Calendar.MINUTE), use24, ac, 0.62f));
+                        if (pt != null) putSpan(pt, DayPart.NAMES[DayPart.of(hh)]);
+                    }
+                };
+                break;
+            }
+            case 7: {   // Aura: digits that fade from the accent into the text colour
+                final GradientText t = new GradientText(c);
+                t.setText("");
+                t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f * TS);
+                t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+                t.setIncludeFontPadding(false);
+                t.setMaxLines(1);
+                t.setFontFeatureSettings("tnum");
+                t.setLetterSpacing(0.03f);
+                t.colors(ac, WHITE);
+                final TextView ap = use24 ? null : tv(c, "", 9.5f, SUB, true);
+                LinearLayout box = row(c);
+                box.addView(t, lp(WRAP, WRAP));
+                if (ap != null) {
+                    LinearLayout.LayoutParams al = lp(WRAP, WRAP);
+                    al.setMarginStart(dp(c, 4));
+                    box.addView(ap, al);
+                }
+                out.addView(box, fl(WRAP, WRAP, Gravity.CENTER, 0));
+                refresh = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        int hh = cal.get(Calendar.HOUR_OF_DAY);
+                        putSpan(t, Parse.timeOfDay(hh, cal.get(Calendar.MINUTE), use24));
+                        if (ap != null) putSpan(ap, ampm(hh));
+                    }
+                };
+                break;
+            }
+            case 8: {   // Dots: the week as seven dots (today lit), the time on the right
+                final WeekDots wk = new WeekDots(c);
+                wk.style(ac);
+                out.addView(wk, fl(dp(c, 54), Math.min(g, dp(c, 18)), Gravity.START | side, m + dp(c, 2)));
+                final TextView t = tv(c, "", 14.5f, WHITE, true);
+                t.setFontFeatureSettings("tnum");
+                t.setLetterSpacing(0.02f);
+                out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
+                refresh = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        wk.update(cal.getTimeInMillis());
+                        putSpan(t, bigTime(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), use24, ac, 0.58f));
+                    }
+                };
+                break;
+            }
+            default: {   // Dial
                 // Left: a mini dial whose accent ring fills with the minutes of the hour.
                 // Right: the time (accent colon, small dim AM/PM) and, when the pill is tall enough, the date under it.
                 final ClockFaceView face = new ClockFaceView(c);
@@ -960,6 +1077,21 @@ final class Cards {
         }
     }
 
+    /** "● Day  43%": a coloured bullet, a dim label, the value in the text colour (a legend line for the rings). */
+    private static CharSequence legend(int color, String label, String value) {
+        SpannableStringBuilder sb = new SpannableStringBuilder("\u25CF  ");
+        sb.setSpan(new ForegroundColorSpan(color), 0, 1, SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.append(label).append("  ");
+        int from = sb.length();
+        sb.append(value);
+        sb.setSpan(new ForegroundColorSpan(WHITE), from, sb.length(), SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return sb;
+    }
+
+    private static String titleCase(String s) {
+        return s.length() == 0 ? s : s.substring(0, 1) + s.substring(1).toLowerCase(java.util.Locale.getDefault());
+    }
+
     private static TextView endAligned(TextView t) {
         t.setGravity(Gravity.END);
         return t;
@@ -969,8 +1101,12 @@ final class Cards {
      * The expanded idle clock, in the style chosen under Style > Idle clock:
      * 0 Classic (big time, time in words, dial with a seconds hand, date, this week, the day's progress),
      * 1 Digital (a big centred time, words, date, progress), 2 Analog (a large dial beside the time and date, progress),
-     * 3 Bold (huge stacked hour and minutes, the date beside them, this week), 4 Week (time and date, this week, progress).
+     * 3 Bold (huge stacked hour and minutes, the date beside them, this week), 4 Week (time and date, this week, progress),
+     * 5 Rings (three activity rings: the day, the hour and the minute), 6 Flip (a flip clock with a seconds line),
+     * 7 Horizon (the sun or moon travelling an arc over the time).
      */
+    static final int ECLOCK_STYLES = 8;
+
     private static View clockCard(final Context c, final IslandEvent e) {
         final boolean use24 = DateFormat.is24HourFormat(c);
         final int ac = acc(e), acOn = S.accentOverride ? S.accentOn : Col.onColor(ac);
@@ -983,7 +1119,92 @@ final class Cards {
         ClockFaceView face0 = null;
         WeekStrip strip0 = null;
         DayRow day0 = null;
+        RingsView rings0 = null;
+        SkyGlyph sky0 = null;
+        TextView[] leg0 = null;
+        FlipTile flipH0 = null, flipM0 = null;
+        MinuteBar secBar0 = null;
+        HorizonView hor0 = null;
         switch (style) {
+            case 5: {   // Rings
+                LinearLayout top = row(c);
+                FrameLayout disc = new FrameLayout(c);
+                rings0 = new RingsView(c);
+                rings0.style(ac, Col.mix(ac, WHITE, 0.45f), Col.mix(ac, WHITE, 0.8f));
+                disc.addView(rings0, new FrameLayout.LayoutParams(dp(c, 124), dp(c, 124)));
+                sky0 = new SkyGlyph(c);
+                sky0.style(accOr(YELLOW), accOr(0xFFD6E2FF));
+                disc.addView(sky0, new FrameLayout.LayoutParams(dp(c, 26), dp(c, 26), Gravity.CENTER));
+                top.addView(disc, lp(dp(c, 124), dp(c, 124)));
+                LinearLayout info = col(c);
+                info.setPadding(dp(c, 18), 0, 0, 0);
+                time0 = tv(c, "", 38f, WHITE, true);
+                time0.setFontFeatureSettings("tnum");
+                date0 = tv(c, "", 15f, WHITE, true);
+                date0.setPadding(0, dp(c, 2), 0, dp(c, 8));
+                info.addView(time0);
+                info.addView(date0);
+                leg0 = new TextView[3];
+                for (int i = 0; i < 3; i++) {
+                    leg0[i] = tv(c, "", 12f, SUB, false);
+                    leg0[i].setFontFeatureSettings("tnum");
+                    LinearLayout.LayoutParams ll = lp(WRAP, WRAP);
+                    ll.topMargin = dp(c, i == 0 ? 0 : 3);
+                    info.addView(leg0[i], ll);
+                }
+                top.addView(info, lpw(0, WRAP, 1f));
+                root.addView(top);
+                break;
+            }
+            case 6: {   // Flip
+                LinearLayout tiles = row(c);
+                final int tileBg = TILE;
+                flipH0 = new FlipTile(c);
+                flipM0 = new FlipTile(c);
+                flipH0.style(tileBg, WHITE, SUB, 56f);
+                flipM0.style(tileBg, WHITE, SUB, 56f);
+                tiles.addView(flipH0, lpw(0, dp(c, 100), 1f));
+                ColonDots cd = new ColonDots(c);
+                cd.color(ac);
+                tiles.addView(cd, lp(dp(c, 22), dp(c, 100)));
+                tiles.addView(flipM0, lpw(0, dp(c, 100), 1f));
+                root.addView(tiles, lp(match, WRAP));
+                secBar0 = new MinuteBar(c);
+                secBar0.style(ac);
+                secBar0.knob(true);
+                LinearLayout.LayoutParams sb = lp(match, dp(c, 8));
+                sb.topMargin = dp(c, 12);
+                root.addView(secBar0, sb);
+                LinearLayout dl = row(c);
+                dl.setPadding(0, dp(c, 10), 0, 0);
+                date0 = tv(c, "", 15f, WHITE, true);
+                week0 = tv(c, "", 12.5f, SUB, false);
+                dl.addView(date0, lpw(0, WRAP, 1f));
+                dl.addView(week0);
+                root.addView(dl);
+                break;
+            }
+            case 7: {   // Horizon
+                FrameLayout sky = new FrameLayout(c);
+                hor0 = new HorizonView(c);
+                hor0.style(ac, accOr(YELLOW), accOr(0xFFD6E2FF), use24 ? "06:00" : "6 AM", use24 ? "18:00" : "6 PM");
+                sky.addView(hor0, new FrameLayout.LayoutParams(match, match));
+                time0 = tv(c, "", 38f, WHITE, true);
+                time0.setFontFeatureSettings("tnum");
+                FrameLayout.LayoutParams tl = new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+                tl.bottomMargin = dp(c, 14);
+                sky.addView(time0, tl);
+                root.addView(sky, lp(match, dp(c, 112)));
+                date0 = tv(c, "", 15f, WHITE, true);
+                date0.setGravity(Gravity.CENTER);
+                date0.setPadding(0, dp(c, 8), 0, 0);
+                words0 = tv(c, "", 13f, SUB, false);
+                words0.setGravity(Gravity.CENTER);
+                words0.setPadding(0, dp(c, 2), 0, 0);
+                root.addView(date0, lp(match, WRAP));
+                root.addView(words0, lp(match, WRAP));
+                break;
+            }
             case 1: {   // Digital
                 root.setGravity(Gravity.CENTER_HORIZONTAL);
                 time0 = tv(c, "", 62f, WHITE, true);
@@ -1115,7 +1336,14 @@ final class Cards {
         final ClockFaceView face = face0;
         final WeekStrip strip = strip0;
         final DayRow day = day0;
-        final float suffix = style == 1 ? 0.3f : (style == 0 ? 0.34f : 0.4f);
+        final RingsView rings = rings0;
+        final SkyGlyph sky = sky0;
+        final TextView[] leg = leg0;
+        final FlipTile flipH = flipH0, flipM = flipM0;
+        final MinuteBar secBar = secBar0;
+        final HorizonView hor = hor0;
+        final float suffix = style == 1 || style == 7 ? 0.3f : (style == 0 ? 0.34f : 0.4f);
+        final int c2 = Col.mix(ac, WHITE, 0.45f), c3 = Col.mix(ac, WHITE, 0.8f);
 
         final Runnable tick = new Runnable() {
             @Override public void run() {
@@ -1131,9 +1359,30 @@ final class Cards {
                 }
                 if (words != null) put(words, Parse.timeWords(hr, mn));
                 if (dow != null) put(dow, DateFormat.format("EEEE", ms).toString().toUpperCase(java.util.Locale.getDefault()));
-                if (date != null) put(date, style == 3 ? DateFormat.format("MMM d", ms).toString() : dateText().toString());
+                if (date != null) {
+                    String ds;
+                    if (style == 3) ds = DateFormat.format("MMM d", ms).toString();
+                    else if (style == 5) ds = DateFormat.format("EEE, MMM d", ms).toString();
+                    else if (style == 7) ds = dateText().toString() + "  \u00B7  " + titleCase(DayPart.NAMES[DayPart.of(hr)]);
+                    else ds = dateText().toString();
+                    put(date, ds);
+                }
                 if (week != null) put(week, "Week " + cal.get(Calendar.WEEK_OF_YEAR));
                 if (strip != null) strip.update(ms);
+                if (rings != null) rings.set(Parse.dayFrac(hr, mn, sc), (mn + sc / 60f) / 60f, sc / 60f);
+                if (sky != null) sky.hour(hr);
+                if (leg != null) {
+                    putSpan(leg[0], legend(ac, "Day", Math.round(Parse.dayFrac(hr, mn, sc) * 100f) + "%"));
+                    putSpan(leg[1], legend(c2, "Hour", mn + " min"));
+                    putSpan(leg[2], legend(c3, "Minute", sc + " s"));
+                }
+                if (flipH != null && flipM != null) {
+                    String[] parts = Parse.timeParts(hr, mn, use24);
+                    flipH.set(parts[0], use24 ? "" : ampm(hr));
+                    flipM.set(parts[1], "");
+                }
+                if (secBar != null) secBar.frac((sc + (ms % 1000L) / 1000f) / 60f);
+                if (hor != null) hor.time(hr + mn / 60f + sc / 3600f);
                 if (day != null) {
                     float f = Parse.dayFrac(hr, mn, sc);
                     day.bar.setFrac(f);
@@ -1283,11 +1532,21 @@ final class Cards {
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
-    /** Two daemon workers at most: skipping through songs queues lookups instead of spawning a thread (and two HTTP calls) each. */
-    private static final java.util.concurrent.ExecutorService NET = java.util.concurrent.Executors.newFixedThreadPool(2,
-        new java.util.concurrent.ThreadFactory() {
-            @Override public Thread newThread(Runnable r) { Thread t = new Thread(r, "vi-lyrics"); t.setDaemon(true); return t; }
-        });
+    /**
+     * Two daemon workers at most: skipping through songs queues lookups instead of spawning a thread (and two HTTP calls) each.
+     * Idle workers exit after 20 s (a fixed pool kept both threads, and their stacks, alive for the life of the process).
+     */
+    private static final java.util.concurrent.ExecutorService NET = lyricPool();
+
+    private static java.util.concurrent.ExecutorService lyricPool() {
+        java.util.concurrent.ThreadPoolExecutor ex = new java.util.concurrent.ThreadPoolExecutor(2, 2, 20L,
+            java.util.concurrent.TimeUnit.SECONDS, new java.util.concurrent.LinkedBlockingQueue<Runnable>(),
+            new java.util.concurrent.ThreadFactory() {
+                @Override public Thread newThread(Runnable r) { Thread t = new Thread(r, "vi-lyrics"); t.setDaemon(true); return t; }
+            });
+        ex.allowCoreThreadTimeOut(true);
+        return ex;
+    }
     /** Set by the worker that ran a lookup when it failed to reach the service (as opposed to being told there are no lyrics). */
     private static final ThreadLocal<Boolean> NET_ERR = new ThreadLocal<Boolean>();
 
@@ -1355,40 +1614,65 @@ final class Cards {
         });
     }
 
-    /** LRCLIB (no key): /api/get first, then /api/search picking the entry whose duration fits best. */
+    /**
+     * LRCLIB (no key): /api/get first, then up to three searches, each looser than the last (exact title + artist, a free-text
+     * "artist title", the cleaned-up title alone). The looser ones only accept a result whose length matches the song.
+     */
     private static Lyrics.Loaded lyricsNet(String track, String artist, long durS) {
         JSONObject best = null;
         try {
             String q = "https://lrclib.net/api/get?track_name=" + URLEncoder.encode(track, "UTF-8")
                 + (artist.length() > 0 ? "&artist_name=" + URLEncoder.encode(artist, "UTF-8") : "")
                 + (durS > 0 ? "&duration=" + durS : "");
-            best = httpJson(q);   // null = no exact record (404) or a busy-server 503 — the search fallback still runs
+            best = httpJson(q);   // null = no exact record (404) or a busy-server 503: the searches below still run
+            if (best != null && !hasLyrics(best)) best = null;   // instrumental / empty record
         } catch (Throwable t) { /* fall through to search */ }
         if (best == null) {
-            NET_ERR.set(Boolean.FALSE);   // only the search decides whether this miss is believable (the exact lookup 404s for most songs)
+            NET_ERR.set(Boolean.FALSE);   // only the searches decide whether this miss is believable (the exact lookup 404s for most songs)
             try {
-                String q = "https://lrclib.net/api/search?track_name=" + URLEncoder.encode(track, "UTF-8")
-                    + (artist.length() > 0 ? "&artist_name=" + URLEncoder.encode(artist, "UTF-8") : "");
-                JSONArray arr = httpArray(q);
-                if (arr != null) {
-                    int ai = -1, score = -1000000;
-                    for (int i = 0; i < arr.length(); i++) {
-                        JSONObject o = arr.optJSONObject(i);
-                        if (o == null) continue;
-                        String s0 = o.optString("syncedLyrics", ""), p0 = o.optString("plainLyrics", "");
-                        if (s0.length() == 0 && p0.length() == 0) continue;
-                        int sc = (s0.length() > 0 ? 500 : 0) + (p0.length() > 0 ? 1 : 0);
-                        double d = o.optDouble("duration", 0);
-                        if (durS > 0 && Math.abs(d - durS) <= 2) sc += 200;
-                        if (sc > score) { score = sc; ai = i; }
-                    }
-                    if (ai >= 0) best = arr.optJSONObject(ai);
+                String cleanTrack = Lyrics.cleanTitle(track), cleanArtist = Lyrics.cleanArtist(artist);
+                String[] urls = {
+                    "https://lrclib.net/api/search?track_name=" + URLEncoder.encode(track, "UTF-8")
+                        + (artist.length() > 0 ? "&artist_name=" + URLEncoder.encode(artist, "UTF-8") : ""),
+                    "https://lrclib.net/api/search?q=" + URLEncoder.encode((cleanArtist + " " + cleanTrack).trim(), "UTF-8"),
+                    "https://lrclib.net/api/search?track_name=" + URLEncoder.encode(cleanTrack, "UTF-8")
+                };
+                for (int u = 0; u < urls.length && best == null; u++) {
+                    JSONArray arr = httpArray(urls[u]);
+                    if (arr != null) best = pickBest(arr, cleanArtist, durS, u > 0);
                 }
             } catch (Throwable t) { /* offline or rate-limited: no lyrics this round, no caching of failures */ }
         }
         if (best == null) return null;
-        String s0 = best.optString("syncedLyrics", ""), p0 = best.optString("plainLyrics", "");
+        String s0 = jstr(best, "syncedLyrics"), p0 = jstr(best, "plainLyrics");
         return Lyrics.parse(s0.length() > 0 ? s0 : null, p0.length() > 0 ? p0 : null);
+    }
+
+    /** A string field, or "" when it is missing or JSON null (Android's optString turns JSON null into the text "null"). */
+    private static String jstr(JSONObject o, String key) {
+        return o == null || o.isNull(key) ? "" : o.optString(key, "");
+    }
+
+    private static boolean hasLyrics(JSONObject o) { return jstr(o, "syncedLyrics").length() > 0 || jstr(o, "plainLyrics").length() > 0; }
+
+    /** The search hit with lyrics that fits best: synced beats plain, a matching length and artist add weight. {@code strict}: length must fit. */
+    private static JSONObject pickBest(JSONArray arr, String artist, long durS, boolean strict) {
+        JSONObject best = null;
+        int score = -1;
+        String want = artist.toLowerCase();
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject o = arr.optJSONObject(i);
+            if (o == null || !hasLyrics(o)) continue;
+            double gap = Math.abs(o.optDouble("duration", 0) - durS);
+            boolean artistOk = want.length() > 0 && jstr(o, "artistName").toLowerCase().contains(want);
+            // a loose search may only return the right song: by its length, or (when the player gives none) by its artist
+            if (strict && (durS > 0 ? gap > 3 : !artistOk)) continue;
+            int sc = (jstr(o, "syncedLyrics").length() > 0 ? 500 : 0) + (jstr(o, "plainLyrics").length() > 0 ? 1 : 0);
+            if (durS > 0 && gap <= 2) sc += 200;
+            if (artistOk) sc += 50;
+            if (sc > score) { score = sc; best = o; }
+        }
+        return best;
     }
 
     private static JSONObject httpJson(String url) {
@@ -1416,7 +1700,7 @@ final class Cards {
                 char[] buf = new char[8192];
                 for (int n; (n = r.read(buf)) > 0;) {
                     b.append(buf, 0, n);
-                    if (b.length() > 600000) return null;   // far bigger than any lyric sheet: don't buffer it
+                    if (b.length() > 600000) { NET_ERR.set(Boolean.TRUE); return null; }   // far bigger than any lyric sheet: don't buffer it (and not a believable "no lyrics")
                 }
                 return b.length() > 0 ? b.toString() : null;
             } finally {

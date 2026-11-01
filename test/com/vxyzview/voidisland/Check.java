@@ -165,6 +165,27 @@ public class Check {
         Lyrics.remember("Who", "Does", p0);
         ok(Lyrics.cached("who", "does") == p0, "lyrics: cache lookup ignores case");
 
+        // --- memory pressure: trim keeps only the most recently used songs, then nothing
+        ok(Lyrics.cleanTitle("Song (feat. Guest) - Remastered 2011").equals("Song"), "lyrics: title loses feat. / remaster suffixes");
+        ok(Lyrics.cleanTitle("(Only)").equals("(Only)") && Lyrics.cleanTitle("Plain").equals("Plain"), "lyrics: a title is never cleaned down to nothing");
+        ok(Lyrics.cleanArtist("Main, Other").equals("Main") && Lyrics.cleanArtist("Main & Other").equals("Main") && Lyrics.cleanArtist("Band - Topic").equals("Band"), "lyrics: first artist is used for the loose lookup");
+        ok(Lyrics.cleanArtist("Solo").equals("Solo") && Lyrics.cleanArtist("").equals(""), "lyrics: a single artist is kept as is");
+        Lyrics.clearAll();
+        for (int i = 0; i < 6; i++) Lyrics.remember("song" + i, "a", Lyrics.parse(null, "x" + i));
+        Lyrics.cached("song0", "a");   // touched last: now the most recently used
+        Lyrics.rememberMiss("nothing", "here", 1000L);
+        Lyrics.trim(2);
+        ok(Lyrics.cacheSize() == 2 && Lyrics.cached("song0", "a") != null && Lyrics.cached("song5", "a") != null && Lyrics.cached("song1", "a") == null,
+            "lyrics: trim keeps the most recently used songs");
+        ok(!Lyrics.missedRecently("nothing", "here", 1001L), "lyrics: trim forgets the misses");
+        Lyrics.trim(0);
+        ok(Lyrics.cacheSize() == 0, "lyrics: trim(0) empties the cache");
+        Lyrics.clearAll();
+        ok(!Trim.shortage(0) && !Trim.shortage(5) && Trim.shortage(10) && Trim.shortage(15), "trim: running-low and critical count as a shortage");
+        ok(!Trim.shortage(20), "trim: closing the settings screen (UI hidden) is not a shortage");
+        ok(Trim.shortage(40) && Trim.shortage(60) && Trim.shortage(80), "trim: background levels count as a shortage");
+        ok(Trim.keepSongs(10) == 4 && Trim.keepSongs(60) == 4 && Trim.keepSongs(80) == 0, "trim: only the last level drops every cached song");
+
         // --- Pill lyric scroll: the pill shows the whole song, so lookups must return an index, not just text
         ok(s0.indexAt(900, 0) == -1, "scroll: nothing before the first stamp");
         ok(s0.indexAt(1500, 0) == 0 && s0.indexAt(65000, 0) == 2, "scroll: synced index, past the last stamp stays on the last line");

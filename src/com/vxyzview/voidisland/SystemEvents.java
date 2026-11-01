@@ -13,6 +13,7 @@ import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.os.SystemClock;
 
 import java.util.HashMap;
@@ -38,12 +39,12 @@ final class SystemEvents {
                 String a = i.getAction();
                 if (a == null) return;
                 if (Intent.ACTION_SCREEN_ON.equals(a) || Intent.ACTION_SCREEN_OFF.equals(a) || Intent.ACTION_USER_PRESENT.equals(a)) {
-                    if (Intent.ACTION_SCREEN_ON.equals(a)) Bus.screen(true);
-                    else if (Intent.ACTION_SCREEN_OFF.equals(a)) Bus.screen(false);
+                    if (Intent.ACTION_SCREEN_ON.equals(a)) { minuteTick(true); Bus.screen(true); }
+                    else if (Intent.ACTION_SCREEN_OFF.equals(a)) { minuteTick(false); Bus.screen(false); }
                     Bus.keyguard();
                     if (Intent.ACTION_SCREEN_ON.equals(a)) Bus.clockNow();
                 }
-                else if (Intent.ACTION_TIME_TICK.equals(a) || Intent.ACTION_TIME_CHANGED.equals(a) || Intent.ACTION_TIMEZONE_CHANGED.equals(a)
+                else if (Intent.ACTION_TIME_CHANGED.equals(a) || Intent.ACTION_TIMEZONE_CHANGED.equals(a)
                     || Intent.ACTION_DATE_CHANGED.equals(a)) Bus.clockNow();
                 else if (Intent.ACTION_BATTERY_CHANGED.equals(a)) battery(i);
                 else if (AudioManager.RINGER_MODE_CHANGED_ACTION.equals(a)) ringer();
@@ -54,6 +55,38 @@ final class SystemEvents {
             } catch (Throwable t) { /* never crash the service over a toast */ }
         }
     };
+
+    /**
+     * The once-a-minute clock broadcast keeps the idle clock exact, but it is only worth waking the app for while the display is
+     * on: with the screen off it is 1440 pointless wake-ups a day. Registered on screen-on, dropped on screen-off.
+     */
+    private boolean tickOn;
+    private final BroadcastReceiver tickRx = new BroadcastReceiver() {
+        @Override public void onReceive(Context ctx, Intent i) {
+            try { Bus.clockNow(); } catch (Throwable t) { /* never crash the service over a clock tick */ }
+        }
+    };
+
+    private void minuteTick(boolean on) {
+        if (on == tickOn) return;
+        try {
+            if (on) {
+                IntentFilter tf = new IntentFilter(Intent.ACTION_TIME_TICK);
+                if (Build.VERSION.SDK_INT >= 33) c.registerReceiver(tickRx, tf, Context.RECEIVER_EXPORTED);
+                else c.registerReceiver(tickRx, tf);
+            } else {
+                c.unregisterReceiver(tickRx);
+            }
+            tickOn = on;
+        } catch (Throwable t) { /* not registered / already gone: the screen-on refresh still sets the clock */ }
+    }
+
+    private boolean interactive() {
+        try {
+            PowerManager pm = (PowerManager) c.getSystemService(Context.POWER_SERVICE);
+            return pm == null || pm.isInteractive();
+        } catch (Throwable t) { return true; }
+    }
 
     void start() {
         startedAt = SystemClock.uptimeMillis();
@@ -71,13 +104,13 @@ final class SystemEvents {
         f.addAction(Intent.ACTION_SCREEN_ON);
         f.addAction(Intent.ACTION_SCREEN_OFF);
         f.addAction(Intent.ACTION_USER_PRESENT);
-        f.addAction(Intent.ACTION_TIME_TICK);        // keeps the idle clock exact: the island's own timer stops while the phone sleeps
         f.addAction(Intent.ACTION_TIME_CHANGED);
         f.addAction(Intent.ACTION_TIMEZONE_CHANGED);
         f.addAction(Intent.ACTION_DATE_CHANGED);
         // system broadcasts only; Android 14 (target 34) requires saying so explicitly
         if (Build.VERSION.SDK_INT >= 33) c.registerReceiver(rx, f, Context.RECEIVER_EXPORTED);
         else c.registerReceiver(rx, f);
+        if (interactive()) minuteTick(true);   // keeps the idle clock exact while the screen is on (the island's own timer stops while the phone sleeps)
         try {
             cm = (CameraManager) c.getSystemService(Context.CAMERA_SERVICE);
             torchCb = new CameraManager.TorchCallback() {
@@ -88,6 +121,7 @@ final class SystemEvents {
     }
 
     void stop() {
+        minuteTick(false);
         try { c.unregisterReceiver(rx); } catch (Throwable t) { /* not registered */ }
         try { if (cm != null && torchCb != null) cm.unregisterTorchCallback(torchCb); } catch (Throwable t) { /* ignore */ }
         h.removeCallbacksAndMessages(null);

@@ -55,7 +55,10 @@ final class Bus {
     static void clockNow() { if (ctl != null) ctl.clockNow(); }
 
     /** The screen turned on or off: the island stops its timers while the screen is dark. */
-    static void screen(boolean on) { if (ctl != null) ctl.setScreen(on); }
+    static void screen(boolean on) {
+        if (ctl != null) ctl.setScreen(on);
+        if (on) MediaTracker.screenOn();   // the music card skipped updates while the display was dark
+    }
 
     static void keyguard() { if (ctl != null) ctl.refreshLock(); }
 

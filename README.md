@@ -11,10 +11,24 @@ Dynamic Island for Android (by vxyzview) — notifications, media and calls on a
 - **Island rules**: quiet hours (optionally only for chosen apps), mute group chats, one banner per chat.
 - **Live activities**: rides, food delivery and live scores stay on the island while they run. Missing an app? Add it under **Apps > Ride / Food / Score apps**.
 - **Hides only when it should**: the island stays visible everywhere, landscape included, and steps aside only while an app is fullscreen (video, game, reader: anything that hides the status bar). Turn that off under **Behavior > Rules**. The idle clock can also stay visible inside apps (turn off *Hide idle clock in apps*) and still disappears in fullscreen.
-- **Idle clock styles**: pick how the clock looks on the compact pill under **Style > Idle clock**: *Dial* (mini dial whose ring fills with the minutes, time and date), *Center* (just the time with a small AM / PM), *Split* (hour on the left, minutes on the right, a camera hole in between), *Date* (day on the left, time on the right) or *Line* (centred time over a line that fills as the hour passes). The expanded clock card has its own five layouts: *Classic*, *Digital*, *Analog*, *Bold* and *Week*.
+- **Idle clock styles**: pick how the clock looks under **Style > Idle clock**.
+  - *Compact pill* (9): *Dial* (mini dial whose ring fills with the minutes, time and date), *Center* (just the time with a small AM / PM), *Split* (hour left, minutes right, a camera hole in between), *Date* (day on the left, time on the right), *Line* (centred time over a slim line whose round head travels the hour; always drawn, the text shrinks to fit short pills), *Capsule* (the time in a filled accent capsule), *Sky* (a sun, sinking sun or moon for the part of the day, plus the time), *Aura* (digits that fade from your accent into white) and *Dots* (the week as seven dots with today lit, plus the time).
+  - *Expanded card* (8): *Classic*, *Digital*, *Analog*, *Bold*, *Week*, *Rings* (three activity rings for the day, the hour and the minute), *Flip* (a flip clock with a seconds line) and *Horizon* (the sun, or the moon at night, travelling an arc over the time).
 - **Backup**: **Apps > Backup** saves every setting to a text file and restores it after a reinstall or on a new phone.
-- **Battery**: timers stop while the screen is off, the music pill refreshes slowly when no lyric is moving, and songs LRCLIB has no lyrics for (and video / podcast apps) are not asked about again for an hour.
+- **Battery**: timers stop while the screen is off, the music pill refreshes slowly when no lyric is moving, and songs LRCLIB has no lyrics for (and video / podcast apps) are not asked about again for an hour. A song the exact lookup misses is searched again by artist + title and by its cleaned-up title (no "feat." / "Remastered"), accepted only when its length fits.
 - **Material You accent on a black island**: on Android 12+ the accent follows your wallpaper colours by default (play button, seek / progress bars, rings, action buttons, glyphs, in both the compact pill and the expanded card) while the island itself stays pure black. It follows the Material 3 dark-scheme roles: primary for the accent and filled buttons, secondary container for tonal buttons, tertiary for "good" things (accept, success, charging), error for "bad" ones (decline, low battery), and on-surface tones for text and tiles. Change it at **Style > Colors > Accent** (*Auto* = album-art / app colour, *Material You*, or *Custom*).
+
+## Memory and background use
+
+The island is a long-lived process, so idle cost matters more than peak speed:
+
+- **Display off = quiet.** The once-a-minute clock broadcast is only registered while the screen is on, the equalizer bars stop redrawing, and the music card skips updates (it catches up the moment the screen lights up).
+- **Equalizer bars** redraw at about 20 fps (was 30) and only while visible, playing and the display is on.
+- **Compact music pill** with lyrics ticks once a second instead of 2.5 times a second; the lyric view schedules its own line changes and slide, and a seek or pause re-anchors it immediately.
+- **Bounded caches.** App icons (about 2 MB) and album artwork (about 1 MB) are limited by size, not by count. Lyrics keep the last 40 songs.
+- **Memory pressure.** Both services release icons, artwork and most cached lyrics when Android reports a real shortage (not merely because the settings screen was closed). Everything refills on demand.
+- **No idle threads.** The two lyric-lookup workers exit after 20 s without work instead of living for the whole process.
+- **No redundant image work.** A repeated artwork refresh no longer re-scales the picture, re-reads its colour or re-uploads its texture.
 
 ## Install
 

@@ -30,6 +30,13 @@ public final class ListenerService extends NotificationListenerService {
         try { NotificationListenerService.requestRebind(new ComponentName(this, ListenerService.class)); } catch (Throwable t) { /* ignore */ }
     }
 
+    @Override public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        try {
+            if (Trim.shortage(level)) { Img.trim(); MediaTracker.trim(); }
+        } catch (Throwable t) { /* never crash over a cache */ }
+    }
+
     @Override public void onNotificationPosted(StatusBarNotification sbn, RankingMap rm) {
         handle(sbn, rm, false);
     }

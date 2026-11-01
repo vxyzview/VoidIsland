@@ -22,9 +22,9 @@ final class Style {
     // behaviour
     int qs = QS_UNDER;
     boolean lockShow = false, haptic = true;
-    // idle clock on the compact pill: 0 Dial, 1 Center, 2 Split, 3 Date, 4 Line
+    // idle clock on the compact pill: 0 Dial, 1 Center, 2 Split, 3 Date, 4 Line, 5 Capsule, 6 Sky, 7 Aura, 8 Dots
     int clockStyle = 0;
-    // idle clock on the expanded card: 0 Classic, 1 Digital, 2 Analog, 3 Bold, 4 Week
+    // idle clock on the expanded card: 0 Classic, 1 Digital, 2 Analog, 3 Bold, 4 Week, 5 Rings, 6 Flip, 7 Horizon
     int eClockStyle = 0;
 
     // derived
@@ -74,8 +74,8 @@ final class Style {
         s.qs = clamp(sp.getInt(Prefs.K_QS, QS_UNDER), 0, 2);
         s.lockShow = sp.getBoolean(Prefs.K_LOCK, false);
         s.haptic = sp.getBoolean(Prefs.K_HAPTIC, true);
-        s.clockStyle = clamp(sp.getInt(Prefs.K_CLOCKSTYLE, 0), 0, 4);
-        s.eClockStyle = clamp(sp.getInt(Prefs.K_ECLOCKSTYLE, 0), 0, 4);
+        s.clockStyle = clamp(sp.getInt(Prefs.K_CLOCKSTYLE, 0), 0, 8);
+        s.eClockStyle = clamp(sp.getInt(Prefs.K_ECLOCKSTYLE, 0), 0, 7);
         s.derive(c);
         return s;
     }

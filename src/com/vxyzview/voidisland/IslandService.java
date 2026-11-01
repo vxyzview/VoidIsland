@@ -141,6 +141,21 @@ public final class IslandService extends AccessibilityService {
 
     @Override public void onInterrupt() { }
 
+    /**
+     * The service lives as long as the phone does, so it must give memory back when the system asks. Caches are only
+     * ever a convenience (icons, artwork, lyrics already fetched): all of them refill on demand.
+     */
+    @Override public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        try {
+            if (Trim.shortage(level)) {
+                Img.trim();
+                MediaTracker.trim();
+                Lyrics.trim(Trim.keepSongs(level));
+            }
+        } catch (Throwable t) { /* a failed trim must never take the service down */ }
+    }
+
     @Override public void onConfigurationChanged(Configuration c) {
         super.onConfigurationChanged(c);
         if (ctl != null) ctl.onConfigChanged();

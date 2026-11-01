@@ -567,30 +567,37 @@ public final class MainActivity extends Activity {
 
         LinearLayout ck = m.card(p, "Idle clock");
         ck.addView(label("Compact pill"));
-        ck.addView(m.segmented(new String[]{"Dial", "Center", "Split", "Date", "Line"}, s.clockStyle, new M3.OnSel() {
+        ck.addView(m.segmentedGrid(new String[]{"Dial", "Center", "Split", "Date", "Line", "Capsule", "Sky", "Aura", "Dots"}, s.clockStyle, 5, new M3.OnSel() {
             @Override public void on(int i) { put(Prefs.K_CLOCKSTYLE, i); showPage(1, true); }   // the island itself shows the new clock right away
-        }), m.top(M3.MATCH, dp(40), 0));
+        }), m.top(M3.MATCH, M3.WRAP, 0));
         String[] cd = {"A mini dial whose ring fills with the minutes, the time and date on the right.",
-            "Just the time, centred, with a small AM / PM.",
+            "Just the time, centred and clean, with a small AM / PM.",
             "Hour on the left, minutes on the right, so a camera hole sits right between them.",
             "Day and date on the left, the time on the right.",
-            "The time, centred, over a thin line that fills as the hour goes by."};
+            "The time, centred, over a slim line whose round head travels the hour.",
+            "The time in a filled accent capsule, centred.",
+            "A sun, a sinking sun or a moon for the part of the day, with the time and the part's name.",
+            "Centred digits that fade from your accent colour into white.",
+            "The week as seven dots with today lit up, and the time on the right."};
         TextView cdv = m.body(cd[s.clockStyle]);
         cdv.setPadding(0, dp(10), 0, 0);
         ck.addView(cdv);
         ck.addView(label("Expanded card"));
-        ck.addView(m.segmented(new String[]{"Classic", "Digital", "Analog", "Bold", "Week"}, s.eClockStyle, new M3.OnSel() {
+        ck.addView(m.segmentedGrid(new String[]{"Classic", "Digital", "Analog", "Bold", "Week", "Rings", "Flip", "Horizon"}, s.eClockStyle, 4, new M3.OnSel() {
             @Override public void on(int i) {
                 put(Prefs.K_ECLOCKSTYLE, i);
                 showPage(1, true);
                 if (Prefs.b(MainActivity.this, Prefs.K_CLOCK, true)) Bus.expand("clock");   // open the card for a few seconds so you can see it
             }
-        }), m.top(M3.MATCH, dp(40), 0));
+        }), m.top(M3.MATCH, M3.WRAP, 0));
         String[] ed = {"Big time, a dial with a seconds hand, the date, this week and how much of the day is gone.",
             "A big centred time with the time in words, the date and the day's progress.",
             "A large dial with a seconds hand beside the time and the date, plus the day's progress.",
             "Huge stacked hour and minutes with the date beside them and this week below.",
-            "The time and date up top, then this week and the day's progress. No dial."};
+            "The time and date up top, then this week and the day's progress. No dial.",
+            "Three activity rings: how much of the day, the hour and the minute has gone, with the time beside them.",
+            "A flip clock with a seconds line that fills each minute, the date and the week below.",
+            "The sun (or the moon at night) travels an arc over the time, with the date and the time in words."};
         TextView edv = m.body(ed[s.eClockStyle]);
         edv.setPadding(0, dp(10), 0, 0);
         ck.addView(edv);

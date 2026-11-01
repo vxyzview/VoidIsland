@@ -14,8 +14,17 @@ import android.util.LruCache;
 final class Img {
     private Img() {}
 
-    private static final LruCache<String, Bitmap> ICONS = new LruCache<String, Bitmap>(48);
+    /** App icons, bounded by memory rather than by count (about 2 MB at most). */
+    private static final LruCache<String, Bitmap> ICONS = new LruCache<String, Bitmap>(2 * 1024 * 1024) {
+        @Override protected int sizeOf(String k, Bitmap b) { return Math.max(1, b.getByteCount()); }
+    };
     private static final LruCache<String, String> LABELS = new LruCache<String, String>(96);
+
+    /** Memory is tight: drop the cached icons and labels (anything on screen is held by its own event). */
+    static void trim() {
+        ICONS.evictAll();
+        LABELS.evictAll();
+    }
 
     static Bitmap appIcon(Context c, String pkg) {
         if (pkg == null) return null;
