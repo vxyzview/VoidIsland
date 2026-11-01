@@ -69,5 +69,7 @@ final class Bus {
 
     static void expand(String key) { if (ctl != null) ctl.expandKey(key); }
 
+    static boolean has(String key) { return ctl != null && ctl.hasLive(key); }
+
     static void foreground(String pkg) { if (ctl != null) ctl.setForeground(pkg); }
 }

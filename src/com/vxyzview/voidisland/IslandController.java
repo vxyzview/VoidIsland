@@ -541,6 +541,9 @@ final class IslandController implements IslandView.Host {
 
     void expandKey(String key) { expandLive(live.get(key)); }
 
+    /** True while a live event with this key (real music, a call...) exists. */
+    boolean hasLive(String key) { return live.containsKey(key); }
+
     void setForeground(String pkg) {
         if (pkg == null || pkg.equals(fg)) return;
         fg = pkg;

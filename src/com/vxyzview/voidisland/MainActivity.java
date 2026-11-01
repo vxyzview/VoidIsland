@@ -567,7 +567,7 @@ public final class MainActivity extends Activity {
 
         LinearLayout ck = m.card(p, "Idle clock");
         ck.addView(label("Compact pill"));
-        ck.addView(m.segmentedGrid(new String[]{"Dial", "Center", "Split", "Date", "Line", "Capsule", "Sky", "Aura", "Dots"}, s.clockStyle, 5, new M3.OnSel() {
+        ck.addView(m.segmentedGrid(new String[]{"Dial", "Center", "Split", "Date", "Line", "Capsule", "Sky", "Aura", "Dots", "Beacon"}, s.clockStyle, 5, new M3.OnSel() {
             @Override public void on(int i) { put(Prefs.K_CLOCKSTYLE, i); showPage(1, true); }   // the island itself shows the new clock right away
         }), m.top(M3.MATCH, M3.WRAP, 0));
         String[] cd = {"A mini dial whose ring fills with the minutes, the time and date on the right.",
@@ -578,7 +578,8 @@ public final class MainActivity extends Activity {
             "The time in a filled accent capsule, centred.",
             "A sun, a sinking sun or a moon for the part of the day, with the time and the part's name.",
             "Centred digits that fade from your accent colour into white.",
-            "The week as seven dots with today lit up, and the time on the right."};
+            "The week as seven dots with today lit up, and the time on the right.",
+            "A glowing lamp in a ring that fills with the day, and a softly glowing time with how much of the day has gone."};
         TextView cdv = m.body(cd[s.clockStyle]);
         cdv.setPadding(0, dp(10), 0, 0);
         ck.addView(cdv);
@@ -605,6 +606,35 @@ public final class MainActivity extends Activity {
             TextView off = m.text("The idle clock is off. Turn on Clock when idle under Behavior to see it.", 13.5f, true, m.error);
             off.setPadding(0, dp(12), 0, 0);
             ck.addView(off);
+        }
+
+        LinearLayout mu = m.card(p, "Music");
+        mu.addView(label("Compact pill"));
+        mu.addView(m.segmentedGrid(MusicStyle.CNAMES, s.musicStyle, 5, new M3.OnSel() {
+            @Override public void on(int i) {
+                put(Prefs.K_MSTYLE, i);
+                showPage(1, true);
+                musicPreview(false);   // show the pill with the new design right away
+            }
+        }), m.top(M3.MATCH, M3.WRAP, 0));
+        TextView mcd = m.body(MusicStyle.CDESC[s.musicStyle]);
+        mcd.setPadding(0, dp(10), 0, 0);
+        mu.addView(mcd);
+        mu.addView(label("Expanded card"));
+        mu.addView(m.segmentedGrid(MusicStyle.ENAMES, s.eMusicStyle, 5, new M3.OnSel() {
+            @Override public void on(int i) {
+                put(Prefs.K_EMSTYLE, i);
+                showPage(1, true);
+                musicPreview(true);    // open the card for a few seconds so you can see it
+            }
+        }), m.top(M3.MATCH, M3.WRAP, 0));
+        TextView mev = m.body(MusicStyle.EDESC[s.eMusicStyle]);
+        mev.setPadding(0, dp(10), 0, 0);
+        mu.addView(mev);
+        if (!Prefs.b(this, Prefs.K_MEDIA, true)) {
+            TextView off = m.text("Music is off. Turn on Music under Behavior to see it on the island.", 13.5f, true, m.error);
+            off.setPadding(0, dp(12), 0, 0);
+            mu.addView(off);
         }
 
         LinearLayout ec = m.card(p, "Expanded card");
@@ -899,17 +929,33 @@ public final class MainActivity extends Activity {
         return e;
     }
 
+    /** The demo song (Try it > Music). It uses the real music's key, so it replaces whatever is playing for 30 seconds. */
+    private void postMusicDemo() {
+        IslandEvent e = ev("media", IslandEvent.MEDIA);
+        e.live = true; e.priority = 60;
+        e.title = "Midnight Void"; e.text = "vxyzview"; e.art = demoArt(); e.accent = 0xFFB388FF;
+        e.playing = true; e.durMs = 215000; e.posMs = 62000; e.posAt = SystemClock.elapsedRealtime();
+        e.actions = PlaybackState.ACTION_SEEK_TO;
+        Bus.post(e);
+        dh.postDelayed(new Runnable() { @Override public void run() { Bus.remove("media"); } }, 30000);
+    }
+
+    /**
+     * After picking a music design: make sure there is a song to look at. Real music that is already playing is left alone
+     * (it is redrawn in the new design by itself); otherwise the demo song stands in. The card opens a moment later, once the
+     * island has finished applying the new setting.
+     */
+    private void musicPreview(final boolean expanded) {
+        if (!Bus.active() || !Prefs.b(this, Prefs.K_MEDIA, true)) return;
+        if (!Bus.has("media")) postMusicDemo();
+        if (expanded) dh.postDelayed(new Runnable() { @Override public void run() { Bus.expand("media"); } }, 260);
+    }
+
     private void demo(String code) {
         if (!ready()) return;
         if ("m".equals(code)) {
-            IslandEvent e = ev("media", IslandEvent.MEDIA);
-            e.live = true; e.priority = 60;
-            e.title = "Midnight Void"; e.text = "vxyzview"; e.art = demoArt(); e.accent = 0xFFB388FF;
-            e.playing = true; e.durMs = 215000; e.posMs = 62000; e.posAt = SystemClock.elapsedRealtime();
-            e.actions = PlaybackState.ACTION_SEEK_TO;
-            Bus.post(e);
+            postMusicDemo();
             Bus.expand("media");
-            dh.postDelayed(new Runnable() { @Override public void run() { Bus.remove("media"); } }, 30000);
         } else if ("c".equals(code)) {
             IslandEvent e = ev("call", IslandEvent.CALL);
             e.live = true; e.popup = true; e.incoming = true; e.priority = 100;

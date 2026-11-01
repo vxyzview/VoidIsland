@@ -329,6 +329,7 @@ final class Cards {
         final int side = Gravity.CENTER_VERTICAL;
         switch (e.type) {
             case IslandEvent.MEDIA: {
+                if (S.musicStyle != 0) { Music.compact(c, e, out, h, g, m); break; }   // Vinyl / Ring / Wave / Song live in Music
                 final RoundImage ri = new RoundImage(c);
                 ri.set(e.art != null ? e.art : e.icon, g * 0.3f);
                 out.addView(ri, fl(g, g, Gravity.START | side, m));
@@ -497,10 +498,11 @@ final class Cards {
      * 0 Dial (mini dial left, time + date right), 1 Center (just the time, centred), 2 Split (hour left, minutes right, the camera
      * between them), 3 Date (day left, time right), 4 Line (centred time over a line with a round head that fills as the hour goes),
      * 5 Capsule (the time in a filled accent capsule), 6 Sky (a sun / moon glyph for the part of the day, time right),
-     * 7 Aura (the digits fade from the accent into the text colour), 8 Dots (the week as seven dots, today lit, time right).
+     * 7 Aura (the digits fade from the accent into the text colour), 8 Dots (the week as seven dots, today lit, time right),
+     * 9 Beacon (a glowing lamp inside a ring that fills with the day, and a softly glowing time).
      * Everything repaints once a minute through {@code e.tC}.
      */
-    static final int CLOCK_STYLES = 9;
+    static final int CLOCK_STYLES = 10;
 
     private static void compactClock(Context c, IslandEvent e, FrameLayout out, int h, int g, int m, int side) {
         final boolean use24 = DateFormat.is24HourFormat(c);
@@ -708,6 +710,39 @@ final class Cards {
                 };
                 break;
             }
+            case 9: {   // Beacon: a glowing lamp in a ring that fills with the day on the left, the glowing time on the right
+                final BeaconView bc = new BeaconView(c);
+                bc.style(ac);
+                out.addView(bc, fl(g, g, Gravity.START | side, m));
+                final TextView t = tv(c, "", 15f, WHITE, true);
+                t.setFontFeatureSettings("tnum");
+                t.setLetterSpacing(0.03f);
+                t.setGravity(Gravity.END);
+                t.setShadowLayer(dp(c, 5), 0f, 0f, Col.alpha(ac, 0.9f));   // the glow: text shadow is the one blur a hardware canvas draws
+                final TextView pc = tall ? tv(c, "", 8.5f, ac, true) : null;
+                LinearLayout box = col(c);
+                box.setGravity(Gravity.END);
+                box.addView(t, lp(WRAP, WRAP));
+                if (pc != null) {
+                    pc.setLetterSpacing(0.1f);
+                    pc.setGravity(Gravity.END);
+                    LinearLayout.LayoutParams pl = lp(WRAP, WRAP);
+                    pl.topMargin = dp(c, 1);
+                    box.addView(pc, pl);
+                }
+                out.addView(box, fl(WRAP, WRAP, Gravity.END | side, m));
+                refresh = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        int hh = cal.get(Calendar.HOUR_OF_DAY), mi = cal.get(Calendar.MINUTE);
+                        float day = (hh * 60 + mi) / 1440f;
+                        bc.day(day);
+                        putSpan(t, bigTime(hh, mi, use24, ac, 0.58f));
+                        if (pc != null) putSpan(pc, Math.round(day * 100f) + "% OF DAY");
+                    }
+                };
+                break;
+            }
             default: {   // Dial
                 // Left: a mini dial whose accent ring fills with the minutes of the hour.
                 // Right: the time (accent colon, small dim AM/PM) and, when the pill is tall enough, the date under it.
@@ -752,7 +787,7 @@ final class Cards {
         e.uE = null;
         e.tE = null;
         switch (e.type) {
-            case IslandEvent.MEDIA: return media(c, e);
+            case IslandEvent.MEDIA: return Music.expanded(c, e, width);
             case IslandEvent.CALL: return call(c, e);
             case IslandEvent.PAYMENT: return payment(c, e);
             case IslandEvent.CHARGE: return charge(c, e);
@@ -1426,7 +1461,8 @@ final class Cards {
         return root;
     }
 
-    private static View media(final Context c, final IslandEvent e) {
+    /** The classic music card (style 0); the other styles are built by {@link Music}. */
+    static View media(final Context c, final IslandEvent e) {
         LinearLayout root = col(c);
         root.setPadding(px(c), py(c), px(c), py(c));
         LinearLayout top = row(c);

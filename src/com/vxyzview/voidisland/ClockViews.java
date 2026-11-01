@@ -460,3 +460,57 @@ final class ColonDots extends View {
         c.drawCircle(w / 2f, h * 0.62f, r, p);
     }
 }
+
+/**
+ * The "Beacon" glyph: a ring that fills with the day (midnight to midnight) around a softly glowing core, like a little
+ * lighthouse lamp. The glow is three stacked discs of the accent, so it needs no shader and works on any island colour.
+ */
+final class BeaconView extends View {
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF r = new RectF();
+    private final float d;
+    private float frac = -1f;
+    private int accent = Color.WHITE;
+
+    BeaconView(Context c) {
+        super(c);
+        d = c.getResources().getDisplayMetrics().density;
+        p.setStrokeCap(Paint.Cap.ROUND);
+    }
+
+    void style(int accent) {
+        this.accent = accent;
+        invalidate();
+    }
+
+    /** How much of the day has gone, 0..1; repaints only when the ring would move by a pixel or so. */
+    void day(float f) {
+        f = f < 0f ? 0f : (f > 1f ? 1f : f);
+        if (Math.abs(f - frac) < 0.0007f) return;
+        frac = f;
+        invalidate();
+    }
+
+    @Override protected void onDraw(Canvas c) {
+        if (frac < 0f) return;
+        float w = getWidth(), h = getHeight(), s = Math.min(w, h), cx = w / 2f, cy = h / 2f;
+        float sw = Math.max(1.5f * d, s * 0.1f), rad = s / 2f - sw / 2f;
+        // track + the part of the day that has gone
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(sw);
+        r.set(cx - rad, cy - rad, cx + rad, cy + rad);
+        p.setColor(Col.alpha(accent, 0.22f));
+        c.drawArc(r, 0f, 360f, false, p);
+        p.setColor(accent);
+        c.drawArc(r, -90f, Math.max(4f, 360f * frac), false, p);   // never empty: a dot marks midnight
+        // the lamp: a wide faint halo, a brighter one, then the core
+        float inner = rad - sw / 2f - 0.6f * d;
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Col.alpha(accent, 0.16f));
+        c.drawCircle(cx, cy, inner, p);
+        p.setColor(Col.alpha(accent, 0.38f));
+        c.drawCircle(cx, cy, inner * 0.66f, p);
+        p.setColor(accent);
+        c.drawCircle(cx, cy, Math.max(1.4f * d, inner * 0.36f), p);
+    }
+}

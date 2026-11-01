@@ -22,10 +22,14 @@ final class Style {
     // behaviour
     int qs = QS_UNDER;
     boolean lockShow = false, haptic = true;
-    // idle clock on the compact pill: 0 Dial, 1 Center, 2 Split, 3 Date, 4 Line, 5 Capsule, 6 Sky, 7 Aura, 8 Dots
+    // idle clock on the compact pill: 0 Dial, 1 Center, 2 Split, 3 Date, 4 Line, 5 Capsule, 6 Sky, 7 Aura, 8 Dots, 9 Beacon
     int clockStyle = 0;
     // idle clock on the expanded card: 0 Classic, 1 Digital, 2 Analog, 3 Bold, 4 Week, 5 Rings, 6 Flip, 7 Horizon
     int eClockStyle = 0;
+    // music on the compact pill: 0 Classic, 1 Vinyl, 2 Ring, 3 Wave, 4 Song (see Music)
+    int musicStyle = 0;
+    // music on the expanded card: 0 Classic, 1 Vinyl, 2 Poster, 3 Mini, 4 Lyrics (see Music)
+    int eMusicStyle = 0;
 
     // derived
     int bg = 0xFF000000, text = 0xFFFFFFFF, sub = 0xB3FFFFFF, btn = 0x2EFFFFFF, tile = 0x24FFFFFF, accent = 0xFFB388FF;
@@ -74,8 +78,10 @@ final class Style {
         s.qs = clamp(sp.getInt(Prefs.K_QS, QS_UNDER), 0, 2);
         s.lockShow = sp.getBoolean(Prefs.K_LOCK, false);
         s.haptic = sp.getBoolean(Prefs.K_HAPTIC, true);
-        s.clockStyle = clamp(sp.getInt(Prefs.K_CLOCKSTYLE, 0), 0, 8);
+        s.clockStyle = clamp(sp.getInt(Prefs.K_CLOCKSTYLE, 0), 0, 9);
         s.eClockStyle = clamp(sp.getInt(Prefs.K_ECLOCKSTYLE, 0), 0, 7);
+        s.musicStyle = clamp(sp.getInt(Prefs.K_MSTYLE, 0), 0, MusicStyle.COMPACT - 1);
+        s.eMusicStyle = clamp(sp.getInt(Prefs.K_EMSTYLE, 0), 0, MusicStyle.EXPANDED - 1);
         s.derive(c);
         return s;
     }

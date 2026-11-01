@@ -298,6 +298,14 @@ public class Check {
         ok(Backup.read(Backup.HEADER + "\nb|ok|true\ngarbage\ni|bad|xyz\ni|good|7\n").size() == 2, "backup: damaged lines are skipped, the rest is kept");
         ok(Backup.write(prefs).equals(saved), "backup: the same settings always give the same file");
 
+        // --- Music styles: the lyrics card reads the lines around the current one, and every style has a name and a description
+        Lyrics.Loaded lc = new Lyrics.Loaded(new long[]{1000L, 2000L, 3000L}, new String[]{"a", "b", null}, true);
+        ok("".equals(lc.lineOr(-1)) && "a".equals(lc.lineOr(0)) && "".equals(lc.lineOr(2)) && "".equals(lc.lineOr(3)), "lyrics card: lines outside the song, and null ones, read as empty");
+        ok(lc.indexAt(500L, 0L) == -1 && "".equals(lc.lineOr(lc.indexAt(500L, 0L))) && "a".equals(lc.lineOr(lc.indexAt(500L, 0L) + 1)), "lyrics card: before the first line the next line is the first one");
+        ok("b".equals(lc.lineOr(lc.indexAt(2500L, 0L))) && "a".equals(lc.lineOr(lc.indexAt(2500L, 0L) - 1)), "lyrics card: previous and current line follow the song position");
+        ok(MusicStyle.CNAMES.length == MusicStyle.COMPACT && MusicStyle.CDESC.length == MusicStyle.COMPACT, "music: every compact style has a name and a description");
+        ok(MusicStyle.ENAMES.length == MusicStyle.EXPANDED && MusicStyle.EDESC.length == MusicStyle.EXPANDED, "music: every expanded style has a name and a description");
+
         System.out.println(fails == 0 ? "ALL CHECKS PASSED" : (fails + " FAILED"));
         System.exit(fails == 0 ? 0 : 1);
     }

@@ -25,6 +25,9 @@ final class Lyrics {
             return i >= 0 ? line[i] : null;
         }
 
+        /** Line {@code i}, or "" when there is no such line (before the first line, after the last, or blank). */
+        String lineOr(int i) { return i >= 0 && i < line.length && line[i] != null ? line[i] : ""; }
+
         /** Milliseconds of song position at which the line after the current one starts, or -1 when there is none. */
         long nextStartMs(long ms, long durMs) {
             int i = indexAt(ms, durMs);
