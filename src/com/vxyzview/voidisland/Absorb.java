@@ -12,7 +12,7 @@ final class Absorb {
     /**
      * The one rule for removing an original notification. It is only ever removed when the person opted in, the app is
      * not on the "keep in shade" list, AND the island really took the banner and can show it right now. If the island is
-     * off, crashed, hidden (landscape, lock screen, shade open) or ignoring the app, the original stays where it is.
+     * off, crashed, hidden (fullscreen app, lock screen, shade open) or ignoring the app, the original stays where it is.
      */
     static boolean shouldRemove(boolean optedIn, boolean keptInShade, boolean islandShowing, int type, boolean live, boolean initial) {
         return optedIn && !keptInShade && islandShowing && applies(type, live, initial);

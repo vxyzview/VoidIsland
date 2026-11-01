@@ -58,6 +58,8 @@ final class IslandEvent {
     // runtime hooks, filled in by Cards when views are built
     Updater uC, uE;
     Runnable tC, tE;
+    /** How soon the compact pill next needs a refresh, in ms (0 = the default); set by the card itself, not copied between events. */
+    int tickHint;
     boolean dirty;
 
     IslandEvent(String key, int type) {

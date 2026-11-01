@@ -6,7 +6,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
-import android.content.res.Configuration;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
@@ -46,9 +45,11 @@ final class IslandController implements IslandView.Host {
     private IslandView view;
     private WindowManager.LayoutParams lp;
     private boolean attached, layerApp, shadeOpen, locked, closed;
+    private boolean fullscreen;        // an app has hidden the status bar (video, game, reader): the island steps aside
+    private boolean pendingFull;       // the fullscreen state waiting out its short debounce
+    private boolean screenOn = true;   // timers stop while the screen is dark
     private Style style = new Style();
     private int screenW, screenH;
-    private boolean landscape;
     private float cutCx = Float.NaN, cutCy = Float.NaN;
 
     private final HashSet<String> homes = new HashSet<String>();   // every launcher package: the only "apps" the idle clock stays visible in
@@ -63,7 +64,7 @@ final class IslandController implements IslandView.Host {
     private IslandEvent popup, userExpanded, shown;
     /**
      * shownMode value meaning "the window may be showing anything": the next show() must push its state to the view, even
-     * when that state is null/HIDDEN. Without it, hiding (e.g. rotating to landscape with "Hide in landscape") right after a
+     * when that state is null/HIDDEN. Without it, hiding (e.g. an app going fullscreen) right after a
      * style/config re-apply looked like "already hidden" and left the old pill on screen with nothing behind it to tap.
      */
     private static final int UNKNOWN = -1;
@@ -83,12 +84,19 @@ final class IslandController implements IslandView.Host {
     private final Runnable rebuildRun = new Runnable() {
         @Override public void run() { rebuild(); }
     };
+    private final Runnable fullRun = new Runnable() {
+        @Override public void run() {
+            if (fullscreen == pendingFull) return;
+            fullscreen = pendingFull;
+            evaluate();
+        }
+    };
     private int tickMiss;   // consecutive ticks that found no ticker yet (content is still being swapped in)
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             try {
                 IslandEvent e = shown;
-                if (e == null || shownMode == IslandView.HIDDEN) return;
+                if (e == null || shownMode == IslandView.HIDDEN || !screenOn) return;
                 Runnable t = shownMode == IslandView.COMPACT ? e.tC : e.tE;
                 if (t != null) {
                     tickMiss = 0;
@@ -110,14 +118,16 @@ final class IslandController implements IslandView.Host {
             case IslandEvent.CLOCK: return shownMode == IslandView.EXPANDED ? Parse.nextWallSecondMs(now) : Parse.nextMinuteMs(now);   // the card has a seconds hand
             case IslandEvent.TIMER: return Parse.nextSecondMs(e.when, e.countDown, now) + 8L;
             case IslandEvent.CALL: if (e.chrono && !e.incoming) return Parse.nextSecondMs(e.when, false, now) + 8L; return 1000L;
-            default: return 400L;   // music: lyric line / progress bar
+            default:   // music: lyric line / progress bar; the compact pill asks for a slower beat when nothing on it moves
+                if (shownMode == IslandView.COMPACT && e.tickHint > 0) return e.tickHint;
+                return 400L;
         }
     }
 
     private void startTick(long delay) {
         tickMiss = 0;
         h.removeCallbacks(tick);
-        h.postDelayed(tick, delay);
+        if (screenOn) h.postDelayed(tick, delay);   // a dark screen needs no refreshes; setScreen(true) starts them again
     }
 
     IslandController(AccessibilityService svc) {
@@ -213,6 +223,7 @@ final class IslandController implements IslandView.Host {
         attached = true;
         live.put(clock.key, clock);   // the idle clock lives in the map so expand/swipe treat it like any other pill
         locked = isLocked();
+        try { screenOn = ((android.os.PowerManager) svc.getSystemService(Context.POWER_SERVICE)).isInteractive(); } catch (Throwable t) { screenOn = true; }
         view.post(new Runnable() {
             @Override public void run() {
                 try {
@@ -318,7 +329,6 @@ final class IslandController implements IslandView.Host {
         DisplayMetrics dm = svc.getResources().getDisplayMetrics();
         screenW = dm.widthPixels;
         screenH = dm.heightPixels;
-        landscape = svc.getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
     }
 
     private void readCutout() {
@@ -417,6 +427,23 @@ final class IslandController implements IslandView.Host {
         evaluate();
     }
 
+    /** Screen on / off: no timers while it is dark, and a fresh start the moment it lights up. */
+    void setScreen(boolean on) {
+        if (screenOn == on) return;
+        screenOn = on;
+        if (!attached) return;
+        if (on) { if (shown != null && shownMode != IslandView.HIDDEN) startTick(0); }
+        else h.removeCallbacks(tick);
+    }
+
+    @Override public void onFullscreen(boolean full) {
+        if (!attached || closed) return;
+        pendingFull = full;
+        h.removeCallbacks(fullRun);
+        if (full == fullscreen) return;
+        h.postDelayed(fullRun, Fullscreen.delay(full));
+    }
+
     // ------------------------------------------------------------------ events in
 
     private boolean allowed(IslandEvent e) {
@@ -425,10 +452,10 @@ final class IslandController implements IslandView.Host {
             case IslandEvent.CALL: return Prefs.b(svc, Prefs.K_CALL, true);
             case IslandEvent.PAYMENT: return Prefs.b(svc, Prefs.K_PAY, true);
             case IslandEvent.CHARGE: return Prefs.b(svc, Prefs.K_CHG, true);
-            case IslandEvent.SYSTEM: return Prefs.b(svc, Prefs.K_SYS, true) || "toast".equals(e.key);
+            case IslandEvent.SYSTEM: return Prefs.b(svc, Prefs.K_SYS, true);
             case IslandEvent.LIVE: return Prefs.b(svc, Prefs.K_LIVEACT, true);
             case IslandEvent.PREVIEW: return true;
-            case IslandEvent.CLOCK: return Prefs.b(svc, Prefs.K_CLOCK, true) && !(Prefs.b(svc, Prefs.K_HIDEAPP, true) && appOpen && !neverHide());
+            case IslandEvent.CLOCK: return Prefs.b(svc, Prefs.K_CLOCK, true) && !(Prefs.b(svc, Prefs.K_HIDEAPP, true) && appOpen);
             default: return Prefs.b(svc, Prefs.K_NOTIF, true);
         }
     }
@@ -443,7 +470,7 @@ final class IslandController implements IslandView.Host {
             if (old == null) live.put(e.key, e);
             else old.copyFrom(e);
         } else {
-            // A banner the island cannot show right now (off, landscape, lock screen, shade open) is NOT queued: it would
+            // A banner the island cannot show right now (off, fullscreen, lock screen, shade open) is NOT queued: it would
             // pop up minutes later, stale, and the caller would still think it had been shown. Its original stays in the shade.
             if (suppressed()) return false;
             if (popup != null && popup.key.equals(e.key)) {
@@ -533,13 +560,8 @@ final class IslandController implements IslandView.Host {
 
     // ------------------------------------------------------------------ what to show
 
-    /** True while the foreground app is on the "Never auto-hide" list: the island ignores the hide rules (landscape, idle clock, own-app pill) there. */
-    private boolean neverHide() {
-        return fg.length() > 0 && Prefs.has(svc, Prefs.K_NOHIDE, fg);
-    }
-
     private boolean hiddenBySource(IslandEvent e) {
-        return Prefs.b(svc, Prefs.K_INAPP, true) && e.pkg != null && e.pkg.equals(fg) && !neverHide()
+        return Prefs.b(svc, Prefs.K_INAPP, true) && e.pkg != null && e.pkg.equals(fg)
             && (e.type == IslandEvent.MEDIA || e.type == IslandEvent.CALL);
     }
 
@@ -560,7 +582,7 @@ final class IslandController implements IslandView.Host {
 
     private boolean suppressed() {
         if (!Prefs.b(svc, Prefs.K_ON, true)) return true;
-        if (landscape && Prefs.b(svc, Prefs.K_LAND, true) && !neverHide()) return true;
+        if (Fullscreen.hidden(Prefs.b(svc, Prefs.K_FULL, true), fullscreen)) return true;   // video, game, reader...
         if (!layerApp) {
             if (locked && !style.lockShow) return true;                      // above-status-bar layer would draw over the lock screen
             if (style.qs != Style.QS_TOP && shadeOpen) return true;          // hide while Quick Settings / shade are open

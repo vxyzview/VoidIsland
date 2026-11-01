@@ -28,9 +28,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Per-app switches in three flavours (intent extra "mode"):
+ * Per-app switches in several flavours (intent extra "mode"):
  * 0 = which apps may appear on the island, 1 = apps whose notifications also stay in the shade,
- * 2 = apps the quiet-hours rule applies to (none switched on = all apps), 3 = apps where the island never auto-hides.
+ * 2 = apps the quiet-hours rule applies to (none switched on = all apps), 4 / 5 / 6 = extra ride / food / score apps for live activities (3 is unused).
  */
 public final class AppsActivity extends Activity {
     /** One launcher app: label resolved once, up front, so sorting and scrolling never hit the PackageManager. */
@@ -73,7 +73,8 @@ public final class AppsActivity extends Activity {
         pm = getPackageManager();
         iconPx = m.dp(40);
         int mode = getIntent().getIntExtra(EXTRA_MODE, 0);
-        prefKey = mode == 1 ? Prefs.K_KEEP : (mode == 2 ? Prefs.K_QAPPS : (mode == 3 ? Prefs.K_NOHIDE : Prefs.K_BLOCK));
+        prefKey = mode == 1 ? Prefs.K_KEEP : (mode == 2 ? Prefs.K_QAPPS
+            : (mode == 4 ? Prefs.K_LIVE_RIDE : (mode == 5 ? Prefs.K_LIVE_FOOD : (mode == 6 ? Prefs.K_LIVE_SPORT : Prefs.K_BLOCK))));
         inverted = mode == 0;
         sel = Prefs.set(this, prefKey);
         getWindow().setBackgroundDrawable(new ColorDrawable(m.surface));
@@ -89,11 +90,11 @@ public final class AppsActivity extends Activity {
         LinearLayout bar = m.row();
         bar.addView(m.iconButton(IconView.BACK, "Back", new Runnable() { @Override public void run() { finish(); } }), m.lp(m.dp(48), m.dp(48)));
         root.addView(bar);
-        TextView t = m.text(mode == 1 ? "Keep in shade" : (mode == 2 ? "Quiet hours apps" : (mode == 3 ? "Never auto-hide" : "Apps")), 32f, false, m.onSurface);
+        TextView t = m.text(mode == 1 ? "Keep in shade" : (mode == 2 ? "Quiet hours apps" : (mode == 4 ? "Ride apps" : (mode == 5 ? "Food apps" : (mode == 6 ? "Score apps" : "Apps")))), 32f, false, m.onSurface);
         t.setPadding(m.dp(4), m.dp(8), 0, 0);
         root.addView(t);
         TextView s = m.text(mode == 1 ? "Switch on apps whose notifications should also stay in the normal notification shade, like banking or one-time codes."
-            : (mode == 3 ? "Switch on apps where the island should always stay visible: it will not hide in landscape, and the idle clock and music / call pill stay up inside them."
+            : (mode >= 4 ? "Switch on apps whose ongoing notification should stay on the island as a live activity, even when VoidIsland does not know them yet."
             : (mode == 2 ? "Quiet hours only apply to the apps switched on. Leave them all off to apply quiet hours to every app."
             : "Switch off apps you never want on the island.")), 14f, false, m.onSurfaceVariant);
         s.setPadding(m.dp(4), m.dp(6), 0, m.dp(10));

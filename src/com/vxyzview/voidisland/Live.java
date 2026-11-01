@@ -26,6 +26,15 @@ final class Live {
         return false;
     }
 
+    /** The kind of live activity for {@code pkg}, with the user's own app lists (checked first, so they can override the built-in guesses). */
+    static int kind(String pkg, java.util.Set<String> ride, java.util.Set<String> food, java.util.Set<String> sport) {
+        if (pkg == null || pkg.length() == 0) return NONE;
+        if (food != null && food.contains(pkg)) return FOOD;
+        if (ride != null && ride.contains(pkg)) return RIDE;
+        if (sport != null && sport.contains(pkg)) return SPORT;
+        return kind(pkg);
+    }
+
     static int kind(String pkg) {
         if (pkg == null || pkg.length() == 0) return NONE;
         if (has(FOOD_PKGS, pkg)) return FOOD;

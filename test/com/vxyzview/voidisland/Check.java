@@ -128,6 +128,9 @@ public class Check {
         ok("13:07".equals(Parse.timeOfDay(13, 7, true)), "time 24h: 13 -> 13:07");
         ok("3:03".equals(Parse.timeOfDay(15, 3, false)), "time 12h: 15 -> 3:03");
         ok("23:59".equals(Parse.timeOfDay(23, 59, true)), "time 24h: 23:59");
+        ok(java.util.Arrays.equals(new String[]{"1", "05"}, Parse.timeParts(13, 5, false)), "time parts 12h: 13:05 -> 1 / 05");
+        ok(java.util.Arrays.equals(new String[]{"13", "05"}, Parse.timeParts(13, 5, true)), "time parts 24h: 13:05 -> 13 / 05");
+        ok(java.util.Arrays.equals(new String[]{"12", "00"}, Parse.timeParts(0, 0, false)), "time parts 12h: midnight -> 12 / 00");
         // --- Parse: the clock card's "text clock" line, seconds wake-up and day progress
         ok("Quarter to eleven".equals(Parse.timeWords(10, 45)), "words: 10:45 -> Quarter to eleven");
         ok("Twenty to eleven".equals(Parse.timeWords(10, 40)), "words: 10:40 -> Twenty to eleven");
@@ -234,6 +237,45 @@ public class Check {
         ok(Live.kind("com.shopee.id") == Live.FOOD, "live: prefix match");
         ok(Live.kind("com.whatsapp") == Live.NONE && Live.kind(null) == Live.NONE && Live.kind("") == Live.NONE, "live: ordinary apps are not live activities");
         ok(Live.kind("com.some.foodpanda.app") == Live.FOOD && Live.kind("io.city.taxi") == Live.RIDE, "live: keyword fallback");
+
+        // --- Fullscreen: hide only while an app is fullscreen
+        ok(Fullscreen.hidden(true, true), "fullscreen: a fullscreen app hides the island");
+        ok(!Fullscreen.hidden(true, false), "fullscreen: normal apps (landscape too) keep the island");
+        ok(!Fullscreen.hidden(false, true), "fullscreen: switched off means never hide");
+        ok(Fullscreen.delay(true) > Fullscreen.delay(false), "fullscreen: going fullscreen waits longer than coming back");
+        ok(Fullscreen.legacyFlag(0x4) && Fullscreen.legacyFlag(0x1 | 0x4 | 0x400) && !Fullscreen.legacyFlag(0x400), "fullscreen: Android 10 flag test");
+
+        // --- Lyrics: which players are worth a lookup, and how long a miss is believed
+        ok(!Lyrics.worthLookup("com.google.android.youtube", 200000L) && !Lyrics.worthLookup("com.netflix.mediaclient", 0L), "lyrics: video apps are never looked up");
+        ok(!Lyrics.worthLookup("au.com.shiftyjelly.pocketcasts", 0L) && !Lyrics.worthLookup("fm.podcast.player", 0L), "lyrics: podcast apps are never looked up");
+        ok(!Lyrics.worthLookup("com.spotify.music", Lyrics.LONGEST_SONG_MS + 1), "lyrics: something longer than 15 minutes is not a song");
+        ok(Lyrics.worthLookup("com.spotify.music", 215000L) && Lyrics.worthLookup("com.google.android.apps.youtube.music", 0L) && Lyrics.worthLookup(null, 0L), "lyrics: music players and unknown length are looked up");
+        Lyrics.clearAll();
+        Lyrics.rememberMiss("inst", "z", 5000L, Lyrics.NONE_TTL_MS);
+        ok(Lyrics.missedRecently("inst", "z", 5000L + Lyrics.MISS_TTL_MS + 1) && !Lyrics.missedRecently("inst", "z", 5000L + Lyrics.NONE_TTL_MS), "lyrics: \"no lyrics\" is believed for an hour, a failed lookup only 2 minutes");
+
+        // --- Live activities: the user's own app lists win over the built-in guesses
+        java.util.Set<String> myFood = new java.util.HashSet<String>(); myFood.add("com.whatsapp"); myFood.add("com.ubercab");
+        java.util.Set<String> myRide = new java.util.HashSet<String>(); myRide.add("com.example.shuttle");
+        ok(Live.kind("com.example.shuttle", myRide, null, null) == Live.RIDE, "live: an app on the user's ride list is a ride");
+        ok(Live.kind("com.whatsapp", myRide, myFood, null) == Live.FOOD, "live: the user can add any app");
+        ok(Live.kind("com.ubercab", myRide, myFood, null) == Live.FOOD, "live: the user's list overrides the built-in guess");
+        ok(Live.kind("com.grabtaxi.passenger", null, null, null) == Live.RIDE && Live.kind(null, myRide, myFood, null) == Live.NONE, "live: empty lists change nothing");
+
+        // --- Backup: settings survive a round trip, awkward text included
+        java.util.HashMap<String, Object> prefs = new java.util.HashMap<String, Object>();
+        java.util.HashSet<String> apps = new java.util.HashSet<String>(); apps.add("com.a.b"); apps.add("com.c,d|e");
+        prefs.put("on", Boolean.TRUE); prefs.put("dur", Integer.valueOf(5)); prefs.put("big", Long.valueOf(1234567890123L));
+        prefs.put("scale", Float.valueOf(1.25f)); prefs.put("name", "line1\nline2 | pipe, comma \\ slash"); prefs.put("blocked", apps);
+        String saved = Backup.write(prefs);
+        java.util.Map<String, Object> back = Backup.read(saved);
+        ok(back != null && back.size() == prefs.size(), "backup: every setting comes back");
+        ok(back != null && Boolean.TRUE.equals(back.get("on")) && Integer.valueOf(5).equals(back.get("dur")) && Long.valueOf(1234567890123L).equals(back.get("big")) && Float.valueOf(1.25f).equals(back.get("scale")), "backup: numbers and switches keep their type");
+        ok(back != null && "line1\nline2 | pipe, comma \\ slash".equals(back.get("name")), "backup: newlines, pipes, commas and backslashes survive");
+        ok(back != null && apps.equals(back.get("blocked")), "backup: app lists survive, even with commas in the names");
+        ok(Backup.read("not a backup") == null && Backup.read("") == null && Backup.read(null) == null, "backup: other files are refused");
+        ok(Backup.read(Backup.HEADER + "\nb|ok|true\ngarbage\ni|bad|xyz\ni|good|7\n").size() == 2, "backup: damaged lines are skipped, the rest is kept");
+        ok(Backup.write(prefs).equals(saved), "backup: the same settings always give the same file");
 
         System.out.println(fails == 0 ? "ALL CHECKS PASSED" : (fails + " FAILED"));
         System.exit(fails == 0 ? 0 : 1);

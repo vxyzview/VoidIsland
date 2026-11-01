@@ -54,6 +54,9 @@ final class Bus {
 
     static void clockNow() { if (ctl != null) ctl.clockNow(); }
 
+    /** The screen turned on or off: the island stops its timers while the screen is dark. */
+    static void screen(boolean on) { if (ctl != null) ctl.setScreen(on); }
+
     static void keyguard() { if (ctl != null) ctl.refreshLock(); }
 
     static boolean appLayer() { return ctl != null && ctl.isAppLayer(); }

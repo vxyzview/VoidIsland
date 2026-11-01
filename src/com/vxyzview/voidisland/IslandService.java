@@ -119,16 +119,6 @@ public final class IslandService extends AccessibilityService {
                     if (ListenerService.connected) return; // the listener already has it, with more detail
                     IslandEvent e = Classifier.from(this, pk, (Notification) data, "a:" + pk + ":" + ev.getEventTime(), -1, false);
                     if (e != null && Bus.post(e) && e.chat != null) Rules.chatShown(e.chat, System.currentTimeMillis());
-                } else if (Prefs.b(this, Prefs.K_TOAST, false) && !ev.getText().isEmpty()) {
-                    StringBuilder sb = new StringBuilder();
-                    for (CharSequence t : ev.getText()) { if (sb.length() > 0) sb.append(' '); sb.append(t); }
-                    IslandEvent e = new IslandEvent("toast", IslandEvent.SYSTEM);
-                    e.title = sb.toString();
-                    e.sub = Img.appLabel(this, pk);
-                    e.icon = Img.appIcon(this, pk);
-                    e.pkg = pk;
-                    e.durationMs = 2400;
-                    Bus.post(e);
                 }
                 break;
             }

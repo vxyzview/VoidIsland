@@ -11,12 +11,13 @@ final class Prefs {
 
     // behaviour
     static final String K_ON = "on", K_MEDIA = "f_media", K_NOTIF = "f_notif", K_CALL = "f_call", K_PAY = "f_pay",
-        K_CHG = "f_chg", K_SYS = "f_sys", K_TOAST = "f_toast", K_LAND = "hide_land", K_INAPP = "hide_inapp", K_HIDEAPP = "hide_app",
+        K_CHG = "f_chg", K_SYS = "f_sys", K_FULL = "hide_full", K_INAPP = "hide_inapp", K_HIDEAPP = "hide_app",
         K_HAPTIC = "haptic", K_DUR = "dur", K_ABSORB = "absorb", K_BLOCK = "blocked", K_QS = "qs", K_LOCK = "lock_show", K_POKE = "poke",
-        K_CLOCK = "f_clock", K_LYRICS = "f_lyric", K_THEME = "app_theme",
+        K_CLOCK = "f_clock", K_CLOCKSTYLE = "clock_style", K_ECLOCKSTYLE = "clock_style_e", K_LYRICS = "f_lyric", K_THEME = "app_theme",
         K_LIVEACT = "f_live", K_KEEP = "keep_apps", K_QUIET = "quiet_on", K_QFROM = "quiet_from", K_QTO = "quiet_to",
         K_QAPPS = "quiet_apps", K_NOGROUP = "no_group", K_ONEPERCHAT = "one_per_chat",
-        K_LYROFF = "lyric_off", K_LYRSIZE = "lyric_size", K_NOHIDE = "nohide_apps";
+        K_LYROFF = "lyric_off", K_LYRSIZE = "lyric_size",
+        K_LIVE_RIDE = "live_ride", K_LIVE_FOOD = "live_food", K_LIVE_SPORT = "live_sport";
     // shape + size
     static final String K_SHAPE = "shape", K_ESHAPE = "e_shape", K_CW = "c_w", K_CH = "c_h", K_CR = "c_r", K_CPAD = "c_pad", K_GLYPH = "glyph",
         K_EW = "e_w", K_ER = "e_r", K_PADX = "pad_x", K_PADY = "pad_y", K_TS = "t_scale";
@@ -50,6 +51,12 @@ final class Prefs {
         if (value == null) return false;
         Set<String> s = sp(c).getStringSet(key, null);   // the live set: read only
         return s != null && s.contains(value);
+    }
+
+    /** The stored set itself, read only and never null: for hot paths that must not copy it. Do not modify the result. */
+    static Set<String> view(Context c, String key) {
+        Set<String> s = sp(c).getStringSet(key, null);
+        return s == null ? java.util.Collections.<String>emptySet() : s;
     }
 
     static boolean b(Context c, String k, boolean def) { return sp(c).getBoolean(k, def); }

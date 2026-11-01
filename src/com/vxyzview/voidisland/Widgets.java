@@ -569,8 +569,9 @@ final class ClockFaceView extends View {
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final float d;
     private int hour, min, sec;
-    private boolean showSec;
+    private boolean showSec, sweep;
     private int accent = Color.WHITE;
+    private final RectF oval = new RectF();
 
     ClockFaceView(Context c) {
         super(c);
@@ -580,6 +581,12 @@ final class ClockFaceView extends View {
     void style(int accent, boolean showSeconds) {
         this.accent = accent;
         this.showSec = showSeconds;
+        invalidate();
+    }
+
+    /** Compact pill dial: a soft disc, a ring that fills with the minutes of the hour, and short hour / minute hands. */
+    void sweep(boolean on) {
+        this.sweep = on;
         invalidate();
     }
 
@@ -599,8 +606,30 @@ final class ClockFaceView extends View {
         c.drawLine(cx - sx * tail, cy - sy * tail, cx + sx * len, cy + sy * len, p);
     }
 
+    private void drawSweep(Canvas c, float s, float cx, float cy) {
+        float rw = Math.max(1.7f * d, s * 0.11f), r = s / 2f - rw / 2f;
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Col.alpha(accent, 0.16f));
+        c.drawCircle(cx, cy, r, p);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        p.setStrokeWidth(rw);
+        p.setColor(Cards.track());
+        c.drawCircle(cx, cy, r, p);
+        oval.set(cx - r, cy - r, cx + r, cy + r);
+        p.setColor(accent);
+        c.drawArc(oval, -90f, Math.max(5f, min * 6f), false, p);   // never empty: a dot marks the top of the hour
+        float hw = Math.max(1.2f * d, s * 0.085f);
+        hand(c, cx, cy, ((hour % 12) + min / 60f) * 30f, r * 0.42f, 0f, hw * 1.25f, Cards.WHITE);
+        hand(c, cx, cy, min * 6f, r * 0.68f, 0f, hw, Col.alpha(Cards.WHITE, 0.85f));
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(accent);
+        c.drawCircle(cx, cy, hw * 0.9f, p);
+    }
+
     @Override protected void onDraw(Canvas c) {
         float w = getWidth(), h = getHeight(), s = Math.min(w, h), cx = w / 2f, cy = h / 2f;
+        if (sweep && s < 44f * d) { drawSweep(c, s, cx, cy); return; }
         float sw = Math.max(1.4f * d, s * 0.07f), r = s / 2f - sw / 2f;
         boolean big = s >= 44f * d;
         p.setStyle(Paint.Style.STROKE);
@@ -625,6 +654,37 @@ final class ClockFaceView extends View {
         p.setStyle(Paint.Style.FILL);
         p.setColor(accent);
         c.drawCircle(cx, cy, sw * 1.1f, p);
+    }
+}
+
+/** A thin rounded line that fills with the minutes of the hour (never empty: a dot marks the start). */
+final class MinuteBar extends View {
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF r = new RectF();
+    private int minute, accent = Color.WHITE;
+
+    MinuteBar(Context c) { super(c); }
+
+    void style(int accent) {
+        this.accent = accent;
+        invalidate();
+    }
+
+    void minute(int m) {
+        if (m == minute) return;
+        minute = m;
+        invalidate();
+    }
+
+    @Override protected void onDraw(Canvas c) {
+        float w = getWidth(), h = getHeight();
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Cards.track());
+        r.set(0f, 0f, w, h);
+        c.drawRoundRect(r, h / 2f, h / 2f, p);
+        p.setColor(accent);
+        r.set(0f, 0f, Math.max(h, w * minute / 60f), h);
+        c.drawRoundRect(r, h / 2f, h / 2f, p);
     }
 }
 

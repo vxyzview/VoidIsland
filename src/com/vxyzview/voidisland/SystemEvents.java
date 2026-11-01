@@ -38,6 +38,8 @@ final class SystemEvents {
                 String a = i.getAction();
                 if (a == null) return;
                 if (Intent.ACTION_SCREEN_ON.equals(a) || Intent.ACTION_SCREEN_OFF.equals(a) || Intent.ACTION_USER_PRESENT.equals(a)) {
+                    if (Intent.ACTION_SCREEN_ON.equals(a)) Bus.screen(true);
+                    else if (Intent.ACTION_SCREEN_OFF.equals(a)) Bus.screen(false);
                     Bus.keyguard();
                     if (Intent.ACTION_SCREEN_ON.equals(a)) Bus.clockNow();
                 }

@@ -144,6 +144,13 @@ final class Parse {
         return String.format(Locale.US, "%d:%02d", h, minute);
     }
 
+    /** The two halves of {@link #timeOfDay}: {"1", "05"} (12 h) or {"13", "05"} (24 h), for clocks that show hours and minutes apart. */
+    static String[] timeParts(int hour24, int minute, boolean use24) {
+        String t = timeOfDay(hour24, minute, use24);
+        int c = t.indexOf(':');
+        return new String[]{t.substring(0, c), t.substring(c + 1)};
+    }
+
     /** Milliseconds until the wall clock's second changes (the expanded clock card shows a seconds hand). */
     static long nextWallSecondMs(long now) {
         return 1000L - (now % 1000L) + 5L;

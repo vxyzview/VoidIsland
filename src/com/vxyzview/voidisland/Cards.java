@@ -174,6 +174,7 @@ final class Cards {
         TextView t = tv(c, label, 14.5f, fg, true);
         t.setPadding(icon >= 0 ? dp(c, 6) : 0, 0, 0, 0);
         b.addView(t);
+        b.setContentDescription(label);   // screen readers announce the button by its label
         b.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { run.run(); }
         });
@@ -245,6 +246,14 @@ final class Cards {
     static String clockText(boolean use24) {
         Calendar cal = Calendar.getInstance();
         return Parse.timeOfDay(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), use24);
+    }
+
+    /** "SUN, NOV 1": the short caption under the compact clock, in the phone's language and date order. */
+    static String shortDate(long now) {
+        String pat;
+        try { pat = DateFormat.getBestDateTimePattern(java.util.Locale.getDefault(), "EEEMMMd"); }
+        catch (Throwable t) { pat = "EEE, MMM d"; }
+        return DateFormat.format(pat, now).toString().toUpperCase(java.util.Locale.getDefault());
     }
 
     private static CharSequence dateText() {
@@ -339,8 +348,9 @@ final class Cards {
                 final Runnable show = new Runnable() {
                     @Override public void run() {
                         Lyrics.Loaded l = lnow[0];
-                        if (l == null) { ls.tick(0, 0, false, 1f); ls.setVisibility(View.INVISIBLE); eq.setVisibility(View.VISIBLE); }
+                        if (l == null) { e.tickHint = 1500; ls.tick(0, 0, false, 1f); ls.setVisibility(View.INVISIBLE); eq.setVisibility(View.VISIBLE); }
                         else {
+                            e.tickHint = e.playing ? 0 : 1000;   // lyrics only slide while the song plays
                             ls.bind(l, lw, WHITE, SUB, Prefs.i(c, Prefs.K_LYRSIZE, 13));
                             // lyrics may be nudged earlier (+) or later (-) to match this player and phone
                             ls.tick(position(e) + Prefs.i(c, Prefs.K_LYROFF, 200), e.durMs, e.playing, e.speed);
@@ -432,25 +442,7 @@ final class Cards {
                 break;
             }
             case IslandEvent.CLOCK: {
-                // a live mini analog face on the left, the time on the right with a small dim AM/PM and an accent colon
-                final boolean use24 = DateFormat.is24HourFormat(c);
-                final int ac = acc(e);
-                final ClockFaceView face = new ClockFaceView(c);
-                face.style(ac, false);
-                out.addView(face, fl(g, g, Gravity.START | side, m));
-                final TextView t = tv(c, "", 13f, WHITE, true);
-                t.setFontFeatureSettings("tnum");
-                out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
-                final Runnable refresh = new Runnable() {
-                    @Override public void run() {
-                        Calendar cal = Calendar.getInstance();
-                        int hr = cal.get(Calendar.HOUR_OF_DAY), mn = cal.get(Calendar.MINUTE);
-                        face.time(hr, mn, 0);
-                        putSpan(t, bigTime(hr, mn, use24, ac, 0.62f));
-                    }
-                };
-                refresh.run();
-                e.tC = refresh;
+                compactClock(c, e, out, h, g, m, side);
                 break;
             }
             default: {
@@ -471,6 +463,170 @@ final class Cards {
                 @Override public boolean update() { return e.chrono == ch && e.incoming == inc && e.icon == ic && e.iconType == it; }
             };
         }
+    }
+
+    // ---------------------------------------------------------------- idle clock (compact pill)
+
+    /** "PM" / "AM" in the phone's language. */
+    private static String ampm(int hour24) {
+        String[] ap = new DateFormatSymbols().getAmPmStrings();
+        return hour24 % 24 >= 12 ? ap[1] : ap[0];
+    }
+
+    /** {@code text} followed by a small dim AM / PM (12 h only). */
+    private static CharSequence withAmPm(CharSequence text, int hour24, boolean use24, float size) {
+        SpannableStringBuilder sb = new SpannableStringBuilder(text);
+        if (!use24) {
+            int from = sb.length();
+            sb.append(' ').append(ampm(hour24));
+            sb.setSpan(new RelativeSizeSpan(size), from, sb.length(), SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
+            sb.setSpan(new ForegroundColorSpan(SUB), from, sb.length(), SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        return sb;
+    }
+
+    private static CharSequence tint(String text, int color) {
+        SpannableStringBuilder sb = new SpannableStringBuilder(text);
+        sb.setSpan(new ForegroundColorSpan(color), 0, sb.length(), SpannableStringBuilder.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return sb;
+    }
+
+    /**
+     * The idle clock on the compact pill, in the style chosen under Style > Idle clock:
+     * 0 Dial (mini dial left, time + date right), 1 Center (time only, centred), 2 Split (hour left, minutes right, the camera
+     * between them), 3 Date (day left, time right), 4 Line (centred time over a line that fills with the hour).
+     * Everything repaints once a minute through {@code e.tC}.
+     */
+    private static void compactClock(Context c, IslandEvent e, FrameLayout out, int h, int g, int m, int side) {
+        final boolean use24 = DateFormat.is24HourFormat(c);
+        final int ac = acc(e);
+        final boolean tall = h >= dp(c, (14.5f + 8.5f) * TS * 1.2f + 4f);   // room for two lines of text
+        final Runnable refresh;
+        switch (S.clockStyle) {
+            case 1: {
+                final TextView t = tv(c, "", 15.5f, WHITE, true);
+                t.setFontFeatureSettings("tnum");
+                t.setLetterSpacing(0.02f);
+                out.addView(t, fl(WRAP, WRAP, Gravity.CENTER, 0));
+                refresh = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        putSpan(t, bigTime(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), use24, ac, 0.58f));
+                    }
+                };
+                break;
+            }
+            case 2: {
+                final TextView hr = tv(c, "", 15.5f, WHITE, true);
+                final TextView mn = tv(c, "", 15.5f, ac, true);
+                hr.setFontFeatureSettings("tnum");
+                mn.setFontFeatureSettings("tnum");
+                out.addView(hr, fl(WRAP, WRAP, Gravity.START | side, m + dp(c, 2)));
+                out.addView(mn, fl(WRAP, WRAP, Gravity.END | side, m + dp(c, 2)));
+                refresh = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        int hh = cal.get(Calendar.HOUR_OF_DAY);
+                        String[] parts = Parse.timeParts(hh, cal.get(Calendar.MINUTE), use24);
+                        putSpan(hr, parts[0]);
+                        putSpan(mn, withAmPm(tint(parts[1], ac), hh, use24, 0.58f));
+                    }
+                };
+                break;
+            }
+            case 3: {
+                final TextView t = tv(c, "", 14.5f, WHITE, true);
+                t.setFontFeatureSettings("tnum");
+                t.setLetterSpacing(0.02f);
+                out.addView(t, fl(WRAP, WRAP, Gravity.END | side, m));
+                final TextView wd = tv(c, "", tall ? 8.5f : 12.5f, ac, true);
+                final TextView dn = tall ? tv(c, "", 14.5f, WHITE, true) : null;
+                wd.setLetterSpacing(0.08f);
+                LinearLayout box = col(c);
+                box.setGravity(Gravity.START);
+                box.addView(wd, lp(WRAP, WRAP));
+                if (dn != null) {
+                    LinearLayout.LayoutParams dl = lp(WRAP, WRAP);
+                    dl.topMargin = dp(c, 1);
+                    box.addView(dn, dl);
+                }
+                out.addView(box, fl(WRAP, WRAP, Gravity.START | side, m + dp(c, 2)));
+                refresh = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        int hh = cal.get(Calendar.HOUR_OF_DAY);
+                        putSpan(t, bigTime(hh, cal.get(Calendar.MINUTE), use24, ac, 0.58f));
+                        String day = String.valueOf(cal.get(Calendar.DAY_OF_MONTH));
+                        String name = DateFormat.format("EEE", cal.getTimeInMillis()).toString().toUpperCase(java.util.Locale.getDefault());
+                        if (dn != null) { putSpan(wd, name); putSpan(dn, day); }
+                        else putSpan(wd, name + " " + day);
+                    }
+                };
+                break;
+            }
+            case 4: {
+                final TextView t = tv(c, "", 15.5f, WHITE, true);
+                t.setFontFeatureSettings("tnum");
+                t.setLetterSpacing(0.02f);
+                t.setGravity(Gravity.CENTER);
+                final boolean bar = h >= dp(c, 15.5f * TS * 1.2f + 3f + 2.5f + 8f);
+                final MinuteBar mb = bar ? new MinuteBar(c) : null;
+                LinearLayout box = col(c);
+                box.setGravity(Gravity.CENTER_HORIZONTAL);
+                box.addView(t, lp(WRAP, WRAP));
+                if (mb != null) {
+                    mb.style(ac);
+                    LinearLayout.LayoutParams bl = lp(dp(c, 34f), dp(c, 2.5f));
+                    bl.topMargin = dp(c, 3f);
+                    box.addView(mb, bl);
+                }
+                out.addView(box, fl(WRAP, WRAP, Gravity.CENTER, 0));
+                refresh = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        int mi = cal.get(Calendar.MINUTE);
+                        putSpan(t, bigTime(cal.get(Calendar.HOUR_OF_DAY), mi, use24, ac, 0.58f));
+                        if (mb != null) mb.minute(mi);
+                    }
+                };
+                break;
+            }
+            default: {
+                // Left: a mini dial whose accent ring fills with the minutes of the hour.
+                // Right: the time (accent colon, small dim AM/PM) and, when the pill is tall enough, the date under it.
+                final ClockFaceView face = new ClockFaceView(c);
+                face.style(ac, false);
+                face.sweep(true);
+                out.addView(face, fl(g, g, Gravity.START | side, m));
+                final TextView t = tv(c, "", 14.5f, WHITE, true);
+                t.setFontFeatureSettings("tnum");
+                t.setLetterSpacing(0.02f);
+                t.setGravity(Gravity.END);
+                final TextView dt = tall ? tv(c, "", 8.5f, SUB, true) : null;
+                LinearLayout box = col(c);
+                box.setGravity(Gravity.END);
+                box.addView(t, lp(WRAP, WRAP));
+                if (dt != null) {
+                    dt.setLetterSpacing(0.08f);
+                    dt.setGravity(Gravity.END);
+                    LinearLayout.LayoutParams dl = lp(WRAP, WRAP);
+                    dl.topMargin = dp(c, 1);
+                    box.addView(dt, dl);
+                }
+                out.addView(box, fl(WRAP, WRAP, Gravity.END | side, m));
+                refresh = new Runnable() {
+                    @Override public void run() {
+                        Calendar cal = Calendar.getInstance();
+                        int hr = cal.get(Calendar.HOUR_OF_DAY), mn = cal.get(Calendar.MINUTE);
+                        face.time(hr, mn, 0);
+                        putSpan(t, bigTime(hr, mn, use24, ac, 0.62f));
+                        if (dt != null) putSpan(dt, shortDate(cal.getTimeInMillis()));
+                    }
+                };
+            }
+        }
+        refresh.run();
+        e.tC = refresh;
     }
 
     // ---------------------------------------------------------------- expanded cards
@@ -781,72 +937,208 @@ final class Cards {
         return root;
     }
 
+    /** "Day  [bar]  42%": how much of the day is gone. */
+    private static final class DayRow {
+        final LinearLayout row;
+        final SeekView bar;
+        final TextView pct;
+
+        DayRow(Context c, int ac, int topPad) {
+            row = Cards.row(c);
+            row.setPadding(0, dp(c, topPad), 0, 0);
+            bar = new SeekView(c);
+            bar.setInteractive(false);
+            bar.setColor(ac);
+            pct = tv(c, "", 12f, WHITE, true);
+            pct.setFontFeatureSettings("tnum");
+            row.addView(tv(c, "Day", 11.5f, SUB, false));
+            LinearLayout.LayoutParams bp = lpw(0, dp(c, 18), 1f);
+            bp.setMarginStart(dp(c, 10));
+            bp.setMarginEnd(dp(c, 10));
+            row.addView(bar, bp);
+            row.addView(pct);
+        }
+    }
+
+    private static TextView endAligned(TextView t) {
+        t.setGravity(Gravity.END);
+        return t;
+    }
+
     /**
-     * Expanded clock: big time (accent colon, small AM/PM), the time in words, an analog face with a seconds hand, the date and
-     * week number, this week with today circled in the accent, and how much of the day is gone.
+     * The expanded idle clock, in the style chosen under Style > Idle clock:
+     * 0 Classic (big time, time in words, dial with a seconds hand, date, this week, the day's progress),
+     * 1 Digital (a big centred time, words, date, progress), 2 Analog (a large dial beside the time and date, progress),
+     * 3 Bold (huge stacked hour and minutes, the date beside them, this week), 4 Week (time and date, this week, progress).
      */
     private static View clockCard(final Context c, final IslandEvent e) {
         final boolean use24 = DateFormat.is24HourFormat(c);
         final int ac = acc(e), acOn = S.accentOverride ? S.accentOn : Col.onColor(ac);
+        final int style = S.eClockStyle;
+        final int match = ViewGroup.LayoutParams.MATCH_PARENT;
         LinearLayout root = col(c);
         root.setPadding(px(c), py(c), px(c), py(c));
 
-        LinearLayout top = row(c);
-        LinearLayout left = col(c);
-        final TextView time = tv(c, "", 46f, WHITE, true);
-        time.setFontFeatureSettings("tnum");
-        final TextView words = tv(c, "", 13.5f, SUB, false);
-        words.setPadding(0, dp(c, 4), 0, 0);
-        left.addView(time);
-        left.addView(words);
-        top.addView(left, lpw(0, WRAP, 1f));
-        final ClockFaceView face = new ClockFaceView(c);
-        face.style(ac, true);
-        top.addView(face, lp(dp(c, 76), dp(c, 76)));
-        root.addView(top);
-
-        LinearLayout dl = row(c);
-        dl.setPadding(0, dp(c, 12), 0, 0);
-        final TextView date = tv(c, "", 15f, WHITE, true);
-        final TextView week = tv(c, "", 12.5f, SUB, false);
-        dl.addView(date, lpw(0, WRAP, 1f));
-        dl.addView(week);
-        root.addView(dl);
-
-        final WeekStrip strip = new WeekStrip(c);
-        strip.style(ac, acOn);
-        LinearLayout.LayoutParams sp = lp(ViewGroup.LayoutParams.MATCH_PARENT, dp(c, 54));
-        sp.topMargin = dp(c, 6);
-        root.addView(strip, sp);
-
-        LinearLayout pr = row(c);
-        pr.setPadding(0, dp(c, 4), 0, 0);
-        final SeekView bar = new SeekView(c);
-        bar.setInteractive(false);
-        bar.setColor(ac);
-        final TextView pct = tv(c, "", 12f, WHITE, true);
-        pct.setFontFeatureSettings("tnum");
-        pr.addView(tv(c, "Day", 11.5f, SUB, false));
-        LinearLayout.LayoutParams bp = lpw(0, dp(c, 18), 1f);
-        bp.setMarginStart(dp(c, 10));
-        bp.setMarginEnd(dp(c, 10));
-        pr.addView(bar, bp);
-        pr.addView(pct);
-        root.addView(pr);
+        TextView time0 = null, words0 = null, date0 = null, week0 = null, hour0 = null, min0 = null, dow0 = null;
+        ClockFaceView face0 = null;
+        WeekStrip strip0 = null;
+        DayRow day0 = null;
+        switch (style) {
+            case 1: {   // Digital
+                root.setGravity(Gravity.CENTER_HORIZONTAL);
+                time0 = tv(c, "", 62f, WHITE, true);
+                time0.setFontFeatureSettings("tnum");
+                words0 = tv(c, "", 13.5f, SUB, false);
+                words0.setPadding(0, dp(c, 2), 0, 0);
+                root.addView(time0, lp(WRAP, WRAP));
+                root.addView(words0, lp(WRAP, WRAP));
+                LinearLayout dl = row(c);
+                dl.setPadding(0, dp(c, 12), 0, 0);
+                date0 = tv(c, "", 15f, WHITE, true);
+                week0 = tv(c, "", 12.5f, SUB, false);
+                week0.setPadding(dp(c, 10), 0, 0, 0);
+                dl.addView(date0);
+                dl.addView(week0);
+                root.addView(dl, lp(WRAP, WRAP));
+                day0 = new DayRow(c, ac, 14);
+                root.addView(day0.row, lp(match, WRAP));
+                break;
+            }
+            case 2: {   // Analog
+                LinearLayout top = row(c);
+                face0 = new ClockFaceView(c);
+                face0.style(ac, true);
+                top.addView(face0, lp(dp(c, 116), dp(c, 116)));
+                LinearLayout info = col(c);
+                info.setPadding(dp(c, 16), 0, 0, 0);
+                time0 = tv(c, "", 36f, WHITE, true);
+                time0.setFontFeatureSettings("tnum");
+                date0 = tv(c, "", 15f, WHITE, true);
+                date0.setPadding(0, dp(c, 6), 0, 0);
+                week0 = tv(c, "", 12.5f, SUB, false);
+                week0.setPadding(0, dp(c, 2), 0, 0);
+                info.addView(time0);
+                info.addView(date0);
+                info.addView(week0);
+                top.addView(info, lpw(0, WRAP, 1f));
+                root.addView(top);
+                day0 = new DayRow(c, ac, 12);
+                root.addView(day0.row, lp(match, WRAP));
+                break;
+            }
+            case 3: {   // Bold
+                LinearLayout top = row(c);
+                LinearLayout stack = col(c);
+                hour0 = tv(c, "", 60f, WHITE, true);
+                hour0.setFontFeatureSettings("tnum");
+                min0 = tv(c, "", 60f, ac, true);
+                min0.setFontFeatureSettings("tnum");
+                stack.addView(hour0);
+                stack.addView(min0);
+                top.addView(stack, lp(WRAP, WRAP));
+                LinearLayout info = col(c);
+                info.setGravity(Gravity.END);
+                dow0 = endAligned(tv(c, "", 12.5f, ac, true));
+                dow0.setLetterSpacing(0.12f);
+                date0 = endAligned(tv(c, "", 24f, WHITE, true));
+                date0.setPadding(0, dp(c, 2), 0, 0);
+                week0 = endAligned(tv(c, "", 12.5f, SUB, false));
+                words0 = endAligned(tv(c, "", 13f, SUB, false));
+                words0.setPadding(0, dp(c, 8), 0, 0);
+                info.addView(dow0);
+                info.addView(date0);
+                info.addView(week0);
+                info.addView(words0);
+                top.addView(info, lpw(0, WRAP, 1f));
+                root.addView(top);
+                strip0 = new WeekStrip(c);
+                strip0.style(ac, acOn);
+                LinearLayout.LayoutParams sp = lp(match, dp(c, 54));
+                sp.topMargin = dp(c, 10);
+                root.addView(strip0, sp);
+                break;
+            }
+            case 4: {   // Week
+                LinearLayout top = row(c);
+                time0 = tv(c, "", 38f, WHITE, true);
+                time0.setFontFeatureSettings("tnum");
+                top.addView(time0, lpw(0, WRAP, 1f));
+                LinearLayout info = col(c);
+                info.setGravity(Gravity.END);
+                date0 = endAligned(tv(c, "", 15f, WHITE, true));
+                week0 = endAligned(tv(c, "", 12.5f, SUB, false));
+                week0.setPadding(0, dp(c, 2), 0, 0);
+                info.addView(date0);
+                info.addView(week0);
+                top.addView(info, lp(WRAP, WRAP));
+                root.addView(top);
+                strip0 = new WeekStrip(c);
+                strip0.style(ac, acOn);
+                LinearLayout.LayoutParams sp = lp(match, dp(c, 54));
+                sp.topMargin = dp(c, 8);
+                root.addView(strip0, sp);
+                day0 = new DayRow(c, ac, 6);
+                root.addView(day0.row, lp(match, WRAP));
+                break;
+            }
+            default: {   // Classic
+                LinearLayout top = row(c);
+                LinearLayout left = col(c);
+                time0 = tv(c, "", 46f, WHITE, true);
+                time0.setFontFeatureSettings("tnum");
+                words0 = tv(c, "", 13.5f, SUB, false);
+                words0.setPadding(0, dp(c, 4), 0, 0);
+                left.addView(time0);
+                left.addView(words0);
+                top.addView(left, lpw(0, WRAP, 1f));
+                face0 = new ClockFaceView(c);
+                face0.style(ac, true);
+                top.addView(face0, lp(dp(c, 76), dp(c, 76)));
+                root.addView(top);
+                LinearLayout dl = row(c);
+                dl.setPadding(0, dp(c, 12), 0, 0);
+                date0 = tv(c, "", 15f, WHITE, true);
+                week0 = tv(c, "", 12.5f, SUB, false);
+                dl.addView(date0, lpw(0, WRAP, 1f));
+                dl.addView(week0);
+                root.addView(dl);
+                strip0 = new WeekStrip(c);
+                strip0.style(ac, acOn);
+                LinearLayout.LayoutParams sp = lp(match, dp(c, 54));
+                sp.topMargin = dp(c, 6);
+                root.addView(strip0, sp);
+                day0 = new DayRow(c, ac, 4);
+                root.addView(day0.row, lp(match, WRAP));
+            }
+        }
+        final TextView time = time0, words = words0, date = date0, week = week0, hourT = hour0, minT = min0, dow = dow0;
+        final ClockFaceView face = face0;
+        final WeekStrip strip = strip0;
+        final DayRow day = day0;
+        final float suffix = style == 1 ? 0.3f : (style == 0 ? 0.34f : 0.4f);
 
         final Runnable tick = new Runnable() {
             @Override public void run() {
                 Calendar cal = Calendar.getInstance();
+                long ms = cal.getTimeInMillis();
                 int hr = cal.get(Calendar.HOUR_OF_DAY), mn = cal.get(Calendar.MINUTE), sc = cal.get(Calendar.SECOND);
-                face.time(hr, mn, sc);
-                putSpan(time, bigTime(hr, mn, use24, ac, 0.34f));
-                put(words, Parse.timeWords(hr, mn));
-                put(date, dateText().toString());
-                put(week, "Week " + cal.get(Calendar.WEEK_OF_YEAR));
-                strip.update(cal.getTimeInMillis());
-                float f = Parse.dayFrac(hr, mn, sc);
-                bar.setFrac(f);
-                put(pct, Math.round(f * 100f) + "%");
+                if (face != null) face.time(hr, mn, sc);
+                if (time != null) putSpan(time, bigTime(hr, mn, use24, ac, suffix));
+                if (hourT != null && minT != null) {
+                    String[] parts = Parse.timeParts(hr, mn, use24);
+                    putSpan(hourT, parts[0]);
+                    putSpan(minT, withAmPm(tint(parts[1], ac), hr, use24, 0.28f));
+                }
+                if (words != null) put(words, Parse.timeWords(hr, mn));
+                if (dow != null) put(dow, DateFormat.format("EEEE", ms).toString().toUpperCase(java.util.Locale.getDefault()));
+                if (date != null) put(date, style == 3 ? DateFormat.format("MMM d", ms).toString() : dateText().toString());
+                if (week != null) put(week, "Week " + cal.get(Calendar.WEEK_OF_YEAR));
+                if (strip != null) strip.update(ms);
+                if (day != null) {
+                    float f = Parse.dayFrac(hr, mn, sc);
+                    day.bar.setFrac(f);
+                    put(day.pct, Math.round(f * 100f) + "%");
+                }
             }
         };
         tick.run();
@@ -935,6 +1227,9 @@ final class Cards {
         next.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
         if (S.accentOverride) play.setPadding(dp(c, 24), dp(c, 14), dp(c, 24), dp(c, 14));   // glyph sits inside the filled pill
         else play.setPadding(dp(c, 12), dp(c, 8), dp(c, 12), dp(c, 8));
+        prev.setContentDescription("Previous track");
+        next.setContentDescription("Next track");
+        play.setContentDescription("Play or pause");
         prev.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 0); } });
         next.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 2); } });
         play.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 1); } });
@@ -993,6 +1288,9 @@ final class Cards {
         new java.util.concurrent.ThreadFactory() {
             @Override public Thread newThread(Runnable r) { Thread t = new Thread(r, "vi-lyrics"); t.setDaemon(true); return t; }
         });
+    /** Set by the worker that ran a lookup when it failed to reach the service (as opposed to being told there are no lyrics). */
+    private static final ThreadLocal<Boolean> NET_ERR = new ThreadLocal<Boolean>();
+
     /** Lookups already running, by song: a second view asking for the same song waits for that answer. Main thread only. */
     private static final java.util.HashMap<String, java.util.ArrayList<GotLyrics>> INFLIGHT = new java.util.HashMap<String, java.util.ArrayList<GotLyrics>>();
 
@@ -1012,11 +1310,13 @@ final class Cards {
                 @Override public void run() {
                     // An exception on this worker thread would kill the whole process (and with it the accessibility service).
                     Lyrics.Loaded found = null;
-                    try { found = lyricsNet(track, artist, durS); } catch (Throwable t) { /* odd lyric sheet / network hiccup: no lyrics */ }
+                    NET_ERR.set(Boolean.FALSE);
+                    try { found = lyricsNet(track, artist, durS); } catch (Throwable t) { NET_ERR.set(Boolean.TRUE); /* odd lyric sheet / network hiccup: no lyrics */ }
                     final Lyrics.Loaded l = found;
+                    final boolean none = found == null && !Boolean.TRUE.equals(NET_ERR.get());   // answered "nothing here" vs. could not ask
                     MAIN.post(new Runnable() {
                         @Override public void run() {
-                            if (l == null) Lyrics.rememberMiss(track, artist, System.currentTimeMillis());
+                            if (l == null) Lyrics.rememberMiss(track, artist, System.currentTimeMillis(), none ? Lyrics.NONE_TTL_MS : Lyrics.MISS_TTL_MS);
                             java.util.ArrayList<GotLyrics> all = INFLIGHT.remove(fk);
                             if (all != null) for (GotLyrics g : all) {
                                 try { g.got(track, artist, l); } catch (Throwable t) { /* that card is gone or broken: the rest still get their answer */ }
@@ -1037,6 +1337,7 @@ final class Cards {
         final String track = e.title == null ? "" : e.title.toString().trim();
         final String artist = e.text == null ? "" : e.text.toString().trim();
         if (track.length() == 0) { now[0] = null; key[0] = ""; on.run(); return; }
+        if (!Lyrics.worthLookup(e.pkg, e.durMs)) { now[0] = null; key[0] = ""; on.run(); return; }   // video / podcast apps: no lookup
         final String k = track + "|" + artist + "|" + (e.durMs / 1000);
         if (k.equals(key[0])) return;   // already working on this exact song (found or not)
         key[0] = k;
@@ -1064,6 +1365,7 @@ final class Cards {
             best = httpJson(q);   // null = no exact record (404) or a busy-server 503 — the search fallback still runs
         } catch (Throwable t) { /* fall through to search */ }
         if (best == null) {
+            NET_ERR.set(Boolean.FALSE);   // only the search decides whether this miss is believable (the exact lookup 404s for most songs)
             try {
                 String q = "https://lrclib.net/api/search?track_name=" + URLEncoder.encode(track, "UTF-8")
                     + (artist.length() > 0 ? "&artist_name=" + URLEncoder.encode(artist, "UTF-8") : "");
@@ -1091,12 +1393,12 @@ final class Cards {
 
     private static JSONObject httpJson(String url) {
         String b = httpText(url);
-        try { return b == null ? null : new JSONObject(b); } catch (Throwable t) { return null; }
+        try { return b == null ? null : new JSONObject(b); } catch (Throwable t) { NET_ERR.set(Boolean.TRUE); return null; }
     }
 
     private static JSONArray httpArray(String url) {
         String b = httpText(url);
-        try { return b == null ? null : new JSONArray(b); } catch (Throwable t) { return null; }
+        try { return b == null ? null : new JSONArray(b); } catch (Throwable t) { NET_ERR.set(Boolean.TRUE); return null; }
     }
 
     private static String httpText(String url) {
@@ -1106,7 +1408,8 @@ final class Cards {
             con.setConnectTimeout(5000);
             con.setReadTimeout(6000);
             con.setRequestProperty("User-Agent", "VoidIsland/" + appVersion + " (https://github.com/vxyzview/VoidIsland)");
-            if (con.getResponseCode() != 200) return null;
+            int code = con.getResponseCode();
+            if (code != 200) { if (code != 404) NET_ERR.set(Boolean.TRUE); return null; }   // 404 = the song is simply not there
             BufferedReader r = new BufferedReader(new InputStreamReader(con.getInputStream(), "UTF-8"));
             try {
                 StringBuilder b = new StringBuilder();
@@ -1120,6 +1423,7 @@ final class Cards {
                 try { r.close(); } catch (Throwable ignored) {}
             }
         } catch (Throwable t) {
+            NET_ERR.set(Boolean.TRUE);
             return null;
         } finally {
             if (con != null) try { con.disconnect(); } catch (Throwable ignored) {}

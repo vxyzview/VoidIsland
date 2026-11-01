@@ -24,8 +24,10 @@ import java.util.HashMap;
 final class Classifier {
     private Classifier() {}
 
-    private static final HashMap<String, Integer> SEEN = new HashMap<String, Integer>();
-    private static final HashMap<String, Long> SEEN_AT = new HashMap<String, Long>();
+    /** Recently seen notifications (key -> {signature hash, time}), least recently used first out, so a busy phone never forgets everything at once. */
+    private static final java.util.LinkedHashMap<String, long[]> SEEN = new java.util.LinkedHashMap<String, long[]>(64, 0.75f, true) {
+        @Override protected boolean removeEldestEntry(java.util.Map.Entry<String, long[]> eldest) { return size() > 300; }
+    };
 
     private static boolean empty(CharSequence s) { return s == null || s.toString().trim().length() == 0; }
 
@@ -85,7 +87,7 @@ final class Classifier {
             Calendar cal = Calendar.getInstance();
             int now = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE);
             if (Rules.inQuiet(now, Prefs.i(c, Prefs.K_QFROM, 22 * 60), Prefs.i(c, Prefs.K_QTO, 7 * 60))
-                && Rules.quietCovers(pkg, Prefs.set(c, Prefs.K_QAPPS))) return true;
+                && Rules.quietCovers(pkg, Prefs.view(c, Prefs.K_QAPPS))) return true;
         }
         CharSequence conv = x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE);
         boolean group = x.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION) || !empty(conv);
@@ -149,12 +151,9 @@ final class Classifier {
 
     private static boolean duplicate(String nkey, String sig) {
         long now = System.currentTimeMillis();
-        Integer h = SEEN.get(nkey);
-        Long at = SEEN_AT.get(nkey);
-        if (h != null && at != null && h == sig.hashCode() && now - at < 30000) return true;
-        if (SEEN.size() > 300) { SEEN.clear(); SEEN_AT.clear(); }
-        SEEN.put(nkey, sig.hashCode());
-        SEEN_AT.put(nkey, now);
+        long[] seen = SEEN.get(nkey);
+        if (seen != null && seen[0] == sig.hashCode() && now - seen[1] < 30000) return true;
+        SEEN.put(nkey, new long[]{sig.hashCode(), now});
         return false;
     }
 
@@ -242,7 +241,7 @@ final class Classifier {
         }
 
         // ---- live activities: rides, food delivery, live scores (judged by the app that posted it)
-        int lk = Live.kind(pkg);
+        int lk = Live.kind(pkg, Prefs.view(c, Prefs.K_LIVE_RIDE), Prefs.view(c, Prefs.K_LIVE_FOOD), Prefs.view(c, Prefs.K_LIVE_SPORT));
         if (lk != Live.NONE && ongoing && (!empty(title) || !empty(text)) && Prefs.b(c, Prefs.K_LIVEACT, true)) {
             IslandEvent e = new IslandEvent("l:" + nkey, IslandEvent.LIVE);
             e.live = true; e.priority = 60; e.pkg = pkg; e.appName = app;

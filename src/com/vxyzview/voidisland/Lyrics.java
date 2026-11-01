@@ -63,13 +63,31 @@ final class Lyrics {
     }
 
     static final int CACHE_MAX = 40;
-    static final long MISS_TTL_MS = 120000L;   // a song with no lyrics (or a failed lookup) is not asked about again for 2 minutes
+    static final long MISS_TTL_MS = 120000L;   // a failed lookup (offline, server busy) is retried after 2 minutes
+    static final long NONE_TTL_MS = 3600000L;  // "LRCLIB has nothing for this song" is believed for an hour (instrumentals, podcasts...)
+    static final long LONGEST_SONG_MS = 15 * 60 * 1000L;   // anything longer is a mix, podcast or video: not worth a lookup
+
+    private static final String[] NOT_MUSIC = {
+        "com.google.android.youtube", "com.netflix.", "com.amazon.avod", "tv.twitch.", "com.zhiliaoapp.musically", "com.ss.android.ugc.",
+        "com.instagram.", "com.facebook.", "com.google.android.apps.podcasts", "au.com.shiftyjelly.pocketcasts", "com.bambuna.podcastaddict",
+        "com.audible.", "org.mozilla.", "com.android.chrome", "com.disney.", "com.hbo.", "com.google.android.apps.youtube.kids"
+    };
+
+    /** False for players that never play songs with lyrics (video apps, browsers, podcast apps) and for anything far longer than a song. */
+    static boolean worthLookup(String pkg, long durMs) {
+        if (durMs > LONGEST_SONG_MS) return false;
+        if (pkg == null) return true;
+        String p = pkg.toLowerCase();
+        if (p.contains("podcast")) return false;
+        for (String n : NOT_MUSIC) if (p.startsWith(n)) return false;
+        return true;
+    }
 
     // least-recently-used: the songs you keep replaying stay, instead of everything being wiped at the cap
     private static final LinkedHashMap<String, Loaded> CACHE = new LinkedHashMap<String, Loaded>(16, 0.75f, true) {
         @Override protected boolean removeEldestEntry(Map.Entry<String, Loaded> eldest) { return size() > CACHE_MAX; }
     };
-    private static final HashMap<String, Long> MISS = new HashMap<String, Long>();
+    private static final HashMap<String, Long> MISS = new HashMap<String, Long>();   // song -> when the miss stops counting
 
     static synchronized Loaded cached(String track, String artist) { return CACHE.get(key(track, artist)); }
 
@@ -81,14 +99,17 @@ final class Lyrics {
     }
 
     /** Note that a lookup found nothing, so rebuilding the music card does not hit the network again straight away. */
-    static synchronized void rememberMiss(String track, String artist, long now) {
-        if (MISS.size() > 64) MISS.clear();
-        MISS.put(key(track, artist), now);
+    static synchronized void rememberMiss(String track, String artist, long now) { rememberMiss(track, artist, now, MISS_TTL_MS); }
+
+    /** {@code ttlMs}: {@link #MISS_TTL_MS} after a failed lookup, {@link #NONE_TTL_MS} when the service answered "no lyrics". */
+    static synchronized void rememberMiss(String track, String artist, long now, long ttlMs) {
+        if (MISS.size() > 256) MISS.clear();
+        MISS.put(key(track, artist), now + ttlMs);
     }
 
     static synchronized boolean missedRecently(String track, String artist, long now) {
-        Long at = MISS.get(key(track, artist));
-        return at != null && now - at < MISS_TTL_MS;
+        Long until = MISS.get(key(track, artist));
+        return until != null && now < until;
     }
 
     static synchronized int cacheSize() { return CACHE.size(); }

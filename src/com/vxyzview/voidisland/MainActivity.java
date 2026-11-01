@@ -44,7 +44,7 @@ public final class MainActivity extends Activity {
     private final Handler h = new Handler(Looper.getMainLooper());
     /** Everything the Try-it demos schedule for later (music timeout, download steps, preview): "Clear demos" cancels it all at once. */
     private final Handler dh = new Handler(Looper.getMainLooper());
-    private static final String[] DEMO_KEYS = {"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "toast", "preview"};
+    private static final String[] DEMO_KEYS = {"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "sys:demo", "preview"};
     private M3 m;
     private M3.Nav nav;
     private ScrollView scroll;
@@ -433,9 +433,9 @@ public final class MainActivity extends Activity {
         }));
 
         LinearLayout ty = m.card(p, "Try it");
-        String[] dNm = {"Music", "Call", "Payment", "Charging", "Message", "Download", "Timer", "Toast"};
+        String[] dNm = {"Music", "Call", "Payment", "Charging", "Message", "Download", "Timer", "Headset"};
         String[] dCd = {"m", "c", "p", "g", "n", "d", "t", "s"};
-        int[] dIc = {IconView.NOTE, IconView.PHONE, IconView.CARD, IconView.BOLT, IconView.BELL, IconView.DOWNLOAD, IconView.TIMER, IconView.MOON};
+        int[] dIc = {IconView.NOTE, IconView.PHONE, IconView.CARD, IconView.BOLT, IconView.BELL, IconView.DOWNLOAD, IconView.TIMER, IconView.HEADSET};
         LinearLayout row = null;
         for (int i = 0; i < dNm.length; i++) {
             if (i % 2 == 0) {
@@ -565,6 +565,41 @@ public final class MainActivity extends Activity {
         if (s.cShape != Style.NOTCH) m.slider(cp, "Top margin", Prefs.K_Y, -30, 80, 0, 1, unit(" dp"), after(false));
         m.slider(cp, "Horizontal position", Prefs.K_X, -200, 200, 0, 1, unit(" dp"), after(false));
 
+        LinearLayout ck = m.card(p, "Idle clock");
+        ck.addView(label("Compact pill"));
+        ck.addView(m.segmented(new String[]{"Dial", "Center", "Split", "Date", "Line"}, s.clockStyle, new M3.OnSel() {
+            @Override public void on(int i) { put(Prefs.K_CLOCKSTYLE, i); showPage(1, true); }   // the island itself shows the new clock right away
+        }), m.top(M3.MATCH, dp(40), 0));
+        String[] cd = {"A mini dial whose ring fills with the minutes, the time and date on the right.",
+            "Just the time, centred, with a small AM / PM.",
+            "Hour on the left, minutes on the right, so a camera hole sits right between them.",
+            "Day and date on the left, the time on the right.",
+            "The time, centred, over a thin line that fills as the hour goes by."};
+        TextView cdv = m.body(cd[s.clockStyle]);
+        cdv.setPadding(0, dp(10), 0, 0);
+        ck.addView(cdv);
+        ck.addView(label("Expanded card"));
+        ck.addView(m.segmented(new String[]{"Classic", "Digital", "Analog", "Bold", "Week"}, s.eClockStyle, new M3.OnSel() {
+            @Override public void on(int i) {
+                put(Prefs.K_ECLOCKSTYLE, i);
+                showPage(1, true);
+                if (Prefs.b(MainActivity.this, Prefs.K_CLOCK, true)) Bus.expand("clock");   // open the card for a few seconds so you can see it
+            }
+        }), m.top(M3.MATCH, dp(40), 0));
+        String[] ed = {"Big time, a dial with a seconds hand, the date, this week and how much of the day is gone.",
+            "A big centred time with the time in words, the date and the day's progress.",
+            "A large dial with a seconds hand beside the time and the date, plus the day's progress.",
+            "Huge stacked hour and minutes with the date beside them and this week below.",
+            "The time and date up top, then this week and the day's progress. No dial."};
+        TextView edv = m.body(ed[s.eClockStyle]);
+        edv.setPadding(0, dp(10), 0, 0);
+        ck.addView(edv);
+        if (!Prefs.b(this, Prefs.K_CLOCK, true)) {
+            TextView off = m.text("The idle clock is off. Turn on Clock when idle under Behavior to see it.", 13.5f, true, m.error);
+            off.setPadding(0, dp(12), 0, 0);
+            ck.addView(off);
+        }
+
         LinearLayout ec = m.card(p, "Expanded card");
         m.slider(ec, "Card width", Prefs.K_EW, 220, 440, 340, 1, unit(" dp"), after(true));
         m.slider(ec, "Card corner radius", Prefs.K_ER, 0, 60, 38, 1, unit(" dp"), after(true));
@@ -692,15 +727,11 @@ public final class MainActivity extends Activity {
         m.toggle(sh, "Live activities", "Rides, food delivery and live scores stay on the island while they run", Prefs.K_LIVEACT, true, null);
         m.toggle(sh, "Charging & battery", "Plugged in, full, low battery", Prefs.K_CHG, true, null);
         m.toggle(sh, "Phone events", "Silent mode, DND, headphones, Bluetooth, flashlight", Prefs.K_SYS, true, null);
-        m.toggle(sh, "App toasts", "Short messages apps pop up", Prefs.K_TOAST, false, null);
 
         LinearLayout ru = m.card(p, "Rules");
-        m.toggle(ru, "Hide in landscape", null, Prefs.K_LAND, true, null);
+        m.toggle(ru, "Hide when an app is fullscreen", "Videos, games and readers that hide the status bar. Everywhere else the island stays visible", Prefs.K_FULL, true, null);
         m.toggle(ru, "Hide idle clock in apps", "While an app is open only the clock pill hides — banners, music and timers keep showing", Prefs.K_HIDEAPP, true, null);
         m.toggle(ru, "Hide music & call pill inside their own app", null, Prefs.K_INAPP, true, null);
-        ru.addView(m.item(IconView.APPS, "Never auto-hide in these apps", "The island stays visible in the apps you pick, even in landscape", null, new Runnable() {
-            @Override public void run() { startActivity(new Intent(MainActivity.this, AppsActivity.class).putExtra(AppsActivity.EXTRA_MODE, 3)); }
-        }));
         final M3Switch[] absorbSw = new M3Switch[1];
         absorbSw[0] = m.toggle(ru, "Only show notifications on the island",
             "Off by default. Messages and payments shown on the island are removed from the notification shade, so nothing pops up twice, but a banner you miss is gone. Calls, timers, maps, downloads and music keep their own notification",
@@ -721,7 +752,8 @@ public final class MainActivity extends Activity {
                         });
                 }
             });
-        m.toggle(ru, "Show on lock screen", "Only when the island is above the status bar", Prefs.K_LOCK, false, null);
+        // The lock-screen switch only matters when the island sits above the status bar; in "Under panel" mode it does nothing.
+        if (!(s.qs == Style.QS_UNDER && overlayOn())) m.toggle(ru, "Show on lock screen", "Show the island over the lock screen", Prefs.K_LOCK, false, null);
         m.toggle(ru, "Haptic feedback", null, Prefs.K_HAPTIC, true, null);
         m.slider(ru, "Banner time", Prefs.K_DUR, 2, 9, 5, 1000, unit(" s"), null);
 
@@ -742,6 +774,67 @@ public final class MainActivity extends Activity {
         ap.addView(m.item(IconView.APPS, "Keep in shade", "Apps that also keep their normal notification, like banking or one-time codes", null, new Runnable() {
             @Override public void run() { startActivity(new Intent(MainActivity.this, AppsActivity.class).putExtra(AppsActivity.EXTRA_MODE, 1)); }
         }));
+        ap.addView(m.item(IconView.NAV, "Ride apps", "Extra apps whose ongoing trip shows as a live activity", null, new Runnable() {
+            @Override public void run() { startActivity(new Intent(MainActivity.this, AppsActivity.class).putExtra(AppsActivity.EXTRA_MODE, 4)); }
+        }));
+        ap.addView(m.item(IconView.CARD, "Food apps", "Extra apps whose ongoing delivery shows as a live activity", null, new Runnable() {
+            @Override public void run() { startActivity(new Intent(MainActivity.this, AppsActivity.class).putExtra(AppsActivity.EXTRA_MODE, 5)); }
+        }));
+        ap.addView(m.item(IconView.TIMER, "Score apps", "Extra apps whose live match shows as a live activity", null, new Runnable() {
+            @Override public void run() { startActivity(new Intent(MainActivity.this, AppsActivity.class).putExtra(AppsActivity.EXTRA_MODE, 6)); }
+        }));
+
+        LinearLayout bk = m.card(p, "Backup");
+        bk.addView(m.item(IconView.DOWNLOAD, "Back up settings", "Save every setting to a file, so a reinstall or a new phone starts where you left off", null, new Runnable() {
+            @Override public void run() {
+                Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain")
+                    .putExtra(Intent.EXTRA_TITLE, "voidisland-backup.txt");
+                try { startActivityForResult(i, REQ_BACKUP); } catch (ActivityNotFoundException e) { Toast.makeText(MainActivity.this, "No file picker found on this phone", Toast.LENGTH_LONG).show(); }
+            }
+        }));
+        bk.addView(m.item(IconView.TUNE, "Restore settings", "Load a backup file. This replaces your current settings", null, new Runnable() {
+            @Override public void run() {
+                Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+                try { startActivityForResult(i, REQ_RESTORE); } catch (ActivityNotFoundException e) { Toast.makeText(MainActivity.this, "No file picker found on this phone", Toast.LENGTH_LONG).show(); }
+            }
+        }));
+    }
+
+    private static final int REQ_BACKUP = 41, REQ_RESTORE = 42;
+
+    @Override protected void onActivityResult(int req, int res, final Intent data) {
+        super.onActivityResult(req, res, data);
+        if ((req != REQ_BACKUP && req != REQ_RESTORE) || res != RESULT_OK || data == null || data.getData() == null) return;
+        final Uri uri = data.getData();
+        final boolean save = req == REQ_BACKUP;
+        new Thread(new Runnable() {
+            @Override public void run() {
+                String msg;
+                try {
+                    if (save) {
+                        java.io.OutputStream os = getContentResolver().openOutputStream(uri, "wt");
+                        try { os.write(Backup.write(Prefs.sp(MainActivity.this).getAll()).getBytes("UTF-8")); } finally { os.close(); }
+                        msg = "Settings saved";
+                    } else {
+                        java.io.InputStream is = getContentResolver().openInputStream(uri);
+                        java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+                        try {
+                            byte[] buf = new byte[8192];
+                            for (int n; (n = is.read(buf)) > 0;) { bo.write(buf, 0, n); if (bo.size() > 1000000) break; }
+                        } finally { is.close(); }
+                        final java.util.Map<String, Object> vals = bo.size() > 1000000 ? null : Backup.read(bo.toString("UTF-8"));
+                        if (vals == null) msg = "That file is not a VoidIsland backup";
+                        else {
+                            Backup.apply(Prefs.sp(MainActivity.this), vals);
+                            msg = "Settings restored";
+                            runOnUiThread(new Runnable() { @Override public void run() { if (!isFinishing()) recreate(); } });
+                        }
+                    }
+                } catch (Throwable t) { msg = save ? "Could not save the file" : "Could not read the file"; }
+                final String shown = msg;
+                runOnUiThread(new Runnable() { @Override public void run() { Toast.makeText(MainActivity.this, shown, Toast.LENGTH_LONG).show(); } });
+            }
+        }, "vi-backup").start();
     }
 
     private void updateDiag() {
@@ -845,7 +938,7 @@ public final class MainActivity extends Activity {
             e.actRuns = new Runnable[]{new Runnable() { @Override public void run() { Bus.remove("t:demo"); } }};
             Bus.post(e);
         } else if ("s".equals(code)) {
-            IslandEvent e = new IslandEvent("toast", IslandEvent.SYSTEM);
+            IslandEvent e = new IslandEvent("sys:demo", IslandEvent.SYSTEM);
             e.title = "Headphones connected"; e.iconType = IconView.HEADSET; e.accent = Cards.GREEN; e.durationMs = 2400;
             Bus.post(e);
         }

@@ -36,6 +36,8 @@ final class IslandView extends ViewGroup {
         void onHold(boolean down);
         /** Something threw inside the island's own animation / install code: rebuild the overlay instead of letting the process die. */
         void onFault();
+        /** An app hid the status bar (video, game, reader) or brought it back. */
+        void onFullscreen(boolean fullscreen);
     }
 
     /** FrameLayout that never needs an off-screen buffer for alpha. */
@@ -137,6 +139,28 @@ final class IslandView extends ViewGroup {
         press.snap(1f);
         press.eps = 0.002f;
         setVisibility(INVISIBLE);
+        // Fullscreen detection: when an app hides the status bar the system tells every window, ours included.
+        setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override public android.view.WindowInsets onApplyWindowInsets(View v, android.view.WindowInsets in) {
+                try {
+                    if (android.os.Build.VERSION.SDK_INT >= 30) host.onFullscreen(!in.isVisible(android.view.WindowInsets.Type.statusBars()));
+                } catch (Throwable t) { /* unknown: treat as not fullscreen */ }
+                return v.onApplyWindowInsets(in);
+            }
+        });
+        if (android.os.Build.VERSION.SDK_INT < 30) {
+            setOnSystemUiVisibilityChangeListener(new View.OnSystemUiVisibilityChangeListener() {
+                @Override public void onSystemUiVisibilityChange(int vis) { host.onFullscreen(Fullscreen.legacyFlag(vis)); }
+            });
+        }
+    }
+
+    @Override protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        try {
+            if (android.os.Build.VERSION.SDK_INT < 30) host.onFullscreen(Fullscreen.legacyFlag(getWindowSystemUiVisibility()));
+            requestApplyInsets();
+        } catch (Throwable t) { /* no fullscreen info: the island simply never auto-hides for it */ }
     }
 
     private int dp(float v) { return Math.round(v * d); }
