@@ -61,6 +61,10 @@ final class IslandEvent {
     /** How soon the compact pill next needs a refresh, in ms (0 = the default); set by the card itself, not copied between events. */
     int tickHint;
     boolean dirty;
+    /** Set by the listener: the original notification may be removed once this banner is really on screen. Not copied. */
+    boolean absorbOk;
+    /** True once the island has put this banner on screen (so the hooks that run on first display run once). */
+    boolean shownOnce;
 
     IslandEvent(String key, int type) {
         this.key = key;

@@ -52,7 +52,7 @@ final class SystemEvents {
                 else if (Intent.ACTION_HEADSET_PLUG.equals(a)) headset(i);
                 else if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(a)) bluetooth(i, true);
                 else if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(a)) bluetooth(i, false);
-            } catch (Throwable t) { /* never crash the service over a toast */ }
+            } catch (Throwable t) { Dbg.e("system-event", t); /* never crash the service over a toast */ }
         }
     };
 
@@ -168,7 +168,7 @@ final class SystemEvents {
         IslandEvent e = new IslandEvent("charge", IslandEvent.CHARGE);
         e.level = pct;
         e.charging = true;
-        e.title = full ? "Fully charged" : (plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS ? "Wireless charging" : "Charging");
+        e.title = full ? Str.t(c, "fully_charged", "Fully charged") : (plugged == BatteryManager.BATTERY_PLUGGED_WIRELESS ? Str.t(c, "wireless_charging", "Wireless charging") : Str.t(c, "charging", "Charging"));
         e.accent = Cards.GREEN;
         e.durationMs = 3600;
         Bus.post(e);
@@ -178,7 +178,7 @@ final class SystemEvents {
         IslandEvent e = new IslandEvent("charge", IslandEvent.CHARGE);
         e.level = pct;
         e.charging = false;
-        e.title = pct <= 5 ? "Battery very low" : "Low battery";
+        e.title = pct <= 5 ? Str.t(c, "battery_very_low", "Battery very low") : Str.t(c, "low_battery", "Low battery");
         e.accent = Cards.RED;
         e.durationMs = 4200;
         Bus.post(e);
@@ -191,13 +191,13 @@ final class SystemEvents {
         AudioManager am = (AudioManager) c.getSystemService(Context.AUDIO_SERVICE);
         switch (am.getRingerMode()) {
             case AudioManager.RINGER_MODE_SILENT:
-                Bus.post(toast("ringer", "Silent", "Ringer off", IconView.BELL_OFF, Cards.RED, 2000));
+                Bus.post(toast("ringer", Str.t(c, "silent", "Silent"), Str.t(c, "ringer_off", "Ringer off"), IconView.BELL_OFF, Cards.RED, 2000));
                 break;
             case AudioManager.RINGER_MODE_VIBRATE:
-                Bus.post(toast("ringer", "Vibrate", "Ringer on vibrate", IconView.BELL, Cards.ORANGE, 2000));
+                Bus.post(toast("ringer", Str.t(c, "vibrate", "Vibrate"), Str.t(c, "ringer_vibrate", "Ringer on vibrate"), IconView.BELL, Cards.ORANGE, 2000));
                 break;
             default:
-                Bus.post(toast("ringer", "Ring", "Ringer on", IconView.BELL, Cards.WHITE, 2000));
+                Bus.post(toast("ringer", Str.t(c, "ring", "Ring"), Str.t(c, "ringer_on", "Ringer on"), IconView.BELL, Cards.WHITE, 2000));
         }
     }
 
@@ -214,7 +214,7 @@ final class SystemEvents {
         if (now == lastDnd) return;
         lastDnd = now;
         if (!on()) return;
-        Bus.post(toast("dnd", "Do Not Disturb", now == 1 ? "On" : "Off", IconView.MOON, Cards.PURPLE, 2200));
+        Bus.post(toast("dnd", Str.t(c, "dnd", "Do Not Disturb"), now == 1 ? Str.t(c, "on", "On") : Str.t(c, "off", "Off"), IconView.MOON, Cards.PURPLE, 2200));
     }
 
     // ---------------------------------------------------------------- headphones / Bluetooth
@@ -222,7 +222,7 @@ final class SystemEvents {
     private void headset(Intent i) {
         if (!on() || SystemClock.uptimeMillis() - startedAt < 1500) return; // ignore the sticky replay at start-up
         boolean plugged = i.getIntExtra("state", 0) == 1;
-        Bus.post(toast("headset", plugged ? "Headphones connected" : "Headphones disconnected", null, IconView.HEADSET,
+        Bus.post(toast("headset", plugged ? Str.t(c, "headphones_on", "Headphones connected") : Str.t(c, "headphones_off", "Headphones disconnected"), null, IconView.HEADSET,
             plugged ? Cards.GREEN : Cards.SUB, 2200));
     }
 
@@ -238,7 +238,7 @@ final class SystemEvents {
                 if (bc != null && bc.getMajorDeviceClass() == BluetoothClass.Device.Major.AUDIO_VIDEO) icon = IconView.HEADSET;
             }
         } catch (Throwable t) { /* BLUETOOTH_CONNECT not granted: fall back to a generic label */ }
-        Bus.post(toast("bt", name != null ? name : "Bluetooth device", connected ? "Connected" : "Disconnected", icon,
+        Bus.post(toast("bt", name != null ? name : Str.t(c, "bt_device", "Bluetooth device"), connected ? Str.t(c, "connected", "Connected") : Str.t(c, "disconnected", "Disconnected"), icon,
             connected ? Cards.BLUE : Cards.SUB, 2400));
     }
 
@@ -252,7 +252,7 @@ final class SystemEvents {
             IslandEvent e = new IslandEvent("torch", IslandEvent.SYSTEM);
             e.live = true;
             e.priority = 30;
-            e.title = "Flashlight";
+            e.title = Str.t(c, "flashlight", "Flashlight");
             e.sub = "On";
             e.iconType = IconView.BOLT;
             e.accent = Cards.YELLOW;
@@ -262,7 +262,7 @@ final class SystemEvents {
         }
         // The callback replays the current state for every camera at registration: don't pop for that.
         if (torchSeen && was != null && was != enabled && on()) {
-            Bus.post(toast("torch_pop", "Flashlight", enabled ? "On" : "Off", IconView.BOLT, enabled ? Cards.YELLOW : Cards.SUB, 1800));
+            Bus.post(toast("torch_pop", Str.t(c, "flashlight", "Flashlight"), enabled ? Str.t(c, "on", "On") : Str.t(c, "off", "Off"), IconView.BOLT, enabled ? Cards.YELLOW : Cards.SUB, 1800));
         }
         if (!torchSeen) h.postDelayed(new Runnable() { @Override public void run() { torchSeen = true; } }, 1200);
     }

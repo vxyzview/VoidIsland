@@ -71,6 +71,55 @@ public class Check {
         ok(Parse.isPaymentFrom(false, "com.whatsapp", "Store", "Receipt for $9.99"), "payment: non-chat notification still classified as before");
         ok(Parse.isPaymentFrom(true, "id.dana", "DANA", "Pembayaran berhasil Rp 18.500"), "payment: a payment app is trusted even with messaging-style");
         ok(!Parse.isPayment("com.news.app", "Markets", "Dollar steady at $1.08 in late trade"), "payment: news with $ is not payment");
+        ok(!Parse.isPayment("com.bank.app", "Payment due", "Your payment of $50 is due tomorrow"), "payment: a bill reminder is not a payment");
+        ok(!Parse.isPayment("com.bank.app", "Payment reminder", "Invoice of Rp 150.000 is due"), "payment: a payment reminder is not a payment");
+        ok(!Parse.isPayment("com.shop.pay", "Pay later", "Get $5 off your next order"), "payment: a promo is not a payment");
+        ok(Live.kind("com.shopee.sg") == Live.NONE, "live: the Shopee marketplace is not a food app");
+        {
+            ReplyFlow<String> f = new ReplyFlow<String>();
+            ok(!f.active() && f.event() == null && !f.isKey("a"), "reply flow: starts idle");
+            String card = "card-1";
+            f.begin(card, "n:chat1");
+            ok(f.active() && f.is(card) && f.isKey("n:chat1") && !f.isKey("n:chat2") && !f.gone(), "reply flow: begin holds that banner and key");
+            String newer = "card-2";
+            f.replace(newer);
+            ok(f.is(newer) && !f.is(card) && f.isKey("n:chat1"), "reply flow: a newer message of the same chat takes the card over");
+            f.markGone();
+            ok(f.gone() && f.active(), "reply flow: original removed while open is remembered, box stays");
+            String old = f.clear();
+            ok("card-2".equals(old) && !f.active() && !f.gone() && !f.isKey("n:chat1"), "reply flow: clear hands back the banner and forgets everything");
+            f.markGone();
+            f.replace("x");
+            ok(!f.active() && !f.gone() && f.clear() == null, "reply flow: nothing happens while idle");
+            f.begin("a", "k1");
+            f.markGone();
+            f.begin("b", "k2");
+            ok(f.is("b") && !f.gone(), "reply flow: a new session starts clean");
+        }
+        {
+            Dbg.clear();
+            ok(Dbg.size() == 0 && Dbg.dump().startsWith("Nothing logged"), "log: starts empty");
+            String firstDump = "";
+            for (int rep = 0; rep < 2; rep++) {   // one source line, so both failures look the same
+                Dbg.e("probe", new IllegalStateException("secret message text"));
+                if (rep == 0) firstDump = Dbg.dump();
+            }
+            ok(firstDump.contains("probe: IllegalStateException") && !firstDump.contains("secret"), "log: records where and what, never the message");
+            ok(Dbg.size() == 1 && Dbg.dump().contains("(x2)"), "log: the same failure repeating is one counted line");
+            for (int i = 0; i < Dbg.MAX + 30; i++) Dbg.i("line " + i);
+            ok(Dbg.size() == Dbg.MAX && Dbg.dump().contains("line " + (Dbg.MAX + 29)) && !Dbg.dump().contains("line 0\n"), "log: keeps only the newest lines");
+            Dbg.clear();
+            ok(Dbg.size() == 0, "log: clear empties it");
+        }
+        {
+            StringBuilder big = new StringBuilder();
+            for (int i = 0; i < 900; i++) big.append(String.format("[%02d:%02d.00] line %d\n", i / 60, i % 60, i));
+            Lyrics.Loaded lb = Lyrics.parse(big.toString(), null);
+            ok(lb != null && lb.line.length == 900 && lb.at[899] == 899000L, "lyrics: a long sheet is kept whole, not cut at 400 lines");
+            StringBuilder two = new StringBuilder();
+            for (int i = 0; i < 300; i++) two.append(String.format("[%02d:%02d.00][%02d:%02d.00] chorus %d\n", i / 60, i % 60, 5 + i / 60, i % 60, i));
+            ok(Lyrics.parse(two.toString(), null).line.length == 600, "lyrics: several stamps per line all count");
+        }
         ok(Parse.isFailure("Payment failed"), "failure word");
         ok(Parse.isIncoming("Anda menerima Rp 50.000 dari Sari"), "incoming word");
         ok(Parse.actionKind("Decline") == -1 && Parse.actionKind("Answer") == 1 && Parse.actionKind("Tolak") == -1 && Parse.actionKind("Jawab") == 1, "call button kinds");

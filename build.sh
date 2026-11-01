@@ -43,6 +43,7 @@ echo "using build-tools: $BT"
 echo "using android.jar: $AJ"
 echo "dexer: $DEXER"
 
+KS_PASS=${KS_PASS:-voidisland}   # keystore + key password; set KS_PASS to keep a private key's password out of the repo
 NAME=${1:-VoidIsland}
 VER=${2:-1.1}
 VCODE=${3:-2}
@@ -61,6 +62,6 @@ echo "[3/6] aapt";    "$AAPT" package -f -M AndroidManifest.xml -S res -I "$AJ" 
 echo "[4/6] add dex"; (cd out && "$AAPT" add -f unsigned.apk classes.dex >/dev/null)
 echo "[5/6] align";   "$ZIP" -f -p 4 out/unsigned.apk out/aligned.apk
 [ -f void.jks ] || keytool -genkeypair -keystore void.jks -alias void -keyalg RSA -keysize 2048 -validity 36500 \
-    -storepass voidisland -keypass voidisland -dname "CN=vxyzview, OU=VoidIsland, O=vxyzview, C=ID" >/dev/null 2>&1
-echo "[6/6] sign";    "$SIGN" sign --ks void.jks --ks-pass pass:voidisland --key-pass pass:voidisland --out out/$NAME.apk out/aligned.apk
+    -storepass "$KS_PASS" -keypass "$KS_PASS" -dname "CN=vxyzview, OU=VoidIsland, O=vxyzview, C=ID" >/dev/null 2>&1
+echo "[6/6] sign";    "$SIGN" sign --ks void.jks --ks-pass "pass:$KS_PASS" --key-pass "pass:$KS_PASS" --out out/$NAME.apk out/aligned.apk
 ls -la out/$NAME.apk

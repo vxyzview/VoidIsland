@@ -21,6 +21,11 @@ final class Parse {
         "failed", "declined", "gagal", "ditolak", "unsuccessful", "error", "cancelled", "canceled", "dibatalkan"};
     private static final String[] IN_WORDS = {
         "received", "menerima", "diterima", "uang masuk", "dana masuk", "credited", "deposit", "refund", "sent you"};
+    // reminders, bills and promos mention money and "payment" but nothing was paid: never a "Payment successful" card
+    private static final String[] NOT_PAY_WORDS = {
+        "reminder", "overdue", "payment due", "bill due", "is due", "are due", "due on", "due by", "due today", "due tomorrow",
+        "due soon", "upcoming", "will be charged", "will be debited", "expires", "expiring", "promo", "discount", "voucher",
+        "cashback", "% off", " off your", " off on", "pengingat", "jatuh tempo", "diskon", "promosi"};
     // prefix match on a word start, so "End call" / "Ending" count but "Send" does not
     private static final Pattern NEG_BTN = Pattern.compile(
         "(?<!\\p{L})(decline|reject|hang|end|tolak|akhiri|tutup|matikan|putus|dismiss|ignore|cancel|stop)");
@@ -57,6 +62,7 @@ final class Parse {
     static boolean isPayment(String pkg, String title, String text) {
         String all = (title == null ? "" : title) + " " + (text == null ? "" : text);
         String lower = all.toLowerCase(Locale.ROOT);
+        if (any(lower, NOT_PAY_WORDS)) return false;
         boolean word = any(lower, PAY_WORDS), pk = payPkg(pkg), amt = amount(all) != null;
         return (word && (pk || amt)) || (pk && amt);
     }

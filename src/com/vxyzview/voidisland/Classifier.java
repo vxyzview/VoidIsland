@@ -126,8 +126,23 @@ final class Classifier {
      * standard "show chronometer" flag, so the island used to miss them. Inflate the layout and read the base from it.
      * Best effort: any failure just means "not a timer".
      */
+    /** A clock app re-posts its stopwatch every second; inflating its layouts that often is wasted work, so a verdict is reused briefly. */
+    private static final java.util.LinkedHashMap<String, Object[]> CHRONO = new java.util.LinkedHashMap<String, Object[]>(16, 0.75f, true) {
+        @Override protected boolean removeEldestEntry(java.util.Map.Entry<String, Object[]> eldest) { return size() > 16; }
+    };
+    private static final long CHRONO_TTL_MS = 2000L;
+
+    private static Chrono customChrono(Context c, Notification n, String nkey) {
+        long now = SystemClock.elapsedRealtime();
+        Object[] hit = nkey == null ? null : CHRONO.get(nkey);
+        if (hit != null && now - (Long) hit[0] < CHRONO_TTL_MS) return (Chrono) hit[1];
+        Chrono k = readChrono(c, n);
+        if (nkey != null) CHRONO.put(nkey, new Object[]{now, k});
+        return k;
+    }
+
     @SuppressWarnings("deprecation")
-    private static Chrono customChrono(Context c, Notification n) {
+    private static Chrono readChrono(Context c, Notification n) {
         RemoteViews[] all = { n.contentView, n.bigContentView, n.headsUpContentView };
         for (RemoteViews rv : all) {
             if (rv == null) continue;
@@ -198,8 +213,8 @@ final class Classifier {
             e.popup = e.incoming;
             e.priority = 100;
             e.pkg = pkg; e.appName = app;
-            e.title = empty(title) ? "Unknown" : title;
-            e.text = empty(text) ? (e.incoming ? "Incoming call" : "On call") : text;
+            e.title = empty(title) ? Str.t(c, "unknown", "Unknown") : title;
+            e.text = empty(text) ? (e.incoming ? Str.t(c, "incoming_call", "Incoming call") : Str.t(c, "on_call", "On call")) : text;
             e.chrono = chrono && !e.incoming;
             e.when = n.when;
             e.icon = largeIcon(c, n);
@@ -213,7 +228,7 @@ final class Classifier {
         long tWhen = n.when;
         boolean tCount = x.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN);
         if (!chrono && ongoing && (Notification.CATEGORY_ALARM.equals(cat) || Parse.isClockApp(pkg))) {
-            Chrono k = customChrono(c, n);   // the clock app's own stopwatch / timer layout
+            Chrono k = customChrono(c, n, nkey);   // the clock app's own stopwatch / timer layout
             if (k != null && k.running) { timerLike = true; tWhen = k.when; tCount = k.countDown; }
         }
         if (timerLike) {
@@ -293,7 +308,7 @@ final class Classifier {
             e.pkg = pkg; e.appName = app; e.nkey = nkey;
             e.success = !Parse.isFailure(all);
             e.incoming = Parse.isIncoming(all);
-            e.title = !e.success ? "Payment failed" : (e.incoming ? "Payment received" : "Payment successful");
+            e.title = !e.success ? Str.t(c, "pay_failed", "Payment failed") : (e.incoming ? Str.t(c, "pay_received", "Payment received") : Str.t(c, "pay_ok", "Payment successful"));
             e.sub = Parse.amount(all);
             e.text = empty(title) ? text : title;
             e.icon = Img.appIcon(c, pkg);

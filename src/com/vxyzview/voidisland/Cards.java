@@ -225,14 +225,22 @@ final class Cards {
         ReplyActivity.closeFromIsland();   // another button was pressed while a reply box was open: the box goes with the banner
     }
 
-    static void open(Context c, IslandEvent e) {
-        if (e.contentIntent != null && send(c, e.contentIntent)) return;
+    static void open(Context c, IslandEvent e) { open(c, e.contentIntent, e.pkg); }
+
+    static void open(Context c, PendingIntent content, String pkg) {
+        if (content != null && send(c, content)) return;
         try {
-            if (e.pkg != null) {
-                Intent i = c.getPackageManager().getLaunchIntentForPackage(e.pkg);
+            if (pkg != null) {
+                Intent i = c.getPackageManager().getLaunchIntentForPackage(pkg);
                 if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); c.startActivity(i); }
             }
         } catch (Throwable t) { /* ignore */ }
+    }
+
+    /** True while the lock screen is up: no quick reply from there (the box could not show over it, and it would skip the unlock). */
+    static boolean keyguarded(Context c) {
+        try { return ((android.app.KeyguardManager) c.getSystemService(Context.KEYGUARD_SERVICE)).isKeyguardLocked(); }
+        catch (Throwable t) { return false; }
     }
 
     /** setText that does nothing when the text already reads the same (a no-op setText still re-measures the view). */
@@ -822,7 +830,7 @@ final class Cards {
     private static View replyRow(final Context c, final IslandEvent e) {
         LinearLayout r = row(c);
         r.setPadding(0, dp(c, 12), 0, 0);
-        r.addView(actionBtn(c, "Reply", true, new Runnable() {
+        r.addView(actionBtn(c, Str.t(c, "reply", "Reply"), true, new Runnable() {
             @Override public void run() { ReplyActivity.start(c, e); }
         }), lpw(0, dp(c, 40), 1f));
         if (e.actLabels.length > 0) {
@@ -857,7 +865,9 @@ final class Cards {
         if (e.text != null && e.text.length() > 0) t.addView(body);
         top.addView(t, lpw(0, WRAP, 1f));
         root.addView(top);
-        if (e.replyIntent != null && e.replyInput != null) root.addView(replyRow(c, e));
+        root.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);   // TalkBack reads a new banner out
+        root.setContentDescription((e.appName == null || e.appName.length() == 0 ? "" : e.appName + ". ") + e.title + (e.text == null || e.text.length() == 0 ? "" : ". " + e.text));
+        if (e.replyIntent != null && e.replyInput != null && !keyguarded(c)) root.addView(replyRow(c, e));
         else if (e.actLabels.length > 0) root.addView(actionsRow(c, e, 2));
         e.uE = new IslandEvent.Updater() {
             @Override public boolean update() { title.setText(e.title); body.setText(e.text); ic.set(e.icon, dp(c, 11)); return true; }
@@ -897,12 +907,12 @@ final class Cards {
         for (int i = 0; i < n; i++) kind[i] = Parse.actionKind(e.actLabels[i]);
         if (inc && n >= 2 && kind[0] == 0 && kind[1] == 0) { kind[0] = -1; kind[1] = 1; }
         if (n == 0) {
-            br.addView(button(c, "Open", BTN, -1, new Runnable() { @Override public void run() { open(c, e); } }), lpw(0, dp(c, 46), 1f));
+            br.addView(button(c, Str.t(c, "open", "Open"), BTN, -1, new Runnable() { @Override public void run() { open(c, e); } }), lpw(0, dp(c, 46), 1f));
         }
         for (int i = 0; i < n; i++) {
             final int idx = i;
             String label = e.actLabels[i];
-            if (label == null || label.length() == 0) label = kind[i] < 0 ? "Decline" : "Accept";
+            if (label == null || label.length() == 0) label = kind[i] < 0 ? Str.t(c, "decline", "Decline") : Str.t(c, "accept", "Accept");
             int color, fg;
             if (kind[i] < 0) { color = neg(); fg = S.accentOverride ? S.errOn : 0xFFFFFFFF; }
             else if (kind[i] > 0) { color = pos(); fg = S.accentOverride ? S.tertOn : 0xFFFFFFFF; }
@@ -932,7 +942,7 @@ final class Cards {
         RoundImage ic = new RoundImage(c);
         ic.set(e.appIcon(), dp(c, 6));
         head.addView(ic, lp(dp(c, 20), dp(c, 20)));
-        TextView app = tv(c, e.appName == null ? "Payment" : e.appName, 13f, SUB, false);
+        TextView app = tv(c, e.appName == null ? Str.t(c, "payment", "Payment") : e.appName, 13f, SUB, false);
         app.setPadding(dp(c, 8), 0, 0, 0);
         head.addView(app);
         root.addView(head);
@@ -1514,9 +1524,9 @@ final class Cards {
         next.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
         if (S.accentOverride) play.setPadding(dp(c, 24), dp(c, 14), dp(c, 24), dp(c, 14));   // glyph sits inside the filled pill
         else play.setPadding(dp(c, 12), dp(c, 8), dp(c, 12), dp(c, 8));
-        prev.setContentDescription("Previous track");
-        next.setContentDescription("Next track");
-        play.setContentDescription("Play or pause");
+        prev.setContentDescription(Str.t(c, "prev_track", "Previous track"));
+        next.setContentDescription(Str.t(c, "next_track", "Next track"));
+        play.setContentDescription(Str.t(c, "play_pause", "Play or pause"));
         prev.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 0); } });
         next.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 2); } });
         play.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { mediaAction(e, 1); } });
@@ -1589,6 +1599,9 @@ final class Cards {
     private static final ThreadLocal<Boolean> NET_ERR = new ThreadLocal<Boolean>();
 
     /** Lookups already running, by song: a second view asking for the same song waits for that answer. Main thread only. */
+    /** The song the most recent request was for: lookups still queued for an older song (skipped past) are not worth the network. */
+    private static volatile String wantKey = "";
+
     private static final java.util.HashMap<String, java.util.ArrayList<GotLyrics>> INFLIGHT = new java.util.HashMap<String, java.util.ArrayList<GotLyrics>>();
 
     /** Cache-first lyrics for the playing song; slow network work sits on a daemon thread, results land on main. */
@@ -1602,18 +1615,20 @@ final class Cards {
         waiting = new java.util.ArrayList<GotLyrics>();
         waiting.add(done);
         INFLIGHT.put(fk, waiting);
+        wantKey = fk;
         try {
             NET.execute(new Runnable() {
                 @Override public void run() {
                     // An exception on this worker thread would kill the whole process (and with it the accessibility service).
                     Lyrics.Loaded found = null;
                     NET_ERR.set(Boolean.FALSE);
-                    try { found = lyricsNet(track, artist, durS); } catch (Throwable t) { NET_ERR.set(Boolean.TRUE); /* odd lyric sheet / network hiccup: no lyrics */ }
+                    final boolean stale = !fk.equals(wantKey);   // the person already skipped past this song: no requests at all
+                    try { if (!stale) found = lyricsNet(track, artist, durS, fk); } catch (Throwable t) { NET_ERR.set(Boolean.TRUE); Dbg.e("lyrics", t); /* odd lyric sheet / network hiccup: no lyrics */ }
                     final Lyrics.Loaded l = found;
                     final boolean none = found == null && !Boolean.TRUE.equals(NET_ERR.get());   // answered "nothing here" vs. could not ask
                     MAIN.post(new Runnable() {
                         @Override public void run() {
-                            if (l == null) Lyrics.rememberMiss(track, artist, System.currentTimeMillis(), none ? Lyrics.NONE_TTL_MS : Lyrics.MISS_TTL_MS);
+                            if (l == null && !stale) Lyrics.rememberMiss(track, artist, System.currentTimeMillis(), none ? Lyrics.NONE_TTL_MS : Lyrics.MISS_TTL_MS);
                             java.util.ArrayList<GotLyrics> all = INFLIGHT.remove(fk);
                             if (all != null) for (GotLyrics g : all) {
                                 try { g.got(track, artist, l); } catch (Throwable t) { /* that card is gone or broken: the rest still get their answer */ }
@@ -1656,7 +1671,7 @@ final class Cards {
      * LRCLIB (no key): /api/get first, then up to three searches, each looser than the last (exact title + artist, a free-text
      * "artist title", the cleaned-up title alone). The looser ones only accept a result whose length matches the song.
      */
-    private static Lyrics.Loaded lyricsNet(String track, String artist, long durS) {
+    private static Lyrics.Loaded lyricsNet(String track, String artist, long durS, String fk) {
         JSONObject best = null;
         try {
             String q = "https://lrclib.net/api/get?track_name=" + URLEncoder.encode(track, "UTF-8")
@@ -1675,7 +1690,7 @@ final class Cards {
                     "https://lrclib.net/api/search?q=" + URLEncoder.encode((cleanArtist + " " + cleanTrack).trim(), "UTF-8"),
                     "https://lrclib.net/api/search?track_name=" + URLEncoder.encode(cleanTrack, "UTF-8")
                 };
-                for (int u = 0; u < urls.length && best == null; u++) {
+                for (int u = 0; u < urls.length && best == null && fk.equals(wantKey); u++) {   // stop early once the song was skipped
                     JSONArray arr = httpArray(urls[u]);
                     if (arr != null) best = pickBest(arr, cleanArtist, durS, u > 0);
                 }

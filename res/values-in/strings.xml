@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reply">Balas</string>
+    <string name="cancel">Batal</string>
+    <string name="send">Kirim</string>
+    <string name="message">Pesan</string>
+    <string name="reply_to">Balas %s</string>
+    <string name="reply_open_fail">Kotak balasan tidak bisa dibuka, membuka aplikasinya</string>
+    <string name="reply_send_fail">Balasan tidak terkirim</string>
+    <string name="open">Buka</string>
+    <string name="decline">Tolak</string>
+    <string name="accept">Terima</string>
+    <string name="payment">Pembayaran</string>
+    <string name="prev_track">Lagu sebelumnya</string>
+    <string name="next_track">Lagu berikutnya</string>
+    <string name="play_pause">Putar atau jeda</string>
+    <string name="unknown">Tidak dikenal</string>
+    <string name="incoming_call">Panggilan masuk</string>
+    <string name="on_call">Sedang menelepon</string>
+    <string name="pay_failed">Pembayaran gagal</string>
+    <string name="pay_received">Pembayaran diterima</string>
+    <string name="pay_ok">Pembayaran berhasil</string>
+    <string name="fully_charged">Terisi penuh</string>
+    <string name="wireless_charging">Mengisi daya nirkabel</string>
+    <string name="charging">Mengisi daya</string>
+    <string name="battery_very_low">Baterai sangat lemah</string>
+    <string name="low_battery">Baterai lemah</string>
+    <string name="silent">Senyap</string>
+    <string name="ringer_off">Dering mati</string>
+    <string name="vibrate">Getar</string>
+    <string name="ringer_vibrate">Dering getar</string>
+    <string name="ring">Dering</string>
+    <string name="ringer_on">Dering aktif</string>
+    <string name="dnd">Jangan Ganggu</string>
+    <string name="on">Aktif</string>
+    <string name="off">Nonaktif</string>
+    <string name="headphones_on">Headphone terhubung</string>
+    <string name="headphones_off">Headphone terputus</string>
+    <string name="bt_device">Perangkat Bluetooth</string>
+    <string name="connected">Terhubung</string>
+    <string name="disconnected">Terputus</string>
+    <string name="flashlight">Senter</string>
+</resources>

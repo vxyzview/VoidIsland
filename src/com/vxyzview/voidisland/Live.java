@@ -12,7 +12,7 @@ final class Live {
     };
     private static final String[] FOOD_PKGS = {
         "com.ubercab.eats", "com.application.zomato", "in.swiggy.android", "com.dd.doordash", "com.grubhub.android",
-        "com.deliveroo.orderapp", "com.global.foodpanda.android", "com.shopee.id", "com.shopee.", "com.gojek.food", "com.grab.food"
+        "com.deliveroo.orderapp", "com.global.foodpanda.android", "com.shopee.id", "com.gojek.food", "com.grab.food"
     };
     private static final String[] SPORT_PKGS = {
         "com.espn.score_center", "com.mobilefootie.wc2010", "com.sofascore.results", "de.motain.iscore", "com.nbaimd.gametime.nba2011",

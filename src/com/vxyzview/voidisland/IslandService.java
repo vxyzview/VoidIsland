@@ -62,6 +62,7 @@ public final class IslandService extends AccessibilityService {
             readIme();
             Prefs.sp(this).registerOnSharedPreferenceChangeListener(prefs);
         } catch (Throwable t) {
+            Dbg.e("setup", t);
             // a broken overlay must never crash the accessibility service: clean up fully, then try again shortly
             try { if (sys != null) { sys.stop(); sys = null; } } catch (Throwable ignored) { /* ignore */ }
             if (ctl != null) { Bus.detach(ctl); try { ctl.detach(); } catch (Throwable ignored) { /* ignore */ } ctl = null; }
@@ -88,7 +89,7 @@ public final class IslandService extends AccessibilityService {
 
     @Override public void onAccessibilityEvent(AccessibilityEvent ev) {
         // an exception here would kill the process and switch the accessibility service off: never let one escape
-        try { handleEvent(ev); } catch (Throwable t) { /* ignore: the next event starts clean */ }
+        try { handleEvent(ev); } catch (Throwable t) { Dbg.e("a11y-event", t); /* the next event starts clean */ }
     }
 
     private void handleEvent(AccessibilityEvent ev) {
@@ -118,6 +119,14 @@ public final class IslandService extends AccessibilityService {
                 if (data instanceof Notification) {
                     if (ListenerService.connected) return; // the listener already has it, with more detail
                     IslandEvent e = Classifier.from(this, pk, (Notification) data, "a:" + pk + ":" + ev.getEventTime(), -1, false);
+                    // Nothing reports the end of a notification on this path, so a live pill (timer, nav...) would never go away.
+                    // Only an incoming call is kept, as a short-lived popup.
+                    if (e != null && e.live) {
+                        if (e.type != IslandEvent.CALL || !e.incoming) return;
+                        e.live = false;
+                        e.popup = false;
+                        e.durationMs = 8000;
+                    }
                     if (e != null && Bus.post(e) && e.chat != null) Rules.chatShown(e.chat, System.currentTimeMillis());
                 }
                 break;

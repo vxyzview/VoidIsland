@@ -40,6 +40,8 @@ final class IslandView extends ViewGroup {
         void onFault();
         /** An app hid the status bar (video, game, reader) or brought it back. */
         void onFullscreen(boolean fullscreen);
+        /** The card a reply box is docked to has a new target size / position: the box must follow it. */
+        void onDockMoved();
     }
 
     /** FrameLayout that never needs an off-screen buffer for alpha. */
@@ -108,6 +110,7 @@ final class IslandView extends ViewGroup {
                     settled();
                 }
             } catch (Throwable t) {
+                Dbg.e("frame", t);
                 running = false;
                 last = 0;
                 host.onFault();
@@ -117,7 +120,7 @@ final class IslandView extends ViewGroup {
 
     /** Runs queued island work; a failure asks the controller for a clean rebuild rather than crashing the process. */
     private void guarded(Runnable r) {
-        try { r.run(); } catch (Throwable t) { host.onFault(); }
+        try { r.run(); } catch (Throwable t) { Dbg.e("view", t); host.onFault(); }
     }
 
     IslandView(Context c, Host host, float density) {
@@ -331,6 +334,7 @@ final class IslandView extends ViewGroup {
         st.to(m == EXPANDED ? drop : 0f);
         sg.to(shp == Style.NOTCH ? rad : 0f);   // glue (notch top pushed above the edge) only when the shown shape is a notch
         start();
+        if (dock && m == EXPANDED) host.onDockMoved();
     }
 
     // ------------------------------------------------------------------ animation loop

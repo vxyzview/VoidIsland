@@ -6,8 +6,10 @@ Dynamic Island for Android (by vxyzview) — notifications, media and calls on a
 
 - Notifications, calls, music, timers, navigation and downloads on a floating island.
 - **Lyrics** on the music pill: one line at a time; long lines slide sideways in step with the song (pause, seek and all).
-- **Only on the island** (opt-in, off by default): messages and payments shown on the island are removed from the shade. Apps on the *Keep in shade* list keep theirs. An original is only ever removed while the island is running and really showing that banner; if the island is off, hidden (fullscreen app, lock screen, shade open) or ignoring the app, the notification stays in the shade. Android cannot bring back a notification that was already removed, so a banner you miss is gone.
+- **Only on the island** (opt-in, off by default): messages and payments shown on the island are removed from the shade. Apps on the *Keep in shade* list keep theirs. An original is only ever removed once the island has really put that banner on screen (not when it is merely queued); if the island is off, hidden (fullscreen app, lock screen, shade open) or ignoring the app, the notification stays in the shade. Android cannot bring back a notification that was already removed, so a banner you look away from would be gone: **Behavior > Help > Recent banners** keeps the last 20 banners the island showed (in memory only) and opens the app when you tap one.
 - **Quick reply**: expand a message banner and tap *Reply* to answer without opening the app. The reply box grows out of the banner's bottom edge as part of the same black shape (same width, same corner radius, same border, no seam), with a rounded text field, a cancel button and a round send button in the island's accent. While it is open the banner is held: it does not time out and no newer banner replaces it. Banner and box leave together when the reply is sent (the arrow turns into a tick first), when you cancel (cancel button, back, tap outside, swipe the banner up), or when you press another button on the banner or tap the banner to open the app. A banner you give up on carries on as a normal one for a few more seconds; a forgotten box lets go after 3 minutes without typing.
+- **Diagnostic log**: **Behavior > Help > Diagnostic log** lists the last errors the island caught (where and what kind, never any message text) with a *Copy* button for bug reports. Memory only, gone when the process ends.
+- **Languages**: the text the island itself shows (banners' buttons, call and payment titles, battery / ringer / Bluetooth pop-ups, the reply box) is translated (English, Bahasa Indonesia); the settings screens are still English. Add a language by copying `res/values/strings.xml` to `res/values-xx/`. Banners are announced by TalkBack.
 - **Island rules**: quiet hours (optionally only for chosen apps), mute group chats, one banner per chat.
 - **Live activities**: rides, food delivery and live scores stay on the island while they run. Missing an app? Add it under **Apps > Ride / Food / Score apps**.
 - **Hides only when it should**: the island stays visible everywhere, landscape included, and steps aside only while an app is fullscreen (video, game, reader: anything that hides the status bar). Turn that off under **Behavior > Rules**. The idle clock can also stay visible inside apps (turn off *Hide idle clock in apps*) and still disappears in fullscreen.
@@ -37,7 +39,7 @@ The island is a long-lived process, so idle cost matters more than peak speed:
 ## Install
 
 Grab an APK from [Releases](https://github.com/vxyzview/VoidIsland/releases) and sideload it (Android 8+ / API 26+).
-Then enable both accessibility services VoidIsland asks for, so it can see notifications and the shade.
+Then turn on the two things VoidIsland asks for: the **Accessibility** service (draws the island, sees the shade) and **Notification access** (reads notifications and music). On Android 13+ a sideloaded app needs *App info > ⋮ > Allow restricted settings* first, or those switches stay greyed out.
 
 ## Keeping it running
 
@@ -51,12 +53,20 @@ if the button does not land on the right page, open *Settings > Apps > VoidIslan
 The island follows Android's animation settings (*Developer options > Animator duration scale*, and *Remove animations* in accessibility): a faster or slower scale speeds up or slows
 down the springs, and scale 0 makes the island jump straight to its next shape with no motion.
 
+## Privacy
+
+Notification text, replies, the Recent banners list and the diagnostic log stay on the phone: nothing in them is ever sent anywhere, written to storage or included in a backup (a backup holds settings only). The app's only network use is the lyric lookup below, which can be switched off.
+
 ## Lyrics & privacy
 
 Lyrics on the music pill are looked up at runtime on [LRCLIB](https://lrclib.net) (open, community-run, no account or key). For each new song the app sends LRCLIB the **song title, artist
 and length** (as shown by your music player), along with the app name in the `User-Agent`. Nothing else leaves the phone. Lyrics are not bundled with the app and are never written to storage:
 they are kept in memory for the current session only (up to 40 songs) and shown on the island, nothing more. The lyrics belong to their rights holders, and LRCLIB's own terms apply to the
 service; check them before reusing or redistributing anything you see. Turn it off at **Behavior > Music lyrics** and no lookups are made.
+
+## Compatibility and testing
+
+Built for Android 8+ (API 26) and targeting API 33. Android 14+ restricts background activity starts (the island opts in when it sends a notification's own intents) and Android 13+ greys out accessibility / notification access for sideloaded apps until *Allow restricted settings* is ticked. Before a release, walk through `TESTING.md` on at least one Android 12 and one Android 14+ phone. Raising the target to 35 turns on forced edge-to-edge for the settings screens and the reply box, so it needs its own pass.
 
 ## Building yourself
 
@@ -66,7 +76,7 @@ Local build needs an `android.jar` (API 34) at `libs/android-34.jar`, a JDK, and
 ./build.sh
 ```
 
-The signing key is not included in the repo: `build.sh` creates a new one (`void.jks`) on first run. CI signs with the
+The signing key is not included in the repo: `build.sh` creates a new one (`void.jks`) on first run (password `voidisland` unless you set `KS_PASS`; CI must use the same password as the keystore in its secret). CI signs with the
 keystore kept in the `SIGNING_KEYSTORE` repository secret (base64 of `void.jks`), so CI builds have one consistent
 signature; note your locally generated key differs from the CI one unless you upload the same file.
 

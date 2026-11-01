@@ -835,6 +835,52 @@ public final class MainActivity extends Activity {
                 try { startActivityForResult(i, REQ_RESTORE); } catch (ActivityNotFoundException e) { Toast.makeText(MainActivity.this, "No file picker found on this phone", Toast.LENGTH_LONG).show(); }
             }
         }));
+
+        LinearLayout hp = m.card(p, "Help");
+        hp.addView(m.item(IconView.BELL, "Recent banners", "Missed one? The last 20 banners the island showed. Kept in memory only", null, new Runnable() {
+            @Override public void run() { showRecent(); }
+        }));
+        hp.addView(m.item(IconView.TUNE, "Diagnostic log", "What went wrong lately, to copy into a bug report. It holds no message text", null, new Runnable() {
+            @Override public void run() { showLog(); }
+        }));
+    }
+
+    private void showRecent() {
+        final Recent.Item[] all = Recent.all();
+        if (all.length == 0) { Toast.makeText(this, "No banners yet", Toast.LENGTH_SHORT).show(); return; }
+        String[] rows = new String[all.length];
+        java.text.DateFormat tf = android.text.format.DateFormat.getTimeFormat(this);
+        for (int i = 0; i < all.length; i++) {
+            Recent.Item it = all[i];
+            rows[i] = tf.format(new java.util.Date(it.at)) + "  " + (it.app.length() > 0 ? it.app + " · " : "") + it.title
+                + (it.text.length() > 0 ? "\n" + it.text : "");
+        }
+        new android.app.AlertDialog.Builder(this).setTitle("Recent banners")
+            .setItems(rows, new android.content.DialogInterface.OnClickListener() {
+                @Override public void onClick(android.content.DialogInterface d, int which) { Cards.open(MainActivity.this, all[which].open, all[which].pkg); }
+            })
+            .setNeutralButton("Clear", new android.content.DialogInterface.OnClickListener() {
+                @Override public void onClick(android.content.DialogInterface d, int w) { Recent.clear(); }
+            })
+            .setPositiveButton("Close", null).show();
+    }
+
+    private void showLog() {
+        final String text = Dbg.dump();
+        new android.app.AlertDialog.Builder(this).setTitle("Diagnostic log").setMessage(text)
+            .setPositiveButton("Copy", new android.content.DialogInterface.OnClickListener() {
+                @Override public void onClick(android.content.DialogInterface d, int w) {
+                    try {
+                        android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("VoidIsland log", "VoidIsland " + Cards.appVersion + ", Android " + Build.VERSION.SDK_INT + ", " + Build.MANUFACTURER + " " + Build.MODEL + "\n" + text));
+                        Toast.makeText(MainActivity.this, "Copied", Toast.LENGTH_SHORT).show();
+                    } catch (Throwable t) { /* no clipboard */ }
+                }
+            })
+            .setNeutralButton("Clear", new android.content.DialogInterface.OnClickListener() {
+                @Override public void onClick(android.content.DialogInterface d, int w) { Dbg.clear(); }
+            })
+            .setNegativeButton("Close", null).show();
     }
 
     private static final int REQ_BACKUP = 41, REQ_RESTORE = 42;
@@ -862,8 +908,9 @@ public final class MainActivity extends Activity {
                         final java.util.Map<String, Object> vals = bo.size() > 1000000 ? null : Backup.read(bo.toString("UTF-8"));
                         if (vals == null) msg = "That file is not a VoidIsland backup";
                         else {
+                            vals.remove(Prefs.K_ABSORB);   // removing banners from the shade is only ever switched on through its own confirmation
                             Backup.apply(Prefs.sp(MainActivity.this), vals);
-                            msg = "Settings restored";
+                            msg = "Settings restored (\"Only on the island\" stays off until you turn it on again)";
                             runOnUiThread(new Runnable() { @Override public void run() { if (!isFinishing()) recreate(); } });
                         }
                     }
@@ -937,7 +984,7 @@ public final class MainActivity extends Activity {
         e.playing = true; e.durMs = 215000; e.posMs = 62000; e.posAt = SystemClock.elapsedRealtime();
         e.actions = PlaybackState.ACTION_SEEK_TO;
         Bus.post(e);
-        dh.postDelayed(new Runnable() { @Override public void run() { Bus.remove("media"); } }, 30000);
+        dh.postDelayed(new Runnable() { @Override public void run() { Bus.remove("media"); MediaTracker.restore(); } }, 30000);
     }
 
     /**

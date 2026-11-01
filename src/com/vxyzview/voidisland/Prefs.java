@@ -50,21 +50,32 @@ final class Prefs {
     /** Membership test on a string-set pref without copying the set (hot path: runs for every notification). */
     static boolean has(Context c, String key, String value) {
         if (value == null) return false;
-        Set<String> s = sp(c).getStringSet(key, null);   // the live set: read only
+        Set<String> s = sets(sp(c), key);   // the live set: read only
         return s != null && s.contains(value);
     }
 
+    // A value stored under the wrong type (a damaged or hand-edited backup) must read as "not set", never throw:
+    // an exception here would take the island down or silently drop every notification.
+    static int si(SharedPreferences sp, String k, int def) { try { return sp.getInt(k, def); } catch (ClassCastException e) { return def; } }
+
+    static boolean sb(SharedPreferences sp, String k, boolean def) { try { return sp.getBoolean(k, def); } catch (ClassCastException e) { return def; } }
+
+    static Set<String> sets(SharedPreferences sp, String k) { try { return sp.getStringSet(k, null); } catch (ClassCastException e) { return null; } }
+
     /** The stored set itself, read only and never null: for hot paths that must not copy it. Do not modify the result. */
     static Set<String> view(Context c, String key) {
-        Set<String> s = sp(c).getStringSet(key, null);
+        Set<String> s = sets(sp(c), key);
         return s == null ? java.util.Collections.<String>emptySet() : s;
     }
 
-    static boolean b(Context c, String k, boolean def) { return sp(c).getBoolean(k, def); }
+    static boolean b(Context c, String k, boolean def) { return sb(sp(c), k, def); }
 
-    static int i(Context c, String k, int def) { return sp(c).getInt(k, def); }
+    static int i(Context c, String k, int def) { return si(sp(c), k, def); }
 
-    static Set<String> set(Context c, String key) { return new HashSet<String>(sp(c).getStringSet(key, new HashSet<String>())); }
+    static Set<String> set(Context c, String key) {
+        Set<String> s = sets(sp(c), key);
+        return s == null ? new HashSet<String>() : new HashSet<String>(s);
+    }
 
     static void setSet(Context c, String key, Set<String> s) { sp(c).edit().putStringSet(key, s).apply(); }
 

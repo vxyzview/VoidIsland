@@ -66,6 +66,7 @@ final class Lyrics {
     }
 
     static final int CACHE_MAX = 40;
+    static final int MAX_LINES = 4000;   // far beyond any song; only a guard against a hostile or broken sheet
     static final long MISS_TTL_MS = 120000L;   // a failed lookup (offline, server busy) is retried after 2 minutes
     static final long NONE_TTL_MS = 3600000L;  // "LRCLIB has nothing for this song" is believed for an hour (instrumentals, podcasts...)
     static final long LONGEST_SONG_MS = 15 * 60 * 1000L;   // anything longer is a mix, podcast or video: not worth a lookup
@@ -151,12 +152,12 @@ final class Lyrics {
     /** Pure line extraction: prefer the LRC body (stamps, possibly several per line), else the plain text. */
     static Loaded parse(String synced, String plain) {
         if (synced != null && synced.indexOf('[') >= 0) {
-            long[] st = new long[400];
-            String[] tx = new String[400];
+            long[] st = new long[512];
+            String[] tx = new String[512];
             int n = 0;
             for (String row : synced.replace("\r", "").split("\n")) {
                 String r0 = row.trim();
-                if (n >= st.length) break;
+                if (n >= MAX_LINES) break;
                 long[] stamps = new long[8]; int sc = 0;
                 int p = 0;
                 while (p < r0.length() && r0.charAt(p) == '[' && sc < stamps.length) {
@@ -170,7 +171,10 @@ final class Lyrics {
                 if (sc == 0) continue;
                 String text = r0.substring(p).trim();
                 if (text.length() == 0) continue;
-                for (int i = 0; i < sc && n < st.length; i++) { st[n] = stamps[i]; tx[n] = text; n++; }
+                for (int i = 0; i < sc && n < MAX_LINES; i++) {
+                    if (n == st.length) { st = java.util.Arrays.copyOf(st, n * 2); tx = java.util.Arrays.copyOf(tx, n * 2); }
+                    st[n] = stamps[i]; tx[n] = text; n++;
+                }
             }
             if (n > 0) {
                 for (int i = 1; i < n; i++)          // insertion sort keeps both arrays in lockstep

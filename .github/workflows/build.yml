@@ -19,11 +19,11 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
         with:
           fetch-depth: 0   # full history: tags + commit count for versionCode
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961   # v5
         with:
           distribution: temurin
           java-version: '21'
@@ -57,7 +57,9 @@ jobs:
             CHANNEL="${{ inputs.channel }}"
             LAST="$(git describe --tags --abbrev=0 2>/dev/null || echo '')"
             BASE="$(printf '%s' "${LAST:-v1.1}" | sed -e 's/^v//' -e 's/-.*$//')"
-            if [ "$CHANNEL" = "stable" ]; then
+            if [ "$CHANNEL" = "stable" ] && printf '%s' "$LAST" | grep -q -- '-' && ! git rev-parse -q --verify "refs/tags/v${BASE}" >/dev/null; then
+              VERSION="$BASE"   # the latest tag was a beta/alpha of this number and it was never released: release that number itself
+            elif [ "$CHANNEL" = "stable" ]; then
               if printf '%s' "$BASE" | grep -q '\.'; then
                 MAJMIN="${BASE%.*}"; PATCH="${BASE##*.}"
               else
@@ -83,6 +85,8 @@ jobs:
           echo "::notice::$( [ "$PRE" = "1" ] && echo pre-release || echo stable ) -> VoidIsland-$VERSION (versionCode $VCODE)"
 
       - name: Build (javac, dx, aapt, zipalign, apksigner)
+        env:
+          KS_PASS: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}   # optional; empty = the default password build.sh uses
         run: ./build.sh "$APK" "$VERSION" "$VERSIONCODE"
 
       - name: Unit checks
@@ -106,7 +110,7 @@ jobs:
           gh release create "$TAG" "out/$APK.apk" --title "$APK" --generate-notes $FLAGS
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
         with:
           name: ${{ env.APK }}
           path: out/*.apk

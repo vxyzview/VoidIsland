@@ -52,11 +52,15 @@ public final class ReplyActivity extends Activity {
     /** The box that is open right now, so the island can close it (card opened, swiped away, other button, call...). */
     private static ReplyActivity cur;
 
+    private static int startToken;   // which start() the 2.5 s watchdog belongs to
+
     static void start(final Context c, final IslandEvent e) {
         if (e.replyIntent == null || e.replyInput == null) return;
+        if (Cards.keyguarded(c)) return;   // never offer a reply box over the lock screen
         ReplyActivity open = cur;
         if (open != null && !open.done && e.key.equals(open.key)) { open.focus(); return; }   // already open for this banner
         if (pending != null) return;   // a box is already on its way up: a second tap must not stack another one
+        final int token = ++startToken;
         pending = e.replyIntent;
         input = e.replyInput;
         who = e.title;
@@ -68,17 +72,18 @@ public final class ReplyActivity extends Activity {
         // A background start the system refuses throws nothing: the screen just never appears. If it has not picked its
         // data up by now, say so and open the app instead of leaving the person with a dead button.
         new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-            @Override public void run() { if (pending != null) failed(c, e); }
+            @Override public void run() { if (pending != null && token == startToken) failed(c, e); }   // not a later box's data
         }, 2500);
     }
 
     private static void failed(Context c, IslandEvent e) {
+        Dbg.i("reply box could not open (background start refused)");
         pending = null;   // don't hold the app's reply intent until some later start
         input = null;
         who = null;
         pendKey = null;
         Bus.replyEnd(e.key, false);
-        try { Toast.makeText(c, "Couldn't open the reply box, opening the app instead", Toast.LENGTH_SHORT).show(); } catch (Throwable t) { /* ignore */ }
+        try { Toast.makeText(c, Str.t(c, "reply_open_fail", "Couldn't open the reply box, opening the app instead"), Toast.LENGTH_SHORT).show(); } catch (Throwable t) { /* ignore */ }
         Cards.open(c, e);
     }
 
@@ -86,6 +91,12 @@ public final class ReplyActivity extends Activity {
     static void closeFromIsland() {
         ReplyActivity a = cur;
         if (a != null) a.retract(false);
+    }
+
+    /** The card moved or changed height (a newer message replaced it): the box slides to the card's new bottom edge. */
+    static void follow() {
+        ReplyActivity a = cur;
+        if (a != null) a.reposition();
     }
 
     /** A newer message arrived in the same chat: replies now go through its (fresher) reply action. */
@@ -108,6 +119,8 @@ public final class ReplyActivity extends Activity {
     private int sendGlyph;
     private final int[] rect = new int[4];   // card left, card bottom, card width, corner radius (screen px)
     private float restY;                     // where the box rests (translationY), for the slide in / out
+    private int overlapPx;                   // how far the box tucks under the card
+    private boolean placed;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -141,7 +154,7 @@ public final class ReplyActivity extends Activity {
 
         // cancel: a small tonal circle
         FrameLayout close = circle(s.btn, IconView.CLOSE, s.btnOn, 40, 18);
-        close.setContentDescription("Cancel");
+        close.setContentDescription(Str.t(this, "cancel", "Cancel"));
         close.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { retract(false); } });
         Cards.press(close);
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(Cards.dp(this, 40), Cards.dp(this, 40));
@@ -154,7 +167,7 @@ public final class ReplyActivity extends Activity {
         CharSequence label = ri.getLabel();
         String nm = name == null ? "" : name.toString().trim();
         if (nm.length() > 22) nm = nm.substring(0, 21) + "\u2026";
-        et.setHint(nm.length() > 0 ? "Reply to " + nm : (label != null && label.length() > 0 ? label : "Message"));
+        et.setHint(nm.length() > 0 ? Str.t(this, "reply_to", "Reply to %s", nm) : (label != null && label.length() > 0 ? label : Str.t(this, "message", "Message")));
         et.setHintTextColor(s.sub);
         et.setTextColor(s.text);
         et.setTextSize(15.5f);
@@ -189,7 +202,7 @@ public final class ReplyActivity extends Activity {
         sendGlyph = Col.onColor(fill);
         sendBtn = circle(fill, IconView.SEND, sendGlyph, 44, 20);
         sendIcon = (IconView) ((FrameLayout) sendBtn).getChildAt(0);
-        sendBtn.setContentDescription("Send");
+        sendBtn.setContentDescription(Str.t(this, "send", "Send"));
         sendBtn.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { send(); } });
         Cards.press(sendBtn);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(Cards.dp(this, 44), Cards.dp(this, 44));
@@ -209,6 +222,7 @@ public final class ReplyActivity extends Activity {
         setContentView(root);
 
         final int ov = overlap;
+        overlapPx = overlap;
         root.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override public void onGlobalLayout() {
                 if (root == null || dockV.getHeight() == 0) return;
@@ -222,7 +236,9 @@ public final class ReplyActivity extends Activity {
     /** Puts the box exactly under the card (the window may start below the status bar) and slides it out from under the card. */
     private void place(int overlap) {
         int h = dockV.getHeight();
+        placed = true;
         if (joined) {
+            Bus.replyDock(rect);   // the card may have changed since this screen was started
             int[] o = new int[2];
             root.getLocationOnScreen(o);
             dockV.setTranslationX(rect[0] - o[0]);
@@ -241,6 +257,22 @@ public final class ReplyActivity extends Activity {
             dockV.setTranslationY(-Cards.dp(this, 10));
             dockV.animate().alpha(1f).translationY(0f).setDuration(200).setInterpolator(M3.STANDARD).start();
         }
+    }
+
+    private void reposition() {
+        if (done || !joined || !placed || dockV == null) return;
+        int[] r = new int[4];
+        if (!Bus.replyDock(r)) return;
+        int[] o = new int[2];
+        root.getLocationOnScreen(o);
+        float ny = r[1] - overlapPx - o[1];
+        float nx = r[0] - o[0];
+        rect[0] = r[0]; rect[1] = r[1];
+        if (ny == restY && nx == dockV.getTranslationX()) return;
+        restY = ny;
+        dockV.setTranslationX(nx);
+        if (animating()) dockV.animate().translationY(ny).setDuration(250).setInterpolator(M3.STANDARD).start();
+        else dockV.setTranslationY(ny);
     }
 
     /** Follows Android's "Remove animations" / animator scale 0. */
@@ -284,8 +316,9 @@ public final class ReplyActivity extends Activity {
             RemoteInput.addResultsToIntent(new RemoteInput[]{ri}, fill, res);
             pi.send(this, 0, fill);
         } catch (Throwable x) {
+            Dbg.e("reply-send", x);
             // stay open: what was typed is not lost, and the person can try again or cancel
-            Toast.makeText(this, "Couldn't send the reply", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, Str.t(this, "reply_send_fail", "Couldn't send the reply"), Toast.LENGTH_SHORT).show();
             return;
         }
         sending = true;

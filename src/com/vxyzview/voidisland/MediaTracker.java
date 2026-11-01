@@ -38,6 +38,12 @@ final class MediaTracker {
         ART_SIG.clear();
     }
 
+    /** The demo song went away: put the real player (if any) back on the island right now. */
+    static void restore() {
+        MediaTracker t = inst;
+        if (t != null) t.soon();
+    }
+
     /** The display came on: catch up with whatever the player did while it was off. */
     static void screenOn() {
         MediaTracker t = inst;
@@ -78,7 +84,7 @@ final class MediaTracker {
     private final Runnable refresh = new Runnable() {
         @Override public void run() {
             // a media session can vanish between two calls (null playback state...): skip this round, never crash the process
-            try { refreshNow(); } catch (Throwable t) { /* the next session callback refreshes again */ }
+            try { refreshNow(); } catch (Throwable t) { Dbg.e("media", t); /* the next session callback refreshes again */ }
         }
     };
     private boolean expiring, gaveUp;
