@@ -1,5 +1,7 @@
 package com.vxyzview.voidisland;
 
+import android.app.ActivityOptions;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -8,6 +10,8 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.media.session.MediaController;
 import android.media.session.PlaybackState;
+import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -88,6 +92,9 @@ final class Cards {
         if (!S.accentOverride) return button(c, label, BTN, -1, run);
         return primary ? button(c, label, S.accent, -1, S.accentOn, run) : button(c, label, S.btn, -1, S.btnOn, run);
     }
+
+    /** The app's versionName, for the lyrics User-Agent (set when the service starts). */
+    static volatile String appVersion = "dev";
 
     static int px(Context c) { return dp(c, S.padX); }
 
@@ -174,15 +181,49 @@ final class Cards {
         return b;
     }
 
-    static void fire(IslandEvent e, int i) {
+    /**
+     * Sends a notification's PendingIntent. On Android 14+ the sender has to opt in before the target app may start an
+     * activity from the background; without it taps on action buttons (and on the banner itself) silently did nothing.
+     * @return false when it could not be sent (cancelled by the app, or refused)
+     */
+    static boolean send(Context c, PendingIntent pi) {
+        if (pi == null) return false;
+        Bundle opts = null;
+        if (Build.VERSION.SDK_INT >= 34) {
+            try {
+                ActivityOptions ao = ActivityOptions.makeBasic();
+                ao.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
+                opts = ao.toBundle();
+            } catch (Throwable t) { opts = null; }
+        }
         try {
-            if (i < e.actRuns.length && e.actRuns[i] != null) { e.actRuns[i].run(); return; }
-            if (i < e.actIntents.length && e.actIntents[i] != null) e.actIntents[i].send();
-        } catch (Throwable t) { /* pending intent cancelled */ }
+            pi.send(c, 0, null, null, null, null, opts);
+            return true;
+        } catch (Throwable t) {   // CanceledException: the app replaced or cancelled it
+            return false;
+        }
+    }
+
+    /**
+     * Runs button {@code i} of an event: the island's own action, or the app's PendingIntent. When the app's intent is gone
+     * (cancelled, or replaced by a newer notification) the app is opened instead, so a press never ends in silence.
+     */
+    static boolean fire(Context c, IslandEvent e, int i) {
+        try {
+            if (i < e.actRuns.length && e.actRuns[i] != null) { e.actRuns[i].run(); return true; }
+            if (i < e.actIntents.length && send(c, e.actIntents[i])) return true;
+        } catch (Throwable t) { /* fall through to opening the app */ }
+        open(c, e);
+        return false;
+    }
+
+    /** A banner's own button was pressed: it has done its job, so put it away (calls, timers and music stay on the island). */
+    private static void done(IslandEvent e) {
+        if (e.type == IslandEvent.NOTIF) Bus.remove(e.key);
     }
 
     static void open(Context c, IslandEvent e) {
-        try { if (e.contentIntent != null) { e.contentIntent.send(); return; } } catch (Throwable t) { /* fall through */ }
+        if (e.contentIntent != null && send(c, e.contentIntent)) return;
         try {
             if (e.pkg != null) {
                 Intent i = c.getPackageManager().getLaunchIntentForPackage(e.pkg);
@@ -458,7 +499,7 @@ final class Cards {
         for (int i = 0; i < n; i++) {
             final int idx = i;
             View b = actionBtn(c, e.actLabels[i], i == 0, new Runnable() {
-                @Override public void run() { fire(e, idx); }
+                @Override public void run() { fire(c, e, idx); done(e); }
             });
             LinearLayout.LayoutParams p = lpw(0, dp(c, 40), 1f);
             if (i > 0) p.setMarginStart(dp(c, 8));
@@ -478,7 +519,7 @@ final class Cards {
             LinearLayout.LayoutParams p = lpw(0, dp(c, 40), 1f);
             p.setMarginStart(dp(c, 8));
             r.addView(actionBtn(c, e.actLabels[0], false, new Runnable() {
-                @Override public void run() { fire(e, 0); }
+                @Override public void run() { fire(c, e, 0); done(e); }
             }), p);
         }
         return r;
@@ -517,6 +558,7 @@ final class Cards {
     private static View call(final Context c, final IslandEvent e) {
         final boolean inc = e.incoming, hadTime = e.chrono;
         final int n = Math.min(2, e.actLabels.length);
+        final String[] shownLabels = e.actLabels;
         LinearLayout root = col(c);
         root.setPadding(px(c), py(c), px(c), py(c));
         LinearLayout top = row(c);
@@ -558,12 +600,13 @@ final class Cards {
             int icon = kind[i] < 0 ? IconView.HANGUP : (kind[i] > 0 ? IconView.PHONE : -1);
             LinearLayout.LayoutParams p = lpw(0, dp(c, 46), 1f);
             if (i > 0) p.setMarginStart(dp(c, 12));
-            br.addView(button(c, label, color, icon, fg, new Runnable() { @Override public void run() { fire(e, idx); } }), p);
+            br.addView(button(c, label, color, icon, fg, new Runnable() { @Override public void run() { fire(c, e, idx); } }), p);
         }
         root.addView(br);
         e.uE = new IslandEvent.Updater() {
             @Override public boolean update() {
-                if (e.incoming != inc || e.chrono != hadTime || Math.min(2, e.actLabels.length) != n) return false;
+                if (e.incoming != inc || e.chrono != hadTime || Math.min(2, e.actLabels.length) != n
+                    || !Parse.sameLabels(shownLabels, e.actLabels)) return false;
                 st.setText(e.text);
                 nm.setText(e.title);
                 return true;
@@ -651,6 +694,7 @@ final class Cards {
     /** Ride / food / score card: app icon, what it is, the status text, an optional progress bar and the app's own actions. */
     private static View live(final Context c, final IslandEvent e) {
         final boolean hadBar = e.progress >= 0;
+        final String[] shownLabels = e.actLabels;
         LinearLayout root = col(c);
         root.setPadding(px(c), py(c), px(c), py(c));
         LinearLayout top = row(c);
@@ -689,6 +733,7 @@ final class Cards {
         e.uE = new IslandEvent.Updater() {
             @Override public boolean update() {
                 if ((e.progress >= 0) != hadBar) return false;
+                if (!Parse.sameLabels(shownLabels, e.actLabels)) return false;   // the app changed its buttons: rebuild them
                 title.setText(e.title);
                 body.setText(e.text);
                 pct.setText(Math.max(0, e.progress) + "%");
@@ -1060,17 +1105,20 @@ final class Cards {
             con = (HttpURLConnection) new URL(url).openConnection();
             con.setConnectTimeout(5000);
             con.setReadTimeout(6000);
-            con.setRequestProperty("User-Agent", "VoidIsland/1.1 (https://github.com/vxyzview/VoidIsland)");
+            con.setRequestProperty("User-Agent", "VoidIsland/" + appVersion + " (https://github.com/vxyzview/VoidIsland)");
             if (con.getResponseCode() != 200) return null;
             BufferedReader r = new BufferedReader(new InputStreamReader(con.getInputStream(), "UTF-8"));
-            StringBuilder b = new StringBuilder();
-            char[] buf = new char[8192];
-            for (int n; (n = r.read(buf)) > 0;) {
-                b.append(buf, 0, n);
-                if (b.length() > 600000) return null;   // far bigger than any lyric sheet: don't buffer it
+            try {
+                StringBuilder b = new StringBuilder();
+                char[] buf = new char[8192];
+                for (int n; (n = r.read(buf)) > 0;) {
+                    b.append(buf, 0, n);
+                    if (b.length() > 600000) return null;   // far bigger than any lyric sheet: don't buffer it
+                }
+                return b.length() > 0 ? b.toString() : null;
+            } finally {
+                try { r.close(); } catch (Throwable ignored) {}
             }
-            r.close();
-            return b.length() > 0 ? b.toString() : null;
         } catch (Throwable t) {
             return null;
         } finally {

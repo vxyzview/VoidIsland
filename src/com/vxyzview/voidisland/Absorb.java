@@ -17,7 +17,4 @@ final class Absorb {
     static boolean shouldRemove(boolean optedIn, boolean keptInShade, boolean islandShowing, int type, boolean live, boolean initial) {
         return optedIn && !keptInShade && islandShowing && applies(type, live, initial);
     }
-
-    /** How long the original rests: the banner's life plus a margin, never under 6s (the heads-up may still be animating). */
-    static long delayMs(long bannerMs) { return Math.max(6000, bannerMs + 3000); }
 }

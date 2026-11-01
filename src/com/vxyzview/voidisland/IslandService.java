@@ -39,6 +39,10 @@ public final class IslandService extends AccessibilityService {
         super.onServiceConnected();
         if (ctl != null) shutdown(); // reconnect without unbind: start clean
         try {
+            String v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            if (v != null && v.length() > 0) Cards.appVersion = v;
+        } catch (Throwable t) { /* keep the default */ }
+        try {
             ctl = new IslandController(this);
             ctl.attach();
             Bus.attach(ctl);
@@ -95,7 +99,7 @@ public final class IslandService extends AccessibilityService {
                 if (data instanceof Notification) {
                     if (ListenerService.connected) return; // the listener already has it, with more detail
                     IslandEvent e = Classifier.from(this, pk, (Notification) data, "a:" + pk + ":" + ev.getEventTime(), -1, false);
-                    if (e != null) Bus.post(e);
+                    if (e != null && Bus.post(e) && e.chat != null) Rules.chatShown(e.chat, System.currentTimeMillis());
                 } else if (Prefs.b(this, Prefs.K_TOAST, false) && !ev.getText().isEmpty()) {
                     StringBuilder sb = new StringBuilder();
                     for (CharSequence t : ev.getText()) { if (sb.length() > 0) sb.append(' '); sb.append(t); }

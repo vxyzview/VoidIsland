@@ -10,6 +10,7 @@ import android.content.IntentFilter;
 import android.hardware.camera2.CameraManager;
 import android.media.AudioManager;
 import android.os.BatteryManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -72,7 +73,9 @@ final class SystemEvents {
         f.addAction(Intent.ACTION_TIME_CHANGED);
         f.addAction(Intent.ACTION_TIMEZONE_CHANGED);
         f.addAction(Intent.ACTION_DATE_CHANGED);
-        c.registerReceiver(rx, f);
+        // system broadcasts only; Android 14 (target 34) requires saying so explicitly
+        if (Build.VERSION.SDK_INT >= 33) c.registerReceiver(rx, f, Context.RECEIVER_EXPORTED);
+        else c.registerReceiver(rx, f);
         try {
             cm = (CameraManager) c.getSystemService(Context.CAMERA_SERVICE);
             torchCb = new CameraManager.TorchCallback() {

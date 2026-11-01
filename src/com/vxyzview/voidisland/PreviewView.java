@@ -50,6 +50,11 @@ final class PreviewView extends View {
         va.start();
     }
 
+    @Override protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        if (va != null) va.cancel();   // don't keep animating (and holding the activity) after the page is gone
+    }
+
     @Override protected void onMeasure(int w, int h) {
         setMeasuredDimension(MeasureSpec.getSize(w), m.dp(212));
     }

@@ -29,11 +29,21 @@ final class Rules {
      * Otherwise records {@code now} as the chat's banner time and returns false (show it).
      */
     static boolean chatRepeat(String chatKey, long now, long windowMs) {
+        if (chatQuiet(chatKey, now, windowMs)) return true;
+        chatShown(chatKey, now);
+        return false;
+    }
+
+    /** True when this chat already had a banner within the window. Only looks: nothing is recorded. */
+    static boolean chatQuiet(String chatKey, long now, long windowMs) {
         Long last = LAST.get(chatKey);
-        if (last != null && now - last >= 0 && now - last < windowMs) return true;
+        return last != null && now - last >= 0 && now - last < windowMs;
+    }
+
+    /** Record that a banner for this chat was really put on the island (not merely accepted while the island was hidden). */
+    static void chatShown(String chatKey, long now) {
         if (LAST.size() > 200) LAST.clear();
         LAST.put(chatKey, now);
-        return false;
     }
 
     static void resetChats() { LAST.clear(); }

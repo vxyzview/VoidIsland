@@ -6,6 +6,8 @@ import android.app.RemoteInput;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -27,7 +29,7 @@ public final class ReplyActivity extends Activity {
     private static RemoteInput input;
     private static CharSequence who, app;
 
-    static void start(Context c, IslandEvent e) {
+    static void start(final Context c, final IslandEvent e) {
         if (e.replyIntent == null || e.replyInput == null) return;
         pending = e.replyIntent;
         input = e.replyInput;
@@ -35,7 +37,21 @@ public final class ReplyActivity extends Activity {
         app = e.appName;
         Intent i = new Intent(c, ReplyActivity.class);
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_ANIMATION | Intent.FLAG_ACTIVITY_NO_HISTORY);
-        try { c.startActivity(i); } catch (Throwable t) { /* the system refused a background start: nothing to show */ }
+        try { c.startActivity(i); } catch (Throwable t) { failed(c, e); return; }
+        // A background start the system refuses throws nothing: the screen just never appears. If it has not picked its
+        // data up by now, say so and open the app instead of leaving the person with a dead button.
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            @Override public void run() { if (pending != null) failed(c, e); }
+        }, 2500);
+    }
+
+    private static void failed(Context c, IslandEvent e) {
+        pending = null;   // don't hold the app's reply intent until some later start
+        input = null;
+        who = null;
+        app = null;
+        try { Toast.makeText(c, "Couldn't open the reply box, opening the app instead", Toast.LENGTH_SHORT).show(); } catch (Throwable t) { /* ignore */ }
+        Cards.open(c, e);
     }
 
     private PendingIntent pi;

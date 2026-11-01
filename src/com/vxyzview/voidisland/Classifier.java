@@ -90,11 +90,15 @@ final class Classifier {
         CharSequence conv = x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE);
         boolean group = x.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION) || !empty(conv);
         if (group && Prefs.b(c, Prefs.K_NOGROUP, false)) return true;
-        if (Prefs.b(c, Prefs.K_ONEPERCHAT, false)) {
-            String chat = pkg + "|" + (empty(conv) ? String.valueOf(title) : conv.toString());
-            if (Rules.chatRepeat(chat, System.currentTimeMillis(), Rules.CHAT_WINDOW_MS)) return true;
-        }
+        if (Prefs.b(c, Prefs.K_ONEPERCHAT, false)
+            && Rules.chatQuiet(chatKey(pkg, x, title), System.currentTimeMillis(), Rules.CHAT_WINDOW_MS)) return true;
         return false;
+    }
+
+    /** Identifies a chat for the "one banner per chat" rule. */
+    private static String chatKey(String pkg, Bundle x, CharSequence title) {
+        CharSequence conv = x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE);
+        return pkg + "|" + (empty(conv) ? String.valueOf(title) : conv.toString());
     }
 
     /** A chronometer read out of a notification's custom layout. */
@@ -307,6 +311,7 @@ final class Classifier {
         e.icon = li != null ? li : Img.appIcon(c, pkg);
         e.durationMs = Prefs.i(c, Prefs.K_DUR, 5000);
         e.contentIntent = n.contentIntent;
+        if (Prefs.b(c, Prefs.K_ONEPERCHAT, false)) e.chat = chatKey(pkg, x, title);
         actions(e, n);
         reply(e, n);
         return e;

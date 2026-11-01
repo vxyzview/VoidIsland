@@ -109,8 +109,6 @@ public class Check {
         ok(!Absorb.applies(IslandEvent.CALL, true, false) && !Absorb.applies(IslandEvent.TIMER, true, false)
             && !Absorb.applies(IslandEvent.PROGRESS, true, false), "absorb: live things keep their original notification");
         ok(!Absorb.applies(IslandEvent.NOTIF, false, true), "absorb: never hides notifications that were already up at connect");
-        ok(Absorb.delayMs(5200) == 8200, "absorb: rests 3s past the banner");
-        ok(Absorb.delayMs(2000) == 6000 && Absorb.delayMs(20000) == 23000, "absorb: delay floor and scale");
 
         // --- ShadeMatch
         ok(ShadeMatch.panel("Notification shade.", "android.widget.FrameLayout"), "shade: en notification shade");
@@ -189,6 +187,10 @@ public class Check {
         ok(Rules.chatRepeat("wa|Ann", 30000L, 60000L), "rules: follow-up inside the window stays quiet");
         ok(!Rules.chatRepeat("wa|Bob", 30000L, 60000L), "rules: another chat is independent");
         ok(!Rules.chatRepeat("wa|Ann", 70000L, 60000L), "rules: chat pops again after the window");
+        Rules.resetChats();
+        ok(!Rules.chatQuiet("wa|Cy", 1000L, 60000L) && !Rules.chatQuiet("wa|Cy", 2000L, 60000L), "rules: looking never records a chat");
+        Rules.chatShown("wa|Cy", 3000L);
+        ok(Rules.chatQuiet("wa|Cy", 4000L, 60000L) && !Rules.chatQuiet("wa|Cy", 70000L, 60000L), "rules: a shown banner quiets its chat for the window");
         ok("07:30".equals(Rules.hhmm(450)) && "00:00".equals(Rules.hhmm(1440)) && "23:30".equals(Rules.hhmm(-30)), "rules: clock text");
 
         // --- Timers / stopwatches

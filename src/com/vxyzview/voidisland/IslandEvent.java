@@ -20,6 +20,7 @@ final class IslandEvent {
     long durationMs = 4500; // transient events auto-dismiss after this
 
     String pkg, nkey, appName;
+    String chat;           // "one banner per chat" key, recorded once the banner has really been shown
     CharSequence title, text, sub;
     Bitmap icon, art;
     int accent = 0xFFFFFFFF;
@@ -68,7 +69,7 @@ final class IslandEvent {
 
     void copyFrom(IslandEvent o) {
         priority = o.priority; live = o.live; popup = o.popup; durationMs = o.durationMs;
-        pkg = o.pkg; nkey = o.nkey; appName = o.appName;
+        pkg = o.pkg; nkey = o.nkey; appName = o.appName; chat = o.chat;
         title = o.title; text = o.text; sub = o.sub;
         icon = o.icon; art = o.art; accent = o.accent; iconType = o.iconType;
         when = o.when; countDown = o.countDown; chrono = o.chrono; progress = o.progress;

@@ -32,6 +32,8 @@ final class IslandView extends ViewGroup {
         /** 0 = up, 1 = down, 2 = left, 3 = right */
         void onSwipe(int dir);
         void onOutside();
+        /** A finger went down on / came off the island (the banner's countdown waits while it is held). */
+        void onHold(boolean down);
         /** Something threw inside the island's own animation / install code: rebuild the overlay instead of letting the process die. */
         void onFault();
     }
@@ -440,8 +442,10 @@ final class IslandView extends ViewGroup {
     @Override public boolean dispatchTouchEvent(MotionEvent e) {
         int a = e.getActionMasked();
         if (a == MotionEvent.ACTION_OUTSIDE) { host.onOutside(); return true; }
-        if (a == MotionEvent.ACTION_DOWN) { press.tune(600f, 0.7f); press.to(0.955f); start(); }
-        else if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) { press.tune(380f, 0.5f); press.to(1f); start(); }
+        // The squish is NOT started here: it shrinks the whole island, and a button under the finger would slide away from it
+        // (the tap then ended outside the button and was lost). It starts in onTouchEvent, i.e. only when no button took the touch.
+        if (a == MotionEvent.ACTION_DOWN) host.onHold(true);
+        else if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) { host.onHold(false); press.tune(380f, 0.5f); press.to(1f); start(); }
         return super.dispatchTouchEvent(e);
     }
 
@@ -473,6 +477,9 @@ final class IslandView extends ViewGroup {
                 downY = e.getRawY();
                 downT = SystemClock.uptimeMillis();
                 swiping = false;
+                press.tune(600f, 0.7f);
+                press.to(0.955f);
+                start();
                 return true;
             case MotionEvent.ACTION_MOVE:
                 if (Math.abs(e.getRawX() - downX) > slop || Math.abs(e.getRawY() - downY) > slop) swiping = true;

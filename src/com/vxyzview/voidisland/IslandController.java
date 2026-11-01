@@ -660,6 +660,27 @@ final class IslandController implements IslandView.Host {
         }
     }
 
+    private boolean held;   // a finger is on a banner that would otherwise time out
+
+    /** A banner must not vanish under the finger: its countdown waits while it is touched and restarts (with time to see the result) on release. */
+    @Override public void onHold(boolean down) {
+        try {
+            if (down) {
+                held = popup != null;
+                if (held) {   // paused, but never for good: if the release is lost the banner still leaves
+                    h.removeCallbacks(popupEnd);
+                    h.postDelayed(popupEnd, 8000L);
+                }
+            } else if (held) {
+                held = false;
+                if (popup != null) {
+                    h.removeCallbacks(popupEnd);
+                    h.postDelayed(popupEnd, Math.max(2500L, Math.min(popup.durationMs, 4000L)));
+                }
+            }
+        } catch (Throwable t) { fault(); }
+    }
+
     @Override public void onOutside() {
         if (shownMode == IslandView.EXPANDED && shown != null && shown == userExpanded) {
             userExpanded = null;

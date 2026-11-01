@@ -239,7 +239,13 @@ public final class MainActivity extends Activity {
     private boolean notifOn() {
         try {
             String s = Settings.Secure.getString(getContentResolver(), "enabled_notification_listeners");
-            return s != null && s.contains(getPackageName());
+            if (s == null) return false;
+            ComponentName mine = new ComponentName(this, ListenerService.class);
+            for (String part : s.split(":")) {   // compare whole components: another app's name may merely start with ours
+                ComponentName cn = ComponentName.unflattenFromString(part);
+                if (mine.equals(cn)) return true;
+            }
+            return false;
         } catch (Throwable t) { return false; }
     }
 
@@ -324,7 +330,7 @@ public final class MainActivity extends Activity {
         su.addView(setupItem(IconView.LAYERS, "Display over other apps", "Recommended: Quick Settings slide over the island", overlayOn(), "Allow", new Runnable() {
             @Override public void run() { go(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()))); }
         }));
-        su.addView(setupItem(IconView.BT, "Bluetooth names", "Optional: show which device connected", btOn(), "Allow", new Runnable() {
+        su.addView(setupItem(IconView.BT, "Bluetooth", "Android 12+ needs this to show connect and disconnect pop-ups with the device name", btOn(), "Allow", new Runnable() {
             @Override public void run() { if (Build.VERSION.SDK_INT >= 31) requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"}, 7); }
         }));
         String fam = KeepAlive.familyHere();
