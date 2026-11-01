@@ -444,7 +444,7 @@ public final class MainActivity extends Activity {
                 ty.addView(row, m.top(M3.MATCH, M3.WRAP, i == 0 ? 0 : 8));
             }
             final String code = dCd[i];
-            View b = m.richButton(dIc[i], dNm[i], (i / 2 + i % 2) % 2, new Runnable() { @Override public void run() { demo(code); } });
+            View b = m.richButton(dIc[i], dNm[i], 0, new Runnable() { @Override public void run() { demo(code); } });
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, M3.WRAP, 1f);
             if (i % 2 == 1) bp.setMarginStart(dp(8));
             row.addView(b, bp);
@@ -610,7 +610,7 @@ public final class MainActivity extends Activity {
 
         LinearLayout mu = m.card(p, "Music");
         mu.addView(label("Compact pill"));
-        mu.addView(m.segmentedGrid(MusicStyle.CNAMES, s.musicStyle, 5, new M3.OnSel() {
+        mu.addView(m.segmentedGrid(MusicStyle.CNAMES, s.musicStyle, 4, new M3.OnSel() {
             @Override public void on(int i) {
                 put(Prefs.K_MSTYLE, i);
                 showPage(1, true);
@@ -621,7 +621,7 @@ public final class MainActivity extends Activity {
         mcd.setPadding(0, dp(10), 0, 0);
         mu.addView(mcd);
         mu.addView(label("Expanded card"));
-        mu.addView(m.segmentedGrid(MusicStyle.ENAMES, s.eMusicStyle, 5, new M3.OnSel() {
+        mu.addView(m.segmentedGrid(MusicStyle.ENAMES, s.eMusicStyle, 4, new M3.OnSel() {
             @Override public void on(int i) {
                 put(Prefs.K_EMSTYLE, i);
                 showPage(1, true);
@@ -771,13 +771,14 @@ public final class MainActivity extends Activity {
         m.toggle(ru, "Hide music & call pill inside their own app", null, Prefs.K_INAPP, true, null);
         final M3Switch[] absorbSw = new M3Switch[1];
         absorbSw[0] = m.toggle(ru, "Only show notifications on the island",
-            "Off by default. Messages and payments shown on the island are removed from the notification shade, so nothing pops up twice, but a banner you miss is gone. Calls, timers, maps, downloads and music keep their own notification",
+            "Off by default. Messages and payments shown on the island are removed from the notification shade right after the banner appears, but a banner you miss is gone and some apps then treat the message as read. Calls, timers, maps, downloads and music keep their own notification",
             Prefs.K_ABSORB, Prefs.ABSORB_DEF, new Runnable() {
                 @Override public void run() {
                     if (!Prefs.b(MainActivity.this, Prefs.K_ABSORB, Prefs.ABSORB_DEF)) return;   // switched off: nothing to confirm
                     Prefs.absorbUnconfirmed = true;
                     m.confirmDialog(MainActivity.this, "Remove banners from the shade?",
-                        "Messages and payments the island shows will be removed from the normal notification shade. If you look away and miss the banner, the message will not be waiting in the shade.\n\n"
+                        "Messages and payments the island shows will be removed from the normal notification shade. If you look away and miss the banner, the message will not be waiting in the shade, and the app is told you dismissed it, so some apps may mark the message as read.\n\n"
+                            + "The system pop-up can still flash for a moment before it is removed. To stop it completely, switch off Pop on screen for that app (Rules > Stock pop-up).\n\n"
                             + "Nothing is removed while the island is off, hidden, or ignoring that app, and apps on Keep in shade are never touched.",
                         "Turn on", new Runnable() { @Override public void run() { Prefs.absorbUnconfirmed = false; } },
                         "Cancel", new Runnable() {
@@ -789,6 +790,9 @@ public final class MainActivity extends Activity {
                         });
                 }
             });
+        ru.addView(m.item(IconView.BELL_OFF, "Stock pop-up", "Pick an app and switch off its Pop on screen in Android's settings, so only the island shows it", null, new Runnable() {
+            @Override public void run() { startActivity(new Intent(MainActivity.this, AppsActivity.class).putExtra(AppsActivity.EXTRA_MODE, 7)); }
+        }));
         // The lock-screen switch only matters when the island sits above the status bar; in "Under panel" mode it does nothing.
         if (!(s.qs == Style.QS_UNDER && overlayOn())) m.toggle(ru, "Show on lock screen", "Show the island over the lock screen", Prefs.K_LOCK, false, null);
         m.toggle(ru, "Haptic feedback", null, Prefs.K_HAPTIC, true, null);

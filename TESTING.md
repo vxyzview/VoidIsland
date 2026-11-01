@@ -23,6 +23,9 @@ The unit checks (`test/`) cover the pure logic. Everything below needs a phone: 
 - [ ] While a video is fullscreen the notification stays in the shade.
 - [ ] A burst of 5 messages: queued ones are not removed until they are shown. All of them appear in **Recent banners**.
 - [ ] Apps on *Keep in shade* keep their notification.
+- [ ] With the island idle (nothing else showing), the **first** message banner's original leaves the shade right after the banner appears (it used to stay, because the removal was armed too late).
+- [ ] *Rules > Stock pop-up*: tapping an app opens that app's Android notification settings; after switching off *Pop on screen* there, the island shows the message and no system pop-up appears.
+- [ ] A chat app that marks messages read on dismiss: note whether the message shows as read after the island absorbed it.
 
 ## Calls, timers, music
 - [ ] Incoming call popup, accept / decline, ongoing call timer. Ending the call on a paired watch removes the pill.

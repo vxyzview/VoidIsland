@@ -6,7 +6,9 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Bitmap;
 import android.graphics.drawable.ColorDrawable;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.util.LruCache;
 import android.view.Gravity;
 import android.view.View;
@@ -16,6 +18,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.text.Collator;
 import java.util.ArrayList;
@@ -30,7 +33,8 @@ import java.util.concurrent.Executors;
 /**
  * Per-app switches in several flavours (intent extra "mode"):
  * 0 = which apps may appear on the island, 1 = apps whose notifications also stay in the shade,
- * 2 = apps the quiet-hours rule applies to (none switched on = all apps), 4 / 5 / 6 = extra ride / food / score apps for live activities (3 is unused).
+ * 2 = apps the quiet-hours rule applies to (none switched on = all apps), 4 / 5 / 6 = extra ride / food / score apps for live activities (3 is unused),
+ * 7 = no switches: tapping an app opens Android's own notification settings for it (to switch off its stock pop-up).
  */
 public final class AppsActivity extends Activity {
     /** One launcher app: label resolved once, up front, so sorting and scrolling never hit the PackageManager. */
@@ -61,6 +65,7 @@ public final class AppsActivity extends Activity {
     private Set<String> sel;          // the apps stored in the preference behind this screen
     private String prefKey;
     private boolean inverted;         // mode 0 stores the apps that are OFF, so its switch reads the opposite way
+    private boolean launch;           // mode 7: a row opens that app's notification settings instead of toggling a switch
     private PackageManager pm;
     private M3 m;
     private Adapter adapter;
@@ -76,6 +81,7 @@ public final class AppsActivity extends Activity {
         prefKey = mode == 1 ? Prefs.K_KEEP : (mode == 2 ? Prefs.K_QAPPS
             : (mode == 4 ? Prefs.K_LIVE_RIDE : (mode == 5 ? Prefs.K_LIVE_FOOD : (mode == 6 ? Prefs.K_LIVE_SPORT : Prefs.K_BLOCK))));
         inverted = mode == 0;
+        launch = mode == 7;
         sel = Prefs.set(this, prefKey);
         getWindow().setBackgroundDrawable(new ColorDrawable(m.surface));
         getWindow().setStatusBarColor(m.surface);
@@ -90,10 +96,11 @@ public final class AppsActivity extends Activity {
         LinearLayout bar = m.row();
         bar.addView(m.iconButton(IconView.BACK, "Back", new Runnable() { @Override public void run() { finish(); } }), m.lp(m.dp(48), m.dp(48)));
         root.addView(bar);
-        TextView t = m.text(mode == 1 ? "Keep in shade" : (mode == 2 ? "Quiet hours apps" : (mode == 4 ? "Ride apps" : (mode == 5 ? "Food apps" : (mode == 6 ? "Score apps" : "Apps")))), 32f, false, m.onSurface);
+        TextView t = m.text(mode == 1 ? "Keep in shade" : (mode == 2 ? "Quiet hours apps" : (mode == 4 ? "Ride apps" : (mode == 5 ? "Food apps" : (mode == 6 ? "Score apps" : (mode == 7 ? "Stock pop-up" : "Apps"))))), 32f, false, m.onSurface);
         t.setPadding(m.dp(4), m.dp(8), 0, 0);
         root.addView(t);
-        TextView s = m.text(mode == 1 ? "Switch on apps whose notifications should also stay in the normal notification shade, like banking or one-time codes."
+        TextView s = m.text(mode == 7 ? "Tap an app to open its notification settings. There, turn off Pop on screen (or set the channel to Default) so only the island shows it. Keep the notification itself on: VoidIsland needs it."
+            : mode == 1 ? "Switch on apps whose notifications should also stay in the normal notification shade, like banking or one-time codes."
             : (mode >= 4 ? "Switch on apps whose ongoing notification should stay on the island as a live activity, even when VoidIsland does not know them yet."
             : (mode == 2 ? "Quiet hours only apply to the apps switched on. Leave them all off to apply quiet hours to every app."
             : "Switch off apps you never want on the island.")), 14f, false, m.onSurfaceVariant);
@@ -152,6 +159,20 @@ public final class AppsActivity extends Activity {
         });
     }
 
+    /** Android's own notification settings for one app (its channels, Pop on screen...). Falls back to the app's info page. */
+    private void openNotificationSettings(String pkg) {
+        if (pkg == null) return;
+        try {
+            startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, pkg));
+        } catch (RuntimeException first) {
+            try {
+                startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", pkg, null)));
+            } catch (RuntimeException second) {
+                Toast.makeText(this, "This phone has no settings page for that app", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
     private final class Adapter extends BaseAdapter {
         @Override public int getCount() { return apps.size(); }
         @Override public Object getItem(int i) { return apps.get(i); }
@@ -174,7 +195,12 @@ public final class AppsActivity extends Activity {
             row.addView(h.name, new LinearLayout.LayoutParams(0, M3.WRAP, 1f));
             h.sw = new M3Switch(m, true, null);
             row.addView(h.sw, new LinearLayout.LayoutParams(m.dp(52), m.dp(32)));
-            row.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View x) { h.sw.toggle(); } });
+            row.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View x) {
+                    if (launch) openNotificationSettings(h.pkg); else h.sw.toggle();
+                }
+            });
+            if (launch) h.sw.setVisibility(View.GONE);
             row.setTag(h);
             h.root = row;
             return h;
@@ -185,7 +211,7 @@ public final class AppsActivity extends Activity {
             final App a = apps.get(i);
             h.pkg = a.pkg;
             h.name.setText(a.label);
-            h.sw.bind(sel.contains(a.pkg) != inverted, new M3.OnSel() {
+            if (!launch) h.sw.bind(sel.contains(a.pkg) != inverted, new M3.OnSel() {
                 @Override public void on(int on) {
                     boolean stored = (on == 1) != inverted;   // is this app in the stored set after the flip?
                     if (stored) sel.add(a.pkg); else sel.remove(a.pkg);

@@ -83,10 +83,14 @@ public final class ListenerService extends NotificationListenerService {
             } else {
                 e.nkey = sbn.getKey();
                 if (!e.live) Bus.removeByNkey(sbn.getKey(), true);
+                // The island can put an idle-island banner on screen INSIDE Bus.post() and call onBannerShown() before it returns,
+                // so the flag has to be armed first. (Setting it afterwards meant the original was never removed for a banner that
+                // showed straight away, which is the usual case.) A banner the island refused is disarmed again right below.
+                e.absorbOk = Absorb.applies(e.type, e.live, initial);
                 boolean showing = Bus.post(e);
+                if (!showing) e.absorbOk = false;   // not taken / not visible right now: its original stays where it is
                 if (showing && e.chat != null) Rules.chatShown(e.chat, System.currentTimeMillis());
                 // the original is removed only once the island has really put this banner on screen (see onBannerShown)
-                e.absorbOk = showing && Absorb.applies(e.type, e.live, initial);
             }
         } catch (Throwable t) { Dbg.e("notification", t); /* one weird notification must never take the service down */ }
     }

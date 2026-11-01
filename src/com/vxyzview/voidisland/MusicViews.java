@@ -336,3 +336,94 @@ final class ArtRing extends View {
         c.drawArc(r, -90f, Math.max(3f, 360f * frac), false, p);   // never empty: a dot marks the start
     }
 }
+
+/**
+ * A dot-matrix equalizer: a grid of flat dots where each column lights up from the bottom like a level meter. Lit dots take the
+ * accent, the rest stay as faint pips. Same rules as the other animated views: it only draws while visible, playing and the
+ * display is on, at about 20 fps, and a paused song shows one calm row and sleeps.
+ */
+final class DotEqView extends View {
+    private static final float[] SP = {5.3f, 7.1f, 6.4f, 8.2f, 5.9f, 7.6f};
+    private static final float[] PH = {0f, 1.4f, 2.7f, 0.6f, 2.1f, 3.3f};
+    private static final long FRAME_MS = 50L;
+
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final int cols, rows;
+    private boolean playing = true, dark;
+    private int color = Color.WHITE;
+
+    DotEqView(Context c, int cols, int rows) {
+        super(c);
+        this.cols = Math.max(2, cols);
+        this.rows = Math.max(2, rows);
+    }
+
+    void setPlaying(boolean b) {
+        playing = b;
+        invalidate();
+    }
+
+    void setColor(int c) {
+        color = c;
+        invalidate();
+    }
+
+    @Override public void onScreenStateChanged(int state) {
+        super.onScreenStateChanged(state);
+        dark = state == View.SCREEN_STATE_OFF;
+        if (!dark) invalidate();
+    }
+
+    @Override public void onVisibilityAggregated(boolean visible) {
+        super.onVisibilityAggregated(visible);
+        if (visible) invalidate();
+    }
+
+    @Override protected void onDraw(Canvas c) {
+        float w = getWidth(), h = getHeight();
+        if (w <= 0f || h <= 0f) return;
+        float pitch = Math.min(w / cols, h / rows), dot = pitch * 0.58f;
+        float x0 = (w - pitch * cols) / 2f, y0 = (h - pitch * rows) / 2f;
+        float t = SystemClock.uptimeMillis() / 1000f;
+        int off = Col.alpha(color, 0.22f);
+        for (int i = 0; i < cols; i++) {
+            float lvl = playing ? 0.2f + 0.8f * (0.5f + 0.5f * (float) Math.sin(t * SP[i % SP.length] + PH[i % PH.length])) : 0f;
+            int lit = Math.max(1, Math.round(lvl * rows));
+            for (int j = 0; j < rows; j++) {                  // j = 0 is the bottom row
+                p.setColor(j < lit ? color : off);
+                c.drawCircle(x0 + pitch * (i + 0.5f), y0 + pitch * (rows - j - 0.5f), dot / 2f, p);
+            }
+        }
+        if (playing && !dark && isShown()) postInvalidateDelayed(FRAME_MS);
+    }
+}
+
+/** A slim, flat progress line (track + accent fill, round ends). It is only for looking at: it never takes a touch, so a tap on the pill still opens the island. */
+final class ProgressLine extends View {
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final RectF r = new RectF();
+    private float frac;
+    private int color = Color.WHITE;
+
+    ProgressLine(Context c) { super(c); }
+
+    /** Song position as 0..1 and the fill colour; repaints only when the line would move by about a pixel. */
+    void set(float f, int color) {
+        f = f < 0f ? 0f : (f > 1f ? 1f : f);
+        if (Math.abs(f - frac) < 0.002f && color == this.color) return;
+        frac = f;
+        this.color = color;
+        invalidate();
+    }
+
+    @Override protected void onDraw(Canvas c) {
+        float w = getWidth(), h = getHeight(), rad = h / 2f;
+        if (w <= 0f || h <= 0f) return;
+        r.set(0f, 0f, w, h);
+        p.setColor(Cards.track());
+        c.drawRoundRect(r, rad, rad, p);
+        r.set(0f, 0f, Math.max(h, w * frac), h);
+        p.setColor(color);
+        c.drawRoundRect(r, rad, rad, p);
+    }
+}

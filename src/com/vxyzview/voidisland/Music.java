@@ -17,9 +17,13 @@ import java.util.Locale;
  * {@link Cards}; everything else is built here. Names and descriptions: {@link MusicStyle}.
  *
  * Compact pill: 1 Vinyl (a spinning record), 2 Ring (round art inside a progress ring), 3 Wave (a wide rolling waveform),
- * 4 Song (the title and artist instead of lyrics).
+ * 4 Song (the title and artist instead of lyrics), 5 Track (title + slim progress line + play badge), 6 Beat (a capsule with a
+ * dot-matrix equalizer), 7 Timer (a capsule with the time left).
  * Expanded card: 1 Vinyl (a record and a tonearm), 2 Poster (big centred art), 3 Mini (one slim row), 4 Lyrics (the lines
- * of the song, big, in the middle of the card).
+ * of the song, big, in the middle of the card), 5 Bento (flat tonal tiles), 6 Wave (a waveform across the card), 7 Cover (wide
+ * art with the title on a flat chip).
+ *
+ * The newest designs (5..7) are strictly flat: solid fills, tonal containers and thin lines, no gradients anywhere.
  *
  * Every design keeps what the island promises: it follows the accent, the seek bar can be dragged, the lyric offset applies,
  * and nothing animates while the song is paused or the display is off.
@@ -56,12 +60,13 @@ final class Music {
                 Bitmap b = artOf(e);
                 if (vv != null) { vv.set(b); vv.setAccent(Cards.acc(e)); vv.setPlaying(e.playing); }
                 if (ar != null) ar.set(b);
-                if (ri != null) ri.set(b, style == 3 ? -1f : gl * 0.3f);   // Wave: a full circle, Song: the usual rounded square
+                if (ri != null) ri.set(b, style == 3 || style == 7 ? -1f : gl * 0.3f);   // Wave + Timer: a full circle, the rest: the usual rounded square
             }
         };
         art.run();
 
         if (style == 4) { song(c, e, out, h, gl, m, pillW, art); return; }
+        if (style >= 5) { flat(c, e, out, h, gl, m, pillW, art, style); return; }
 
         // ---- right: the lyric line, or a visual while no lyric is known
         final int lw = Math.max(Cards.dp(c, 36), pillW - gl - Cards.dp(c, S.cPad * 2) - Cards.dp(c, 2));
@@ -169,6 +174,113 @@ final class Music {
         };
     }
 
+    /**
+     * The flat pills. 5 Track: the title with a slim progress line under it and a play / pause badge. 6 Beat: the title (and artist)
+     * and a tonal capsule holding a dot-matrix equalizer. 7 Timer: the title and a tonal capsule with the time left. Solid fills
+     * only. No lyric lookups, so these never touch the network.
+     */
+    private static void flat(final Context c, final IslandEvent e, FrameLayout out, int h, int gl, int m, int pillW, final Runnable art, final int style) {
+        final int side = Gravity.CENTER_VERTICAL;
+        final boolean tall = h >= Cards.dp(c, (13f + 9.5f) * Cards.TS * 1.2f + 4f + (style == 5 ? 6f : 0f));   // room for a second line of text
+        final int cap = Math.max(Cards.dp(c, 14), Math.min(h - Cards.dp(c, 8), Cards.dp(c, 22)));           // height of the badge / capsule
+        final int widgetW = style == 5 ? cap : (style == 6 ? Math.round(cap * 2.1f) : Math.round(cap * 2.7f));
+        final int leftEdge = m + gl + Cards.dp(c, 8);
+        int rightEdge = m + widgetW + Cards.dp(c, 8);
+        final boolean widgetOn = pillW - leftEdge - rightEdge >= Cards.dp(c, 44);
+        if (!widgetOn) rightEdge = m;
+        final int avail = Math.max(Cards.dp(c, 24), pillW - leftEdge - rightEdge);
+
+        // ---- the text block
+        final TextView title = Cards.tv(c, e.title, tall ? 12.5f : 13f, Cards.WHITE, true);
+        final TextView sub = tall ? Cards.tv(c, e.text, 9.5f, Cards.SUB, false) : null;
+        title.setMaxWidth(avail);
+        LinearLayout box = Cards.col(c);
+        box.setGravity(Gravity.START);
+        box.addView(title, Cards.lp(WRAP, WRAP));
+        if (sub != null) {
+            sub.setMaxWidth(avail);
+            LinearLayout.LayoutParams sl = Cards.lp(WRAP, WRAP);
+            sl.topMargin = Cards.dp(c, 1);
+            box.addView(sub, sl);
+            sub.setVisibility(e.text == null || e.text.length() == 0 ? View.GONE : View.VISIBLE);
+        }
+        final ProgressLine pl = style == 5 ? new ProgressLine(c) : null;
+        if (pl != null) {
+            LinearLayout.LayoutParams pp = Cards.lp(avail, Math.max(2, Cards.dp(c, 3)));
+            pp.topMargin = Cards.dp(c, tall ? 4 : 3);
+            box.addView(pl, pp);
+        }
+        FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.START | side);
+        bl.setMargins(leftEdge, 0, rightEdge, 0);
+        out.addView(box, bl);
+
+        // ---- the widget at the far end
+        final IconView badge = style == 5 && widgetOn ? new IconView(c, e.playing ? IconView.PAUSE : IconView.PLAY, Cards.acc(e)) : null;
+        final DotEqView dots = style == 6 && widgetOn ? new DotEqView(c, 5, 3) : null;
+        final TextView left = style == 7 && widgetOn ? Cards.tv(c, "", 10.5f, Cards.acc(e), true) : null;
+        final View chip;   // whatever is the tonal capsule / badge, so one routine can recolour it
+        if (badge != null) {
+            int pad = Math.round(cap * 0.27f);
+            badge.setPadding(pad, pad, pad, pad);
+            out.addView(badge, Cards.fl(cap, cap, Gravity.END | side, m));
+            chip = badge;
+        } else if (dots != null) {
+            LinearLayout cap6 = Cards.row(c);
+            cap6.setGravity(Gravity.CENTER);
+            int hp = Cards.dp(c, 7);
+            cap6.addView(dots, Cards.lp(widgetW - 2 * hp, cap - Cards.dp(c, 8)));
+            out.addView(cap6, Cards.fl(widgetW, cap, Gravity.END | side, m));
+            chip = cap6;
+        } else if (left != null) {
+            left.setGravity(Gravity.CENTER);
+            left.setFontFeatureSettings("tnum");
+            left.setPadding(Cards.dp(c, 8), 0, Cards.dp(c, 8), 0);
+            out.addView(left, Cards.fl(WRAP, cap, Gravity.END | side, m));
+            chip = left;
+        } else {
+            chip = null;
+        }
+        final int capR = cap / 2;
+        final String[] lastRem = {null};
+        final Runnable tick = new Runnable() {
+            @Override public void run() {
+                long dur = e.durMs, pos = Cards.position(e);
+                int a = Cards.acc(e);
+                if (pl != null) pl.set(dur > 0 ? pos / (float) dur : 0f, a);
+                if (left != null) {
+                    String t = dur > 0 ? "-" + Parse.clock(Math.max(0L, dur - pos)) : "LIVE";
+                    if (!t.equals(lastRem[0])) { lastRem[0] = t; left.setText(t); }
+                    left.setTextColor(a);
+                }
+                e.tickHint = e.playing ? (pl != null ? 800 : 1000) : 4000;   // paused: a slow re-anchor is plenty
+            }
+        };
+        final Runnable skin = new Runnable() {
+            @Override public void run() {
+                int a = Cards.acc(e);
+                if (chip != null) chip.setBackground(Cards.bg(Col.alpha(a, badge != null ? 0.22f : 0.18f), capR));
+                if (badge != null) badge.set(e.playing ? IconView.PAUSE : IconView.PLAY, a);
+                if (dots != null) { dots.setColor(a); dots.setPlaying(e.playing); }
+            }
+        };
+        skin.run();
+        tick.run();
+        e.tC = tick;
+        e.uC = new IslandEvent.Updater() {
+            @Override public boolean update() {
+                art.run();
+                title.setText(e.title);
+                if (sub != null) {
+                    sub.setText(e.text);
+                    sub.setVisibility(e.text == null || e.text.length() == 0 ? View.GONE : View.VISIBLE);
+                }
+                skin.run();
+                tick.run();
+                return true;
+            }
+        };
+    }
+
     // ================================================================== expanded card
 
     static View expanded(Context c, IslandEvent e, int width) {
@@ -177,6 +289,9 @@ final class Music {
             case 2: return poster(c, e, width);
             case 3: return mini(c, e);
             case 4: return lyrics(c, e);
+            case 5: return bento(c, e);
+            case 6: return waveCard(c, e);
+            case 7: return cover(c, e, width);
             default: return Cards.media(c, e);
         }
     }
@@ -519,6 +634,185 @@ final class Music {
                 eq.setPlaying(e.playing);
                 Cards.lyricsLoad(c, e, lkey, lnow, paint);
                 paint.run();
+            }
+        });
+        return root;
+    }
+    // ---------------------------------------------------------------- Bento
+
+    /** Previous / play-pause / next as three roomy flat keys: two tonal tiles and an accent-filled play key in the middle. */
+    private static LinearLayout bentoKeys(Context c, final IslandEvent e, Parts p) {
+        final Style S = Cards.S;
+        LinearLayout ctl = Cards.row(c);
+        ctl.setGravity(Gravity.CENTER);
+        ctl.setPadding(0, Cards.dp(c, 12), 0, 0);
+        final int skipFg = S.accentOverride ? S.btnOn : Cards.WHITE;
+        final int tileCol = S.accentOverride ? S.btn : Cards.TILE;
+        final int a = Cards.acc(e);
+        p.playFg = Col.onColor(a);
+        p.prev = new IconView(c, IconView.PREV, skipFg);
+        p.next = new IconView(c, IconView.NEXT, skipFg);
+        p.play = new IconView(c, e.playing ? IconView.PAUSE : IconView.PLAY, p.playFg);
+        p.prev.setBackground(Cards.bg(tileCol, Cards.dp(c, 22)));
+        p.next.setBackground(Cards.bg(tileCol, Cards.dp(c, 22)));
+        p.play.setBackground(Cards.bg(a, Cards.dp(c, 28)));
+        int pd = Cards.dp(c, 14);
+        p.prev.setPadding(pd, pd, pd, pd);
+        p.next.setPadding(pd, pd, pd, pd);
+        p.play.setPadding(pd, pd, pd, pd);
+        p.prev.setContentDescription("Previous track");
+        p.next.setContentDescription("Next track");
+        p.play.setContentDescription("Play or pause");
+        p.prev.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { Cards.mediaAction(e, 0); } });
+        p.next.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { Cards.mediaAction(e, 2); } });
+        p.play.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { Cards.mediaAction(e, 1); } });
+        Cards.press(p.prev);
+        Cards.press(p.next);
+        Cards.press(p.play);
+        int gap = Cards.dp(c, 8);
+        LinearLayout.LayoutParams l1 = Cards.lpw(0, Cards.dp(c, 52), 1f), l2 = Cards.lpw(0, Cards.dp(c, 56), 1.5f), l3 = Cards.lpw(0, Cards.dp(c, 52), 1f);
+        l2.setMargins(gap, 0, gap, 0);
+        ctl.addView(p.prev, l1);
+        ctl.addView(p.play, l2);
+        ctl.addView(p.next, l3);
+        return ctl;
+    }
+
+    /** Big rounded art beside one tonal tile with the app, title and artist; then the seek bar and three flat keys. */
+    private static View bento(final Context c, final IslandEvent e) {
+        LinearLayout root = root(c, 1f);
+        final Parts p = new Parts();
+        LinearLayout top = Cards.row(c);
+        final int as = Cards.dp(c, 104);
+        final RoundImage art = new RoundImage(c);
+        art.set(artOf(e), Cards.dp(c, 24));
+        top.addView(art, Cards.lp(as, as));
+
+        LinearLayout tile = Cards.col(c);
+        tile.setGravity(Gravity.CENTER_VERTICAL);
+        tile.setBackground(Cards.bg(Cards.TILE, Cards.dp(c, 24)));
+        tile.setPadding(Cards.dp(c, 14), Cards.dp(c, 8), Cards.dp(c, 12), Cards.dp(c, 8));
+        LinearLayout head = Cards.row(c);
+        final TextView app = Cards.tv(c, appCaps(e), 10.5f, Cards.acc(e), true);
+        app.setLetterSpacing(0.12f);
+        final EqView eq = eq(c, e);
+        head.addView(app, Cards.lpw(0, WRAP, 1f));
+        head.addView(eq, Cards.lp(Cards.dp(c, 18), Cards.dp(c, 14)));
+        p.title = Cards.tv(c, e.title, 17f, Cards.WHITE, true);
+        p.artist = Cards.tv(c, e.text, 14f, Cards.SUB, false);
+        tile.addView(head, Cards.lp(MATCH, WRAP));
+        LinearLayout.LayoutParams tl = Cards.lp(MATCH, WRAP);
+        tl.topMargin = Cards.dp(c, 6);
+        tile.addView(p.title, tl);
+        LinearLayout.LayoutParams al = Cards.lp(MATCH, WRAP);
+        al.topMargin = Cards.dp(c, 2);
+        tile.addView(p.artist, al);
+        LinearLayout.LayoutParams tp = Cards.lpw(0, Math.round(as * Math.max(1f, Cards.TS)), 1f);
+        tp.leftMargin = Cards.dp(c, 8);
+        top.addView(tile, tp);
+        root.addView(top);
+        root.addView(seekRow(c, e, p, true, 10));
+        root.addView(bentoKeys(c, e, p));
+        wire(c, e, p, null, new Runnable() {
+            @Override public void run() {
+                int a = Cards.acc(e);
+                art.set(artOf(e), Cards.dp(c, 24));
+                eq.setColor(a);
+                eq.setPlaying(e.playing);
+                app.setText(appCaps(e));
+                app.setTextColor(a);
+                p.playFg = Col.onColor(a);
+                p.play.setBackground(Cards.bg(a, Cards.dp(c, 28)));
+                p.play.set(e.playing ? IconView.PAUSE : IconView.PLAY, p.playFg);
+            }
+        });
+        return root;
+    }
+
+    // ---------------------------------------------------------------- Wave
+
+    /** A small header (art, title, artist), a wide rolling waveform across the card, then the seek bar and the buttons. */
+    private static View waveCard(final Context c, final IslandEvent e) {
+        LinearLayout root = root(c, 1f);
+        final Parts p = new Parts();
+        LinearLayout top = Cards.row(c);
+        final RoundImage art = new RoundImage(c);
+        art.set(artOf(e), Cards.dp(c, 14));
+        top.addView(art, Cards.lp(Cards.dp(c, 52), Cards.dp(c, 52)));
+        LinearLayout txt = Cards.col(c);
+        txt.setPadding(Cards.dp(c, 12), 0, Cards.dp(c, 4), 0);
+        p.title = Cards.tv(c, e.title, 16.5f, Cards.WHITE, true);
+        p.artist = Cards.tv(c, e.text, 13.5f, Cards.SUB, false);
+        p.artist.setPadding(0, Cards.dp(c, 2), 0, 0);
+        txt.addView(p.title);
+        txt.addView(p.artist);
+        top.addView(txt, Cards.lpw(0, WRAP, 1f));
+        root.addView(top);
+
+        final WaveView wv = new WaveView(c);
+        wv.setColor(Cards.acc(e));
+        wv.setPlaying(e.playing);
+        LinearLayout.LayoutParams wl = Cards.lp(MATCH, Cards.dp(c, 48));
+        wl.topMargin = Cards.dp(c, 12);
+        root.addView(wv, wl);
+        root.addView(seekRow(c, e, p, true, 6));
+        root.addView(controls(c, e, p, 0.9f));
+        wire(c, e, p, null, new Runnable() {
+            @Override public void run() {
+                art.set(artOf(e), Cards.dp(c, 14));
+                wv.setColor(Cards.acc(e));
+                wv.setPlaying(e.playing);
+            }
+        });
+        return root;
+    }
+
+    // ---------------------------------------------------------------- Cover
+
+    /** Wide cover art with the title on a flat chip in its corner (and an equalizer badge); then the seek bar and the buttons. */
+    private static View cover(final Context c, final IslandEvent e, int width) {
+        LinearLayout root = root(c, 1f);
+        final Parts p = new Parts();
+        final int chipBg = Col.alpha(Cards.S.bg, 0.84f);   // the island's own colour, so the text on it always reads
+        FrameLayout frame = new FrameLayout(c);
+        final RoundImage art = new RoundImage(c);
+        art.set(artOf(e), Cards.dp(c, 26));
+        frame.addView(art, new FrameLayout.LayoutParams(MATCH, Cards.dp(c, 150)));
+
+        LinearLayout chip = Cards.col(c);
+        chip.setBackground(Cards.bg(chipBg, Cards.dp(c, 18)));
+        chip.setPadding(Cards.dp(c, 12), Cards.dp(c, 8), Cards.dp(c, 14), Cards.dp(c, 9));
+        p.title = Cards.tv(c, e.title, 16f, Cards.WHITE, true);
+        p.artist = Cards.tv(c, e.text, 12.5f, Cards.SUB, false);
+        int maxW = Math.max(Cards.dp(c, 80), width - 2 * Cards.px(c) - Cards.dp(c, 46));
+        p.title.setMaxWidth(maxW);
+        p.artist.setMaxWidth(maxW);
+        chip.addView(p.title);
+        LinearLayout.LayoutParams al = Cards.lp(WRAP, WRAP);
+        al.topMargin = Cards.dp(c, 1);
+        chip.addView(p.artist, al);
+        FrameLayout.LayoutParams cl = new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.START | Gravity.BOTTOM);
+        cl.setMargins(Cards.dp(c, 10), 0, 0, Cards.dp(c, 10));
+        frame.addView(chip, cl);
+
+        LinearLayout badge = Cards.row(c);
+        badge.setGravity(Gravity.CENTER);
+        badge.setBackground(Cards.bg(chipBg, Cards.dp(c, 14)));
+        badge.setPadding(Cards.dp(c, 9), Cards.dp(c, 7), Cards.dp(c, 9), Cards.dp(c, 7));
+        final EqView eq = eq(c, e);
+        badge.addView(eq, Cards.lp(Cards.dp(c, 18), Cards.dp(c, 14)));
+        FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.TOP | Gravity.END);
+        bl.setMargins(0, Cards.dp(c, 10), Cards.dp(c, 10), 0);
+        frame.addView(badge, bl);
+        root.addView(frame, Cards.lp(MATCH, WRAP));
+
+        root.addView(seekRow(c, e, p, true, 10));
+        root.addView(controls(c, e, p, 0.9f));
+        wire(c, e, p, null, new Runnable() {
+            @Override public void run() {
+                art.set(artOf(e), Cards.dp(c, 26));
+                eq.setColor(Cards.acc(e));
+                eq.setPlaying(e.playing);
             }
         });
         return root;
