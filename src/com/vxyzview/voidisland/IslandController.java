@@ -62,6 +62,13 @@ final class IslandController implements IslandView.Host {
     private final LinkedHashMap<String, IslandEvent> live = new LinkedHashMap<String, IslandEvent>();
     private final ArrayDeque<IslandEvent> queue = new ArrayDeque<IslandEvent>();
     private IslandEvent popup, userExpanded, shown;
+    /** The banner a quick-reply box is open for: it stays on screen, joined to the box, until the reply is sent or given up. */
+    private IslandEvent replying;
+    private boolean replyGone;   // its original notification was removed while the box was open: take it away afterwards
+    private static final long REPLY_IDLE_MS = 180000L;   // a forgotten box never keeps the island busy for good
+    private final Runnable replyGuard = new Runnable() {
+        @Override public void run() { cancelReply(); evaluate(); }
+    };
     /**
      * shownMode value meaning "the window may be showing anything": the next show() must push its state to the view, even
      * when that state is null/HIDDEN. Without it, hiding (e.g. an app going fullscreen) right after a
@@ -73,10 +80,18 @@ final class IslandController implements IslandView.Host {
     private boolean restyle;   // next present() should morph, not cross-fade (settings were just changed)
 
     private final Runnable popupEnd = new Runnable() {
-        @Override public void run() { popup = null; evaluate(); }
+        @Override public void run() {
+            if (replying != null && replying == popup) return;   // a reply is being typed: the banner stays until it is done
+            popup = null;
+            evaluate();
+        }
     };
     private final Runnable collapse = new Runnable() {
-        @Override public void run() { userExpanded = null; evaluate(); }
+        @Override public void run() {
+            if (replying != null && replying == userExpanded) return;
+            userExpanded = null;
+            evaluate();
+        }
     };
     private final Runnable applyRun = new Runnable() {
         @Override public void run() { try { applyPrefs(); } catch (Throwable t) { fault(); } }
@@ -239,6 +254,7 @@ final class IslandController implements IslandView.Host {
     void detach() {
         closed = true;   // never rebuild a controller the service has already let go of
         h.removeCallbacksAndMessages(null);
+        if (replying != null) { replying = null; ReplyActivity.closeFromIsland(); }
         if (attached) {
             try { wm.removeViewImmediate(view); } catch (Throwable t) { /* already gone */ }
         }
@@ -248,6 +264,13 @@ final class IslandController implements IslandView.Host {
     }
 
     private void reattach(boolean app) {
+        if (replying != null) {   // the overlay is thrown away: nothing is left for the box to join
+            IslandEvent r = replying;
+            replying = null;
+            h.removeCallbacks(replyGuard);
+            if (r == popup) { h.removeCallbacks(popupEnd); h.postDelayed(popupEnd, 4000L); }
+            ReplyActivity.closeFromIsland();
+        }
         try { if (attached) wm.removeViewImmediate(view); } catch (Throwable t) { /* already gone */ }
         attached = false;
         h.removeCallbacks(tick);
@@ -384,6 +407,7 @@ final class IslandController implements IslandView.Host {
 
     void applyPrefs() {
         if (!attached) return;
+        if (replying != null) { cancelReply(); }   // a restyle rebuilds the island: the box would no longer line up
         style = Style.load(svc);
         boolean app = wantApp(style);
         if (app != layerApp) { reattach(app); return; }
@@ -475,7 +499,12 @@ final class IslandController implements IslandView.Host {
             if (suppressed()) return false;
             if (popup != null && popup.key.equals(e.key)) {
                 popup = e;
-                schedulePopup(e);
+                if (replying != null && replying.key.equals(e.key)) {
+                    replying = e;           // the new message appears on the card while the box stays open under it
+                    ReplyActivity.update(e);
+                } else {
+                    schedulePopup(e);
+                }
             } else {
                 for (Iterator<IslandEvent> it = queue.iterator(); it.hasNext();) if (it.next().key.equals(e.key)) it.remove();
                 // A full queue refuses the newcomer instead of silently dropping an older banner that may already have
@@ -501,6 +530,7 @@ final class IslandController implements IslandView.Host {
     }
 
     void remove(String key) {
+        if (replying != null && replying.key.equals(key)) { replyGone = true; return; }   // the original left the shade; the reply may still go out
         drop(key);
         evaluate();
     }
@@ -526,11 +556,84 @@ final class IslandController implements IslandView.Host {
             if (userExpanded == old) userExpanded = null;
             if (k.equals(pinnedKey)) pinnedKey = null;
         }
-        if (!liveOnly && popup != null && nkey.equals(popup.nkey)) { popup = null; h.removeCallbacks(popupEnd); }
+        if (!liveOnly && popup != null && nkey.equals(popup.nkey)) {
+            if (popup == replying) { replyGone = true; }
+            else { popup = null; h.removeCallbacks(popupEnd); }
+        }
         evaluate();
     }
 
     void refresh() { evaluate(); }
+
+    // ------------------------------------------------------------------ quick reply
+
+    /**
+     * The quick-reply box opened for a card that is on screen right now. From here the banner is held: its timer stops,
+     * no other banner replaces it, and its bottom edge flattens so the box (drawn by ReplyActivity) continues the same
+     * shape. It ends only when the reply is sent, given up, or the person presses another button / opens the app.
+     * @return false when the card is not what the island is showing (then the box simply floats on its own)
+     */
+    boolean replyBegin(IslandEvent e) {
+        if (!attached || e == null || closed) return false;
+        IslandEvent on = shown;
+        if (on == null || shownMode != IslandView.EXPANDED || !on.key.equals(e.key)) return false;
+        if (replying != null && replying != on) cancelReply();
+        replying = on;
+        replyGone = false;
+        h.removeCallbacks(popupEnd);
+        h.removeCallbacks(collapse);
+        replyTouch();
+        view.dock(true);
+        return true;
+    }
+
+    /** The person is still typing: push the safety timeout back. */
+    void replyTouch() {
+        if (replying == null) return;
+        h.removeCallbacks(replyGuard);
+        h.postDelayed(replyGuard, REPLY_IDLE_MS);
+    }
+
+    /** Screen position of the card's bottom edge, for the reply box to join. */
+    boolean replyDock(int[] out) {
+        return attached && replying != null && view != null && view.dockRect(out);
+    }
+
+    /**
+     * The box is done. {@code sent}: the reply went out, so the banner has done its job and goes with the box.
+     * Otherwise the banner simply carries on as a normal one (with a little time to be seen) unless it was taken away meanwhile.
+     */
+    void replyEnd(String key, boolean sent) {
+        if (replying == null || !replying.key.equals(key)) return;
+        IslandEvent e = replying;
+        boolean gone = replyGone || sent;
+        finishReply(false);
+        if (gone) drop(e.key);
+        evaluate();
+    }
+
+    /** Gives the reply up without touching the screen state beyond the banner's own timer (callers evaluate). */
+    private void cancelReply() {
+        if (replying == null) return;
+        IslandEvent e = replying;
+        boolean gone = replyGone;
+        finishReply(true);
+        if (gone) drop(e.key);
+    }
+
+    /** @param closeBox the box's own window is still open and has to be told to go */
+    private void finishReply(boolean closeBox) {
+        IslandEvent e = replying;
+        replying = null;
+        replyGone = false;
+        h.removeCallbacks(replyGuard);
+        if (view != null) view.dock(false);
+        if (e != null) {   // from now on it times out like any other banner
+            if (e == popup) { h.removeCallbacks(popupEnd); h.postDelayed(popupEnd, 4000L); }
+            else if (e == userExpanded) { h.removeCallbacks(collapse); h.postDelayed(collapse, 8000L); }
+        }
+        if (closeBox) ReplyActivity.closeFromIsland();
+    }
 
     /** The wall clock moved (minute tick, screen on, time / zone change): the idle clock must show the real time now, not at its next timer. */
     void clockNow() {
@@ -606,10 +709,16 @@ final class IslandController implements IslandView.Host {
         if (!attached) return;
         IslandEvent want = null;
         int mode = IslandView.HIDDEN;
-        if (!suppressed()) {
+        if (suppressed()) {
+            if (replying != null) cancelReply();   // lock screen, fullscreen app or shade took the island: the box goes with it
+        } else {
             IslandEvent ring = ring();
             if (ring != null) {
+                if (replying != null) cancelReply();   // a ringing call never waits behind a reply box
                 want = ring;
+                mode = IslandView.EXPANDED;
+            } else if (replying != null) {
+                want = replying;                       // held: no timer, no newer banner, nothing replaces it
                 mode = IslandView.EXPANDED;
             } else {
                 if (popup == null && !queue.isEmpty()) {
@@ -665,6 +774,7 @@ final class IslandController implements IslandView.Host {
             if (mode == IslandView.COMPACT) {
                 expandLive(e);
             } else if (mode == IslandView.EXPANDED) {
+                if (e == replying) finishReply(true);   // the card was tapped: the app opens, the box closes
                 Cards.open(svc, e);
                 if (e == popup) { popup = null; h.removeCallbacks(popupEnd); }
                 else if (e == userExpanded) userExpanded = null;
@@ -682,6 +792,7 @@ final class IslandController implements IslandView.Host {
         if (e == null) return;
         if (dir == 0) { // up: put it away
             if (shownMode == IslandView.EXPANDED) {
+                if (e == replying) finishReply(true);
                 if (e.popup) e.popup = false;               // ringing call -> keep as compact pill
                 else if (e == popup) { popup = null; h.removeCallbacks(popupEnd); }
                 else userExpanded = null;
@@ -700,6 +811,7 @@ final class IslandController implements IslandView.Host {
     /** A banner must not vanish under the finger: its countdown waits while it is touched and restarts (with time to see the result) on release. */
     @Override public void onHold(boolean down) {
         try {
+            if (replying != null) return;   // a banner with a reply box open has no countdown to pause
             if (down) {
                 held = popup != null;
                 if (held) {   // paused, but never for good: if the release is lost the banner still leaves
@@ -708,7 +820,7 @@ final class IslandController implements IslandView.Host {
                 }
             } else if (held) {
                 held = false;
-                if (popup != null) {
+                if (popup != null && replying == null) {
                     h.removeCallbacks(popupEnd);
                     h.postDelayed(popupEnd, Math.max(2500L, Math.min(popup.durationMs, 4000L)));
                 }

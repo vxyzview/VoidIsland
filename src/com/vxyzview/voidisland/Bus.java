@@ -67,6 +67,17 @@ final class Bus {
     /** Ask the island to re-evaluate after an event was edited in place. */
     static void refresh() { if (ctl != null) ctl.refresh(); }
 
+    // --- quick reply: the card stays on screen, joined to the reply box, until the reply is finished
+    static boolean replyBegin(IslandEvent e) { return ctl != null && ctl.replyBegin(e); }
+
+    /** The box is finished: {@code sent} = the reply went out (the banner leaves with it), else the banner carries on normally. */
+    static void replyEnd(String key, boolean sent) { if (ctl != null) ctl.replyEnd(key, sent); }
+
+    static void replyTouch() { if (ctl != null) ctl.replyTouch(); }
+
+    /** out = {card left, card bottom, card width, corner radius} in screen pixels; false when there is no card to join. */
+    static boolean replyDock(int[] out) { return ctl != null && ctl.replyDock(out); }
+
     static void expand(String key) { if (ctl != null) ctl.expandKey(key); }
 
     static boolean has(String key) { return ctl != null && ctl.hasLive(key); }

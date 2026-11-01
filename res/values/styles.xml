@@ -10,7 +10,10 @@
     <style name="ReplyTheme" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:backgroundDimEnabled">true</item>
+        <!-- no dim and no bar colours: the reply box is drawn as part of the island, nothing else on screen may change -->
+        <item name="android:backgroundDimEnabled">false</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

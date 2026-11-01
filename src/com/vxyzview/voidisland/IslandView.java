@@ -4,6 +4,8 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Outline;
 import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.view.Choreographer;
@@ -52,8 +54,16 @@ final class IslandView extends ViewGroup {
     int padB, drop;
     private final Layer compact, expanded;
     private final Spring sw = new Spring(), sh = new Spring(), sr = new Spring(), st = new Spring(), sg = new Spring(),
-        swap = new Spring(), press = new Spring();
+        swap = new Spring(), press = new Spring(), sf = new Spring();
     private final float[] geo = new float[5];
+    // Quick reply: while a reply box is docked under the card, the card's bottom corners flatten (sf 0 -> 1) so the card
+    // and the box read as ONE black shape. The box itself is drawn by ReplyActivity, flush against that flat edge.
+    private boolean dock;
+    private final Path shapePath = new Path(), edgePath = new Path();
+    private final RectF shapeRect = new RectF();
+    private final float[] shapeRad = new float[8];
+    private final float[] tgt = new float[5];
+    private final int[] loc = new int[2];
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private Style style = new Style();
@@ -129,6 +139,7 @@ final class IslandView extends ViewGroup {
             @Override public void getOutline(View v, Outline o) {
                 Geo.surface(shapeFor(mode), v.getWidth(), sw.value, st.value, sh.value, sr.value, sg.value, geo);
                 if (geo[2] <= geo[0] || geo[3] <= geo[1]) { o.setEmpty(); return; }
+                if (sf.value > 0.002f) { buildShape(); o.setConvexPath(shapePath); return; }
                 o.setRoundRect(Math.round(geo[0]), Math.round(geo[1]), Math.round(geo[2]), Math.round(geo[3]), geo[4]);
             }
         });
@@ -138,6 +149,8 @@ final class IslandView extends ViewGroup {
         swap.eps = 0.004f;
         press.snap(1f);
         press.eps = 0.002f;
+        sf.snap(0f);
+        sf.eps = 0.004f;
         setVisibility(INVISIBLE);
         // Fullscreen detection: when an app hides the status bar the system tells every window, ours included.
         setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
@@ -256,7 +269,7 @@ final class IslandView extends ViewGroup {
         }
         if (m != HIDDEN && getVisibility() != VISIBLE) setVisibility(VISIBLE);
         int needW = Math.max(tw, Math.max(Math.round(sw.target), Math.round(sw.value))) + 2 * padX;
-        int needH = Math.max(th, Math.max(Math.round(sh.target), Math.round(sh.value))) + padB;
+        int needH = Math.max(th, Math.max(Math.round(sh.target), Math.round(sh.value))) + (m == EXPANDED ? padBottom() : padB);
         ensureWindow(needW, needH, m != HIDDEN, go);
     }
 
@@ -347,6 +360,7 @@ final class IslandView extends ViewGroup {
         a |= st.step(dt);
         a |= sg.step(dt);
         a |= press.step(dt);
+        a |= sf.step(dt);
         a |= swap.step(dt);
         if (pendingSwap != null && swap.target == 0f && swap.value < 0.04f) {
             Runnable r = pendingSwap;
@@ -393,8 +407,73 @@ final class IslandView extends ViewGroup {
         if (borderPx > 0 && (style.borderCol >>> 24) != 0) {
             Geo.surface(shapeFor(mode), getWidth(), sw.value, st.value, sh.value, sr.value, sg.value, geo);
             stroke.setStrokeWidth(borderPx * 2f); // half of it falls outside the clip, so this shows exactly borderPx
-            c.drawRoundRect(geo[0], geo[1], geo[2], geo[3], geo[4], geo[4], stroke);
+            if (sf.value > 0.5f) {
+                // docked: no line along the bottom edge (that edge is now a seam inside one shape), just the two sides and the top
+                float l = geo[0], t = geo[1], r = geo[2], b = geo[3] + borderPx * 2f, rd = geo[4];
+                edgePath.rewind();
+                edgePath.moveTo(l, b);
+                edgePath.lineTo(l, t + rd);
+                edgePath.arcTo(l, t, l + 2f * rd, t + 2f * rd, 180f, 90f, false);
+                edgePath.lineTo(r - rd, t);
+                edgePath.arcTo(r - 2f * rd, t, r, t + 2f * rd, 270f, 90f, false);
+                edgePath.lineTo(r, b);
+                c.drawPath(edgePath, stroke);
+            } else if (sf.value > 0.002f) {
+                buildShape();
+                c.drawPath(shapePath, stroke);
+            } else {
+                c.drawRoundRect(geo[0], geo[1], geo[2], geo[3], geo[4], geo[4], stroke);
+            }
         }
+    }
+
+    /** The surface in {@link #geo} as a path whose bottom corners are flattened by the dock spring. Allocation-free. */
+    private void buildShape() {
+        float rt = geo[4], rb = geo[4] * (1f - clamp01(sf.value));
+        shapeRad[0] = rt; shapeRad[1] = rt; shapeRad[2] = rt; shapeRad[3] = rt;
+        shapeRad[4] = rb; shapeRad[5] = rb; shapeRad[6] = rb; shapeRad[7] = rb;
+        shapeRect.set(geo[0], geo[1], geo[2], geo[3]);
+        shapePath.rewind();
+        shapePath.addRoundRect(shapeRect, shapeRad, Path.Direction.CW);
+    }
+
+    /** Extra window height under the card: none while a reply box sits there, or the window would swallow the box's touches. */
+    private int padBottom() { return dock ? drop : padB; }
+
+    /**
+     * A reply box is docked under the card (or let go of it): flatten / re-round the card's bottom corners and make the
+     * window end exactly at the card's bottom edge, so everything under it belongs to the box.
+     */
+    void dock(boolean on) {
+        if (dock == on) return;
+        dock = on;
+        float k = style.speed / 100f;
+        sf.tune(380f * k, 0.95f);
+        sf.to(on ? 1f : 0f);
+        if (mode == EXPANDED && pendingRun == null) {
+            int hh = Math.round(sh.target) + padBottom();
+            if (hh != winH) {
+                winH = hh;
+                host.applyWindow(winW, hh, touchable);
+            }
+        }
+        start();
+    }
+
+    /**
+     * Where the reply box has to go, in screen pixels: out = {left of the card, bottom of the card, card width, corner radius}.
+     * Uses where the springs are heading, so it is right even while the card is still growing.
+     * @return false when no expanded card is showing
+     */
+    boolean dockRect(int[] out) {
+        if (mode != EXPANDED || getWidth() <= 0) return false;
+        getLocationOnScreen(loc);
+        Geo.surface(shapeFor(EXPANDED), getWidth(), sw.target, st.target, sh.target, sr.target, sg.target, tgt);
+        out[0] = loc[0] + Math.round(tgt[0]);
+        out[1] = loc[1] + Math.round(tgt[3]);
+        out[2] = Math.round(tgt[2] - tgt[0]);
+        out[3] = Math.round(tgt[4]);
+        return out[2] > 0;
     }
 
     /** Everything stopped moving: free views, shrink the window so it stops catching touches. */
@@ -414,7 +493,7 @@ final class IslandView extends ViewGroup {
         }
         if (pendingRun != null || pendingSwap != null) return;
         int w = even((mode == HIDDEN ? dot : Math.round(sw.target)) + 2 * padX);
-        int h = (mode == HIDDEN ? dot : Math.round(sh.target)) + padB;
+        int h = (mode == HIDDEN ? dot : Math.round(sh.target)) + (mode == EXPANDED ? padBottom() : padB);
         boolean t = mode != HIDDEN;
         if (w == winW && h == winH && t == touchable) return;
         winW = w;

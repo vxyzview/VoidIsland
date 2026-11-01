@@ -220,7 +220,9 @@ final class Cards {
 
     /** A banner's own button was pressed: it has done its job, so put it away (calls, timers and music stay on the island). */
     private static void done(IslandEvent e) {
-        if (e.type == IslandEvent.NOTIF) Bus.remove(e.key);
+        if (e.type != IslandEvent.NOTIF) return;
+        Bus.remove(e.key);
+        ReplyActivity.closeFromIsland();   // another button was pressed while a reply box was open: the box goes with the banner
     }
 
     static void open(Context c, IslandEvent e) {
