@@ -51,11 +51,11 @@ public final class AppsActivity extends Activity {
         ImageView icon;
         TextView name;
         M3Switch sw;
-        String pkg;
+        volatile String pkg;
     }
 
     private final ArrayList<App> apps = new ArrayList<App>();
-    private final ExecutorService io = Executors.newSingleThreadExecutor();
+    private final ExecutorService io = Executors.newFixedThreadPool(2);
     private final LruCache<String, Bitmap> icons = new LruCache<String, Bitmap>(80);
     static final String EXTRA_MODE = "mode";
     private Set<String> sel;          // the apps stored in the preference behind this screen
@@ -205,6 +205,7 @@ public final class AppsActivity extends Activity {
             try {
                 io.execute(new Runnable() {
                     @Override public void run() {
+                        if (!a.pkg.equals(h.pkg)) return;   // that row already scrolled on to another app: don't spend time on a stale icon
                         final Bitmap bmp = Img.bmp(a.info.loadIcon(pm), iconPx);
                         if (bmp == null) return;
                         icons.put(a.pkg, bmp);

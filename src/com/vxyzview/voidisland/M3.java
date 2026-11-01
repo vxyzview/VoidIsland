@@ -10,6 +10,7 @@ import android.content.res.Configuration;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
@@ -201,19 +202,34 @@ final class M3 {
         return f;
     }
 
-    /** Filled card with an optional small coloured heading. */
+    /** Tonal container card (32dp corners) with its section label sitting above it, like grouped M3 settings lists. */
     LinearLayout card(LinearLayout parent, String heading) {
-        LinearLayout k = col();
-        k.setBackground(shape(surfaceLow, 28));
-        k.setPadding(dp(20), dp(18), dp(20), dp(20));
-        parent.addView(k, top(MATCH, WRAP, 14));
         if (heading != null) {
-            TextView t = text(heading, 15f, true, primary);
-            t.setPadding(0, 0, 0, dp(10));
-            k.addView(t);
+            TextView t = text(heading, 14f, true, primary);
+            t.setLetterSpacing(0.02f);
+            t.setPadding(dp(10), 0, 0, 0);
+            parent.addView(t, top(WRAP, WRAP, 26));
         }
+        LinearLayout k = col();
+        k.setBackground(shape(container, 32));
+        k.setPadding(dp(20), dp(12), dp(20), dp(16));
+        parent.addView(k, top(MATCH, WRAP, heading != null ? 10 : 16));
         return k;
     }
+
+    /** Which tonal colour pair an icon wears (0 primary, 1 tertiary, 2 secondary), so a list reads in three calm hues, not one. */
+    static int tone(int icon) {
+        switch (icon) {
+            case IconView.BELL: case IconView.BOLT: case IconView.CARD: case IconView.PALETTE: return 1;
+            case IconView.LAYERS: case IconView.CLOCK: case IconView.APPS: case IconView.PHONE: case IconView.MOON:
+            case IconView.DOWNLOAD: case IconView.TUNE: return 2;
+            default: return 0;
+        }
+    }
+
+    int toneBg(int tone) { return tone == 1 ? tertiaryContainer : (tone == 2 ? secondaryContainer : primaryContainer); }
+
+    int toneFg(int tone) { return tone == 1 ? onTertiaryContainer : (tone == 2 ? onSecondaryContainer : onPrimaryContainer); }
 
     // ------------------------------------------------------------------ buttons + rows
 
@@ -223,10 +239,10 @@ final class M3 {
         int fg = kind == 0 ? onPrimary : (kind == 1 ? onSecondaryContainer : primary);
         TextView t = text(label, 14f, true, fg);
         t.setGravity(Gravity.CENTER);
-        t.setMinHeight(dp(40));
-        int ph = dp(kind == 3 ? 12 : 22);
+        t.setMinHeight(dp(kind == 3 ? 40 : 44));
+        int ph = dp(kind == 3 ? 14 : 22);
         t.setPadding(ph, 0, ph, 0);
-        t.setBackground(ripple(fill, 20, kind == 2 ? outline : 0, fg));
+        t.setBackground(ripple(fill, 22, kind == 2 ? outline : 0, fg));
         t.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { r.run(); } });
         return t;
     }
@@ -249,10 +265,11 @@ final class M3 {
         r.setPadding(0, dp(8), 0, dp(8));
         r.setMinimumHeight(dp(56));
         if (icon >= 0) {
+            int tn = tone(icon);
             FrameLayout lead = new FrameLayout(c);
-            lead.setBackground(shape(primaryContainer, 20));
-            lead.addView(new IconView(c, icon, onPrimaryContainer), new FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER));
-            r.addView(lead, lp(dp(40), dp(40)));
+            lead.setBackground(shape(toneBg(tn), 16));
+            lead.addView(new IconView(c, icon, toneFg(tn)), new FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER));
+            r.addView(lead, lp(dp(44), dp(44)));
         }
         LinearLayout t = col();
         t.setPadding(icon >= 0 ? dp(16) : 0, 0, dp(12), 0);
@@ -319,6 +336,7 @@ final class M3 {
         head.addView(val);
         parent.addView(head);
         final M3Slider s = new M3Slider(this);
+        final Runnable later = perFrame(s, after);
         int cur = Prefs.i(c, key, def * mult) / mult;
         s.set(min, max, Math.max(min, Math.min(max, cur)));
         val.setText(fmt.f(s.value()));
@@ -327,11 +345,30 @@ final class M3 {
                 val.setText(fmt.f(v));
                 if (!user) return;
                 Prefs.sp(c).edit().putInt(key, v * mult).apply();
-                if (after != null) after.run();
+                if (later != null) later.run();
             }
         });
         parent.addView(s, lp(MATCH, dp(40)));
         return s;
+    }
+
+    /** Runs {@code after} at most once per frame: a drag fires dozens of changes, the live preview only needs the latest. */
+    private Runnable perFrame(final View on, final Runnable after) {
+        if (after == null) return null;
+        final boolean[] queued = new boolean[1];
+        final Runnable fire = new Runnable() {
+            @Override public void run() {
+                queued[0] = false;
+                after.run();
+            }
+        };
+        return new Runnable() {
+            @Override public void run() {
+                if (queued[0]) return;
+                queued[0] = true;
+                on.postOnAnimation(fire);
+            }
+        };
     }
 
     /** Segmented button group. selected may be -1 (none). */
@@ -362,7 +399,7 @@ final class M3 {
         final Seg seg = new Seg(labels, cb);
         LinearLayout box = new LinearLayout(c);
         box.setOrientation(LinearLayout.HORIZONTAL);
-        GradientDrawable bg = shape(0, 20);
+        GradientDrawable bg = shape(0, 22);
         bg.setStroke(dp(1), outlineVariant);
         box.setBackground(bg);
         box.setClipToOutline(true);
@@ -388,7 +425,7 @@ final class M3 {
                 }
             });
             seg.t[i] = t;
-            box.addView(t, new LinearLayout.LayoutParams(0, dp(40), 1f));
+            box.addView(t, new LinearLayout.LayoutParams(0, dp(44), 1f));
         }
         seg.select(sel);
         return box;
@@ -406,14 +443,15 @@ final class M3 {
     }
 
     /** Tonal button with a leading glyph — M3's icon + label button, used for the Try-it demos. */
-    View richButton(int icon, String label, final Runnable r) {
+    View richButton(int icon, String label, int tone, final Runnable r) {
+        int bg = toneBg(tone), fg = toneFg(tone);
         LinearLayout b = row();
         b.setGravity(Gravity.CENTER);
-        b.setPadding(dp(6), dp(13), dp(6), dp(13));
-        b.setBackground(ripple(secondaryContainer, 16, 0, onSecondaryContainer));
-        b.addView(new IconView(c, icon, onSecondaryContainer), lp(dp(18), dp(18)));
-        TextView t = text(label, 14f, true, onSecondaryContainer);
-        t.setPadding(dp(8), 0, 0, 0);
+        b.setPadding(dp(8), dp(16), dp(8), dp(16));
+        b.setBackground(ripple(bg, 22, 0, fg));
+        b.addView(new IconView(c, icon, fg), lp(dp(20), dp(20)));
+        TextView t = text(label, 14.5f, true, fg);
+        t.setPadding(dp(10), 0, 0, 0);
         b.addView(t);
         b.setOnClickListener(new View.OnClickListener() { @Override public void onClick(View v) { r.run(); } });
         return b;
@@ -522,7 +560,7 @@ final class M3 {
         final Nav nav = new Nav(new LinearLayout(c), labels.length);
         LinearLayout box = nav.view;
         box.setOrientation(rail ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
-        box.setBackgroundColor(surfaceLow);
+        box.setBackgroundColor(container);
         if (rail) {
             box.setGravity(Gravity.CENTER_HORIZONTAL);
             box.setPadding(dp(8), dp(16), dp(8), dp(24));
@@ -781,23 +819,32 @@ final class M3Switch extends View {
         float rad = (8f + 4f * t) * d, cx = (16f + 20f * t) * d;
         p.setColor(Col.mix(m.outline, m.onPrimary, t));
         c.drawCircle(cx, h / 2f, rad, p);
+        if (t > 0.35f) {   // the check fades in as the thumb grows
+            float s = 14f * d;
+            IconView.glyph(c, p, IconView.CHECK, Col.alpha(m.primary, (t - 0.35f) / 0.65f), cx - s / 2f, h / 2f - s / 2f, s);
+        }
     }
 }
 
-/** Material 3 slider: 4dp tracks with a gap, 20dp thumb with a halo while dragging. */
+/** Material 3 Expressive slider: 16dp rounded tracks split by a gap, a slim handle bar between them that thickens while dragged. */
 final class M3Slider extends View {
     interface OnChange { void onChange(int value, boolean user); }
 
     private final M3 m;
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF r = new RectF();
+    private final Path path = new Path();
+    private final float[] rad = new float[8];
     private int min, max = 100, val;
     private boolean drag;
     private OnChange cb;
 
+    private final float slop;
+
     M3Slider(M3 m) {
         super(m.c);
         this.m = m;
+        slop = android.view.ViewConfiguration.get(m.c).getScaledTouchSlop();   // once, not on every touch event
     }
 
     void set(int min, int max, int v) {
@@ -813,22 +860,38 @@ final class M3Slider extends View {
 
     private float frac() { return (val - min) / (float) (max - min); }
 
+    /** A track piece whose outer end is fully round and whose end next to the handle is nearly square. */
+    private void piece(Canvas c, float rl, float rr, int color) {
+        rad[0] = rad[1] = rad[6] = rad[7] = rl;
+        rad[2] = rad[3] = rad[4] = rad[5] = rr;
+        path.reset();
+        path.addRoundRect(r, rad, Path.Direction.CW);
+        p.setColor(color);
+        c.drawPath(path, p);
+    }
+
     @Override protected void onDraw(Canvas c) {
-        float d = m.d, pad = 14f * d, x0 = pad, x1 = getWidth() - pad, cy = getHeight() / 2f, th = 4f * d, gap = 8f * d;
+        float d = m.d, pad = 14f * d, x0 = pad, x1 = getWidth() - pad, cy = getHeight() / 2f;
+        float th = 16f * d, big = th / 2f, small = 3f * d, gap = 6f * d, hw = (drag ? 3f : 2f) * d, hh = (drag ? 18f : 16f) * d;
         float tx = x0 + (x1 - x0) * frac();
         p.setStyle(Paint.Style.FILL);
-        p.setColor(m.secondaryContainer);
-        r.set(Math.min(x1, tx + gap), cy - th / 2f, x1, cy + th / 2f);
-        if (r.width() > 0) c.drawRoundRect(r, th / 2f, th / 2f, p);
-        p.setColor(m.primary);
-        r.set(x0, cy - th / 2f, Math.max(x0, tx - gap), cy + th / 2f);
-        if (r.width() > 0) c.drawRoundRect(r, th / 2f, th / 2f, p);
-        if (drag) {
-            p.setColor(Col.alpha(m.primary, 0.16f));
-            c.drawCircle(tx, cy, 20f * d, p);
+        float ls = tx + hw + gap;                 // the part still to go (right of the handle)
+        if (x1 - ls > 2f * d) {
+            r.set(ls, cy - th / 2f, x1, cy + th / 2f);
+            piece(c, small, big, m.secondaryContainer);
+            if (x1 - ls > 18f * d) {              // the little end stop
+                p.setColor(m.primary);
+                c.drawCircle(x1 - big, cy, 2f * d, p);
+            }
+        }
+        float re = tx - hw - gap;                 // the part already done (left of the handle)
+        if (re - x0 > 2f * d) {
+            r.set(x0, cy - th / 2f, re, cy + th / 2f);
+            piece(c, big, small, m.primary);
         }
         p.setColor(m.primary);
-        c.drawCircle(tx, cy, (drag ? 12f : 10f) * d, p);
+        r.set(tx - hw, cy - hh, tx + hw, cy + hh);
+        c.drawRoundRect(r, hw, hw, p);
     }
 
     private void update(float x) {
@@ -846,7 +909,6 @@ final class M3Slider extends View {
     private boolean pending;
 
     @Override public boolean onTouchEvent(MotionEvent e) {
-        float slop = android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop();
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 downX = e.getX();
@@ -880,5 +942,42 @@ final class M3Slider extends View {
                 invalidate();
                 return true;
         }
+    }
+}
+
+/** A solid scalloped "cookie" badge (M3 Expressive shape) with a glyph in the middle. Flat colours only. */
+final class CookieView extends View {
+    private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path path = new Path();
+    private final int icon, bg, fg, lobes;
+
+    CookieView(android.content.Context c, int icon, int bg, int fg, int lobes) {
+        super(c);
+        this.icon = icon;
+        this.bg = bg;
+        this.fg = fg;
+        this.lobes = lobes;
+    }
+
+    @Override protected void onSizeChanged(int w, int h, int ow, int oh) {
+        super.onSizeChanged(w, h, ow, oh);
+        path.reset();
+        float cx = w / 2f, cy = h / 2f, big = Math.min(w, h) / 2f;
+        int n = 240;
+        for (int i = 0; i <= n; i++) {
+            double a = 2.0 * Math.PI * i / n;
+            float rr = (float) (big * (0.915 + 0.085 * Math.cos(lobes * a)));
+            float x = cx + rr * (float) Math.cos(a), y = cy + rr * (float) Math.sin(a);
+            if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+        }
+        path.close();
+    }
+
+    @Override protected void onDraw(Canvas c) {
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(bg);
+        c.drawPath(path, p);
+        float s = Math.min(getWidth(), getHeight()) * 0.46f;
+        IconView.glyph(c, p, icon, fg, (getWidth() - s) / 2f, (getHeight() - s) / 2f, s);
     }
 }

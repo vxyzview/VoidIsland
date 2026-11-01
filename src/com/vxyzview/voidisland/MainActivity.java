@@ -17,6 +17,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.MessageQueue;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.view.Gravity;
@@ -51,6 +52,14 @@ public final class MainActivity extends Activity {
     private int shown = -1;                 // destination whose content is in the scroll view right now (-1: nothing built yet)
     private int gen;                        // bumped by every (re)build: a pending page-switch fade bails when stale
     private int[] ys = new int[3];          // remembered scroll position per destination
+    /** A built destination. Kept, so switching tabs swaps views instead of rebuilding ~100 of them on the UI thread. */
+    private static final class Page {
+        View root;
+        PreviewView preview;
+        TextView banner, bannerSub, diag;
+        String sig;   // the setup state it was built for: when that changes (Settings screens), the page is rebuilt
+    }
+    private final Page[] pages = new Page[3];
     private PreviewView preview;
     private boolean previewExpanded;
     private TextView banner, bannerSub, diag;
@@ -111,6 +120,29 @@ public final class MainActivity extends Activity {
         setContentView(root);
         lastOverlay = overlayOn();
         showPage(start, true);
+        prewarm();
+    }
+
+    /** Builds the other destinations while the UI thread is idle (one per idle slice), so the first tab switch is instant too. */
+    private void prewarm() {
+        Looper.myQueue().addIdleHandler(new MessageQueue.IdleHandler() {
+            @Override public boolean queueIdle() {
+                if (isFinishing() || isDestroyed()) return false;
+                for (int p = 0; p < pages.length; p++) {
+                    if (pages[p] == null) {
+                        try { pages[p] = make(p); } catch (Throwable t) { pages[p] = null; return false; }
+                        return true;
+                    }
+                }
+                return false;
+            }
+        });
+    }
+
+    /** Everything that decides how Home / Behavior look; cheap to read. */
+    private String statusSig() {
+        return (a11yOn() ? "1" : "0") + (notifOn() ? "1" : "0") + (overlayOn() ? "1" : "0") + (btOn() ? "1" : "0")
+            + (KeepAlive.batteryUnrestricted(this) ? "1" : "0");
     }
 
     @Override protected void onSaveInstanceState(Bundle out) {
@@ -128,7 +160,8 @@ public final class MainActivity extends Activity {
             lastOverlay = o;
             Prefs.sp(this).edit().putLong(Prefs.K_POKE, System.currentTimeMillis()).apply();
         }
-        if (page != 1) showPage(page, true);
+        Page pg = pages[page];
+        if (page != 1 && (pg == null || !pg.sig.equals(statusSig()))) showPage(page, true);
         h.post(new Runnable() { @Override public void run() { askKeepAlive(); } });
     }
 
@@ -157,14 +190,14 @@ public final class MainActivity extends Activity {
         page = p;
         final int my = ++gen;
         scroll.animate().cancel();
-        scroll.animate().alpha(0f).setDuration(90).setInterpolator(new LinearInterpolator()).withEndAction(new Runnable() {
+        scroll.animate().alpha(0f).setDuration(70).setInterpolator(new LinearInterpolator()).withLayer().withEndAction(new Runnable() {
             @Override public void run() {
                 if (my != gen) return;   // a newer rebuild or switch took over
                 build(p);
                 restoreScroll(ys[p]);
                 scroll.setAlpha(0f);
                 scroll.setTranslationY(dp(14));
-                scroll.animate().alpha(1f).translationY(0f).setDuration(240).setInterpolator(M3.STANDARD).start();
+                scroll.animate().alpha(1f).translationY(0f).setDuration(220).setInterpolator(M3.STANDARD).withLayer().start();
             }
         }).start();
     }
@@ -177,22 +210,55 @@ public final class MainActivity extends Activity {
         scroll.animate().cancel();
         scroll.setAlpha(1f);
         scroll.setTranslationY(0f);
+        pages[p] = null;   // the content itself changed: build it again
         build(p);
         restoreScroll(y);
     }
 
-    private void build(int p) {
-        shown = p;
+    /** Builds destination {@code p} off-screen. The page on screen keeps its own references while the build helpers publish theirs. */
+    private Page make(int p) {
+        PreviewView sPv = preview;
+        TextView sBn = banner, sSub = bannerSub, sDg = diag;
         preview = null;
         banner = null;
+        bannerSub = null;
         diag = null;
-        scroll.removeAllViews();
         LinearLayout c = m.col();
         c.setPadding(dp(16), dp(8), dp(16), dp(28));
-        scroll.addView(m.maxSized(c, 480), new FrameLayout.LayoutParams(M3.MATCH, M3.WRAP));
-        if (p == 0) buildHome(c);
-        else if (p == 1) buildStyle(c);
-        else buildBehavior(c);
+        Page pg = new Page();
+        pg.root = m.maxSized(c, 480);
+        try {
+            if (p == 0) buildHome(c);
+            else if (p == 1) buildStyle(c);
+            else buildBehavior(c);
+            pg.preview = preview;
+            pg.banner = banner;
+            pg.bannerSub = bannerSub;
+            pg.diag = diag;
+            pg.sig = statusSig();
+        } finally {
+            preview = sPv;
+            banner = sBn;
+            bannerSub = sSub;
+            diag = sDg;
+        }
+        return pg;
+    }
+
+    /** Puts destination {@code p} on screen: the kept page when it is still valid, otherwise a freshly built one. */
+    private void build(int p) {
+        shown = p;
+        Page pg = pages[p];
+        if (pg == null) {
+            pg = make(p);
+            pages[p] = pg;
+        }
+        preview = pg.preview;
+        banner = pg.banner;
+        bannerSub = pg.bannerSub;
+        diag = pg.diag;
+        scroll.removeAllViews();
+        scroll.addView(pg.root, new FrameLayout.LayoutParams(M3.MATCH, M3.WRAP));
         h.removeCallbacks(diagRun);
         if (p == 2) h.post(diagRun);
     }
@@ -216,8 +282,8 @@ public final class MainActivity extends Activity {
     }
 
     private void header(LinearLayout parent, String title, String sub) {
-        TextView t = m.text(title, 32f, false, m.onSurface);
-        t.setPadding(dp(4), dp(20), 0, 0);
+        TextView t = m.text(title, 36f, false, m.onSurface);
+        t.setPadding(dp(6), dp(22), 0, 0);
         parent.addView(t);
         TextView s = m.text(sub, 14f, false, m.onSurfaceVariant);
         s.setPadding(dp(4), dp(6), 0, dp(4));
@@ -289,6 +355,18 @@ public final class MainActivity extends Activity {
 
     // ------------------------------------------------------------------ HOME
 
+    /** A small flat tile on the hero card: what it tracks, and whether it is on. */
+    private View statusPill(String label, boolean on, int fg) {
+        LinearLayout t = m.col();
+        t.setBackground(m.shape(Col.alpha(fg, 0.12f), 22));
+        t.setPadding(dp(16), dp(12), dp(16), dp(12));
+        t.addView(m.text(label, 12f, false, Col.alpha(fg, 0.8f)));
+        TextView v = m.text(on ? "On" : "Off", 16f, true, fg);
+        v.setPadding(0, dp(2), 0, 0);
+        t.addView(v);
+        return t;
+    }
+
     private View setupItem(int icon, String title, String sub, boolean done, String actionLabel, Runnable action) {
         View trailing = done ? m.statusDot(true) : m.button(actionLabel, 1, action);
         return m.item(icon, title, sub, trailing, action);
@@ -303,22 +381,26 @@ public final class MainActivity extends Activity {
         int heroOn = state == 0 ? m.onPrimaryContainer : state == 1 ? m.onTertiaryContainer : m.onErrorContainer;
         int heroGlyph = state == 0 ? IconView.CLOCK : state == 1 ? IconView.BELL : IconView.ACCESS;
         LinearLayout st = m.col();
-        st.setBackground(m.shape(heroBg, 28));
-        st.setPadding(dp(22), dp(20), dp(22), dp(22));
+        st.setBackground(m.shape(heroBg, 36));
+        st.setPadding(dp(24), dp(24), dp(24), dp(20));
         LinearLayout hr = m.row();
-        FrameLayout isle = new FrameLayout(this);   // a small black pill — the island itself, idle clock on
-        isle.setBackground(m.shape(0xFF000000, 16));
-        isle.addView(new IconView(this, heroGlyph, 0xFFFFFFFF), new FrameLayout.LayoutParams(dp(15), dp(15), Gravity.CENTER));
-        hr.addView(isle, m.lp(dp(50), dp(30)));
+        hr.addView(new CookieView(this, heroGlyph, heroOn, heroBg, 8), m.lp(dp(68), dp(68)));   // flat scalloped badge
         LinearLayout ht = m.col();
-        ht.setPadding(dp(14), 0, 0, 0);
-        banner = m.text("", 20f, true, heroOn);
-        bannerSub = m.text("", 13.5f, false, Col.alpha(heroOn, 0.86f));
-        bannerSub.setPadding(0, dp(3), 0, 0);
+        ht.setPadding(dp(18), 0, 0, 0);
+        banner = m.text("", 25f, false, heroOn);
+        bannerSub = m.text("", 14f, false, Col.alpha(heroOn, 0.86f));
+        bannerSub.setPadding(0, dp(5), 0, 0);
+        bannerSub.setLineSpacing(0f, 1.1f);
         ht.addView(banner);
         ht.addView(bannerSub);
         hr.addView(ht, m.lpw(1f));
         st.addView(hr);
+        LinearLayout pills = m.row();
+        pills.addView(statusPill("Accessibility", a, heroOn), m.lpw(1f));
+        LinearLayout.LayoutParams pp = m.lpw(1f);
+        pp.setMarginStart(dp(10));
+        pills.addView(statusPill("Notifications", n, heroOn), pp);
+        st.addView(pills, m.top(M3.MATCH, M3.WRAP, 20));
         p.addView(st, m.top(M3.MATCH, M3.WRAP, 12));
         if (a && n) { banner.setText("Island is live"); bannerSub.setText("Everything is on. Try a demo below, or play some music."); }
         else if (a) { banner.setText("One step to go"); bannerSub.setText("Turn on Notification access to show music, calls and payments."); }
@@ -361,7 +443,7 @@ public final class MainActivity extends Activity {
                 ty.addView(row, m.top(M3.MATCH, M3.WRAP, i == 0 ? 0 : 8));
             }
             final String code = dCd[i];
-            View b = m.richButton(dIc[i], dNm[i], new Runnable() { @Override public void run() { demo(code); } });
+            View b = m.richButton(dIc[i], dNm[i], (i / 2 + i % 2) % 3, new Runnable() { @Override public void run() { demo(code); } });
             LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0, M3.WRAP, 1f);
             if (i % 2 == 1) bp.setMarginStart(dp(8));
             row.addView(b, bp);
