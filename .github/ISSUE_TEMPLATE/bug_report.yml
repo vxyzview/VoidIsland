@@ -1,0 +1,62 @@
+name: Bug report
+description: Something on the island looks wrong, is missing, or does not work
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. **Do not paste message text, names, numbers or amounts** from your notifications into this form.
+  - type: input
+    id: version
+    attributes:
+      label: VoidIsland version
+      description: Shown in the app, or the name of the APK you installed (for example `1.1`).
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      placeholder: "Android 14"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Phone and system skin
+      placeholder: "Redmi Note 12, HyperOS / Pixel 8, stock"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include a screenshot or screen recording if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. See ...
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+  - type: textarea
+    id: log
+    attributes:
+      label: Diagnostic log
+      description: "In the app: Behavior > Help > Diagnostic log > Copy. It lists where an error happened, never any message text."
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before sending
+      options:
+        - label: Accessibility and Notification access are both on, and Battery is set to unrestricted
+        - label: I checked that this is not already reported

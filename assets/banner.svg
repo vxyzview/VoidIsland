@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 380" width="1200" height="380" role="img" aria-labelledby="t d">
+  <title id="t">VoidIsland</title>
+  <desc id="d">A Dynamic Island for Android: notifications, media and calls on a floating black pill.</desc>
+  <rect width="1200" height="380" rx="28" fill="#141218"/>
+  <rect x="1" y="1" width="1198" height="378" rx="27" fill="none" stroke="#2B2930" stroke-width="2"/>
+
+  <!-- the island: a flat black pill with a music row -->
+  <rect x="380" y="40" width="440" height="72" rx="36" fill="#000000" stroke="#2B2930" stroke-width="2"/>
+  <rect x="400" y="56" width="40" height="40" rx="12" fill="#D0BCFF"/>
+  <circle cx="420" cy="76" r="9" fill="#21005D"/>
+  <rect x="456" y="62" width="128" height="9" rx="4.5" fill="#E6E0E9"/>
+  <rect x="456" y="80" width="84" height="8" rx="4" fill="#79747E"/>
+  <g fill="#D0BCFF">
+    <rect x="690" y="70" width="6" height="12" rx="3"/>
+    <rect x="704" y="62" width="6" height="28" rx="3"/>
+    <rect x="718" y="66" width="6" height="20" rx="3"/>
+    <rect x="732" y="58" width="6" height="36" rx="3"/>
+    <rect x="746" y="68" width="6" height="16" rx="3"/>
+    <rect x="760" y="64" width="6" height="24" rx="3"/>
+  </g>
+  <circle cx="792" cy="76" r="9" fill="#EADDFF"/>
+
+  <!-- name + tagline -->
+  <text x="600" y="228" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="92" font-weight="800" letter-spacing="-2" fill="#EADDFF">VoidIsland</text>
+  <text x="600" y="282" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="30" font-weight="500" fill="#CAC4D0">A Dynamic Island for Android</text>
+  <text x="600" y="330" text-anchor="middle" font-family="-apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="500" letter-spacing="3" fill="#938F99">NOTIFICATIONS  ·  MUSIC  ·  CALLS  ·  LYRICS</text>
+</svg>
