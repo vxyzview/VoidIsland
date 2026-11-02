@@ -22,6 +22,11 @@ final class Rules {
         return apps == null || apps.isEmpty() || (pkg != null && apps.contains(pkg));
     }
 
+    /** Identifies a chat for the "one banner per chat" rule: the app plus the conversation's title, or the sender's title when there is none. */
+    static String chatKey(String pkg, String conversationTitle, String title) {
+        return pkg + "|" + (conversationTitle == null || conversationTitle.trim().length() == 0 ? title : conversationTitle);
+    }
+
     private static final HashMap<String, Long> LAST = new HashMap<String, Long>();
 
     /**

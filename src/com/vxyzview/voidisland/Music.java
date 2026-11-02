@@ -116,12 +116,12 @@ final class Music {
                 art.run();
                 if (eq != null) { eq.setColor(Cards.acc(e)); eq.setPlaying(e.playing); }
                 if (wv != null) { wv.setColor(Cards.acc(e)); wv.setPlaying(e.playing); }
-                Cards.lyricsLoad(c, e, lkey, lnow, show);
+                LyricsNet.load(c, e, lkey, lnow, show);
                 show.run();
                 return true;
             }
         };
-        Cards.lyricsLoad(c, e, lkey, lnow, show);
+        LyricsNet.load(c, e, lkey, lnow, show);
     }
 
     /** Song: art, then the title (and the artist under it when the pill is tall enough), bars at the far end. No lyric lookups at all. */
@@ -632,7 +632,7 @@ final class Music {
                 art.set(artOf(e), Cards.dp(c, 12));
                 eq.setColor(Cards.acc(e));
                 eq.setPlaying(e.playing);
-                Cards.lyricsLoad(c, e, lkey, lnow, paint);
+                LyricsNet.load(c, e, lkey, lnow, paint);
                 paint.run();
             }
         });

@@ -7,6 +7,7 @@ Dynamic Island for Android (by vxyzview) — notifications, media and calls on a
 - Notifications, calls, music, timers, navigation and downloads on a floating island.
 - **Lyrics** on the music pill: one line at a time; long lines slide sideways in step with the song (pause, seek and all).
 - **Only on the island** (opt-in, off by default): messages and payments shown on the island are removed from the shade. Apps on the *Keep in shade* list keep theirs. An original is only ever removed once the island has really put that banner on screen (not when it is merely queued); if the island is off, hidden (fullscreen app, lock screen, shade open) or ignoring the app, the notification stays in the shade. Android also tells the app that its notification was dismissed, so some apps may mark that message as read. Ongoing notifications cannot be removed by a listener at all, and the system's own pop-up can still flash for a moment before the original is removed: to stop it completely, open **Rules > Stock pop-up**, pick the app and switch off *Pop on screen* in Android's notification settings (the notification itself must stay on, the island reads it). Android cannot bring back a notification that was already removed, so a banner you look away from would be gone: **Behavior > Help > Recent banners** keeps the last 20 banners the island showed (in memory only) and opens the app when you tap one.
+- **Lock-screen privacy**: while the phone is locked behind a PIN, pattern or password the island follows what Android's own lock screen would show. A notification marked *secret* (banks, one-time codes, password managers) never appears, and with *Hide sensitive content* on, a *private* one shows only the app name and "Content hidden" (no text, no amount, no buttons, no reply). A banner that was hidden or redacted is never removed from the shade. A plain swipe-to-unlock lock hides nothing, same as the system.
 - **Quick reply**: expand a message banner and tap *Reply* to answer without opening the app. The reply box grows out of the banner's bottom edge as part of the same black shape (same width, same corner radius, same border, no seam), with a rounded text field, a cancel button and a round send button in the island's accent. While it is open the banner is held: it does not time out and no newer banner replaces it. Banner and box leave together when the reply is sent (the arrow turns into a tick first), when you cancel (cancel button, back, tap outside, swipe the banner up), or when you press another button on the banner or tap the banner to open the app. A banner you give up on carries on as a normal one for a few more seconds; a forgotten box lets go after 3 minutes without typing.
 - **Diagnostic log**: **Behavior > Help > Diagnostic log** lists the last errors the island caught (where and what kind, never any message text) with a *Copy* button for bug reports. Memory only, gone when the process ends.
 - **Languages**: the text the island itself shows (banners' buttons, call and payment titles, battery / ringer / Bluetooth pop-ups, the reply box) is translated (English, Bahasa Indonesia); the settings screens are still English. Add a language by copying `res/values/strings.xml` to `res/values-xx/`. Banners are announced by TalkBack.
@@ -20,7 +21,7 @@ Dynamic Island for Android (by vxyzview) — notifications, media and calls on a
   - *Compact pill* (8): *Classic* (round-cornered art, the lyric line or four bars), *Vinyl* (a little record that spins while the song plays), *Ring* (round art inside a ring that fills as the song goes on), *Wave* (round art and a wide rolling waveform, the lyric line takes its place when the song has one) *Song* (the title and artist on the pill instead of lyrics, and no lyric lookups at all), *Track* (the title with a slim progress line under it and a play / pause badge), *Beat* (the title and artist with a tonal capsule holding a dot-matrix equalizer) and *Timer* (round art, the title and a capsule with the time left). Track, Beat and Timer are strictly flat: solid fills and thin lines, no gradients.
   - *Expanded card* (8): *Classic*, *Vinyl* (a record under a tonearm that lowers when the song plays and lifts when it pauses), *Poster* (big centred art in a soft accent frame), *Mini* (one slim row with a thin seek bar, the shortest card) *Lyrics* (the previous, current and next line of the song in the middle of the card), *Bento* (big art beside a tonal title tile, then three roomy flat keys with an accent play key), *Wave* (a rolling waveform across the card) and *Cover* (wide art with the title on a flat chip and an equalizer badge). Bento, Wave and Cover are flat as well.
   - Every design follows the accent (Material You or custom), the seek bar can be dragged, the lyric nudge under **Behavior** applies, and nothing animates while the song is paused or the display is off.
-- **Backup**: **Apps > Backup** saves every setting to a text file and restores it after a reinstall or on a new phone.
+- **Backup**: **Apps > Backup** saves every setting to a text file and restores it after a reinstall or on a new phone. A restore asks first, only sets settings this version knows (anything else in the file is ignored) and changes nothing if the file has none.
 - **Battery**: timers stop while the screen is off, the music pill refreshes slowly when no lyric is moving, and songs LRCLIB has no lyrics for (and video / podcast apps) are not asked about again for an hour. A song the exact lookup misses is searched again by artist + title and by its cleaned-up title (no "feat." / "Remastered"), accepted only when its length fits.
 - **Material You accent on a black island**: on Android 12+ the accent follows your wallpaper colours by default (play button, seek / progress bars, rings, action buttons, glyphs, in both the compact pill and the expanded card) while the island itself stays pure black. It follows the Material 3 dark-scheme roles: primary for the accent and filled buttons, secondary container for tonal buttons, tertiary for "good" things (accept, success, charging), error for "bad" ones (decline, low battery), and on-surface tones for text and tiles. Change it at **Style > Colors > Accent** (*Auto* = album-art / app colour, *Material You*, or *Custom*).
 
@@ -62,11 +63,11 @@ Notification text, replies, the Recent banners list and the diagnostic log stay 
 Lyrics on the music pill are looked up at runtime on [LRCLIB](https://lrclib.net) (open, community-run, no account or key). For each new song the app sends LRCLIB the **song title, artist
 and length** (as shown by your music player), along with the app name in the `User-Agent`. Nothing else leaves the phone. Lyrics are not bundled with the app and are never written to storage:
 they are kept in memory for the current session only (up to 40 songs) and shown on the island, nothing more. The lyrics belong to their rights holders, and LRCLIB's own terms apply to the
-service; check them before reusing or redistributing anything you see. Turn it off at **Behavior > Music lyrics** and no lookups are made.
+service; check them before reusing or redistributing anything you see. The first time the app opens it shows this in a short notice with *Keep on* / *Turn off*. Turn it off any time at **Behavior > Music lyrics** and no lookups are made. All of the network code is in one small file, `LyricsNet.java`.
 
 ## Compatibility and testing
 
-Built for Android 8+ (API 26) and targeting API 33. Android 14+ restricts background activity starts (the island opts in when it sends a notification's own intents) and Android 13+ greys out accessibility / notification access for sideloaded apps until *Allow restricted settings* is ticked. Before a release, walk through `TESTING.md` on at least one Android 12 and one Android 14+ phone. Raising the target to 35 turns on forced edge-to-edge for the settings screens and the reply box, so it needs its own pass.
+Built for Android 8+ (API 26) and targeting API 34. Android 14+ restricts background activity starts (the island opts in when it sends a notification's own intents) and Android 13+ greys out accessibility / notification access for sideloaded apps until *Allow restricted settings* is ticked. Before a release, walk through `TESTING.md` on at least one Android 12 and one Android 14+ phone. Raising the target to 35 turns on forced edge-to-edge for the settings screens and the reply box, so it needs its own pass.
 
 ## Building yourself
 
@@ -76,9 +77,9 @@ Local build needs an `android.jar` (API 34) at `libs/android-34.jar`, a JDK, and
 ./build.sh
 ```
 
-The signing key is not included in the repo: `build.sh` creates a new one (`void.jks`) on first run (password `voidisland` unless you set `KS_PASS`; CI must use the same password as the keystore in its secret). CI signs with the
-keystore kept in the `SIGNING_KEYSTORE` repository secret (base64 of `void.jks`), so CI builds have one consistent
-signature; note your locally generated key differs from the CI one unless you upload the same file.
+The signing key is not included in the repo and there is no built-in password. On first run `build.sh` creates `void.jks` with a random password saved in `void.jks.pass` (both git-ignored: **back both up**, because losing them means users must uninstall to update). Later runs read the password from `$KS_PASS` or from `void.jks.pass`. A `void.jks` made by an older `build.sh` used the password `voidisland`: run `KS_PASS=voidisland ./build.sh` once (or put that word in `void.jks.pass`) and rotate the key when you can. The password goes to `keytool` / `apksigner` through the environment, never on a command line.
+
+CI signs with the keystore kept in the `SIGNING_KEYSTORE` repository secret (base64 of `void.jks`) and its password in `SIGNING_KEYSTORE_PASSWORD`. **Both are required: without them the workflow stops** instead of publishing an APK signed with a throwaway key that nobody could update over. Your locally generated key differs from the CI one unless you upload the same file.
 
 ## Releases via GitHub Actions
 
@@ -92,10 +93,11 @@ The `Build APK` workflow builds and signs on every trigger:
 
 ## Tests
 
-Unit checks for the pure-Java logic live in `test/` (Spring, Parse, Col, Geo, ShadeMatch, Lyrics, Backup, the music style names). CI runs them before every
-release, and locally you can run them after building:
+Unit checks for the pure-Java logic live in `test/`, one class per area (`SpringCheck`, `ParseCheck`, `LyricsCheck`, `BackupCheck`, `PrivacyCheck` for the lock-screen rules, `ClassifierCheck` for which notifications get a banner, and so on); `Check` runs them all. Logic that has to be testable is kept free of Android types (`Privacy`, `Gate`, `Dedupe`, `Rules`, `Backup`, `Lyrics`...). CI runs them before every release, and locally you can run them after building:
 
 ```sh
 javac -d out/test -cp out/classes $(find test -name '*.java')
 java -cp out/test:out/classes com.vxyzview.voidisland.Check
 ```
+
+To add an area, write `XCheck.run()` (use `import static com.vxyzview.voidisland.Check.ok;`) and list it in `Check.main`.

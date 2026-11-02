@@ -30,14 +30,12 @@ public final class ListenerService extends NotificationListenerService {
     /** What was already showing is read in small steps, so a phone with a hundred notifications never freezes while we connect. */
     private void scan(final StatusBarNotification[] all, final int from) {
         if (!connected) return;
-        int to = Math.min(all.length, from + 8);
+        final int to = Math.min(all.length, from + 8);
         for (int i = from; i < to; i++) handle(all[i], null, true);
         if (to < all.length) {
-            main.post(new Runnable() { @Override public void run() { scan(all, to2(all, from)); } });
+            main.post(new Runnable() { @Override public void run() { scan(all, to); } });
         }
     }
-
-    private static int to2(StatusBarNotification[] all, int from) { return Math.min(all.length, from + 8); }
 
     @Override public void onListenerDisconnected() {
         connected = false;
@@ -70,10 +68,13 @@ public final class ListenerService extends NotificationListenerService {
 
     private void handle(StatusBarNotification sbn, RankingMap rm, boolean initial) {
         try {
-            int importance = -1;
+            int importance = -1, chanVis = Privacy.NO_OVERRIDE;
             if (rm != null) {
                 Ranking r = new Ranking();
-                if (rm.getRanking(sbn.getKey(), r)) importance = r.matchesInterruptionFilter() ? r.getImportance() : 0;
+                if (rm.getRanking(sbn.getKey(), r)) {
+                    importance = r.matchesInterruptionFilter() ? r.getImportance() : 0;
+                    try { if (r.getChannel() != null) chanVis = r.getChannel().getLockscreenVisibility(); } catch (Throwable t) { /* no channel info: the notification's own setting counts */ }
+                }
             }
             SELF.remove(sbn.getKey());   // posted again: a later removal is not ours
             Notification n = sbn.getNotification();
@@ -82,6 +83,7 @@ public final class ListenerService extends NotificationListenerService {
                 Bus.removeByNkey(sbn.getKey(), true); // e.g. progress notification turned into "download complete"
             } else {
                 e.nkey = sbn.getKey();
+                e.vis = Privacy.effectiveVisibility(n.visibility, chanVis);   // the lock screen rules need it when the banner is shown
                 if (!e.live) Bus.removeByNkey(sbn.getKey(), true);
                 // The island can put an idle-island banner on screen INSIDE Bus.post() and call onBannerShown() before it returns,
                 // so the flag has to be armed first. (Setting it afterwards meant the original was never removed for a banner that

@@ -87,6 +87,18 @@ public final class ReplyActivity extends Activity {
         Cards.open(c, e);
     }
 
+    /**
+     * Drops anything still waiting for a box that never came up (the app's reply intent, its input and the chat's name), so
+     * a reply intent can never outlive its banner: called when the island shuts down, and when a box is torn down.
+     */
+    static void release() {
+        pending = null;
+        input = null;
+        who = null;
+        pendKey = null;
+        startToken++;   // a watchdog from an earlier start() must not act on a later box
+    }
+
     /** The island let go of the banner (opened, swiped away, another button pressed, a call came in...): the box goes too. */
     static void closeFromIsland() {
         ReplyActivity a = cur;
@@ -356,6 +368,11 @@ public final class ReplyActivity extends Activity {
     @Override protected void onDestroy() {
         if (cur == this) cur = null;
         if (!done && key != null) { done = true; Bus.replyEnd(key, false); }
+        // The app's reply intent must not outlive the box. Only this box's own copies are dropped here: the static fields may
+        // already belong to a newer box that is starting, so release() is left to the island's shutdown. send() returns early
+        // once the box is done, so nothing reads these afterwards.
+        pi = null;
+        ri = null;
         super.onDestroy();
     }
 

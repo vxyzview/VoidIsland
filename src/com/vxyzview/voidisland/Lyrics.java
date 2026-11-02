@@ -6,7 +6,7 @@ import java.util.Map;
 
 /**
  * Lyrics text support for the music card: parse an LRC or plain-lyrics body, then look up the line
- * that is playing at a given position. Pure Java so the unit checks cover it (network lives in Cards).
+ * that is playing at a given position. Pure Java so the unit checks cover it (the network lives in LyricsNet).
  */
 final class Lyrics {
     private Lyrics() {}

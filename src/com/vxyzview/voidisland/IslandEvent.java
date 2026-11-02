@@ -63,6 +63,10 @@ final class IslandEvent {
     boolean dirty;
     /** Set by the listener: the original notification may be removed once this banner is really on screen. Not copied. */
     boolean absorbOk;
+    /** The notification's effective lock-screen visibility (Notification.VISIBILITY_*; the platform default is PRIVATE). */
+    int vis = Privacy.VIS_PRIVATE;
+    /** True once the lock-screen privacy rules replaced this banner's content with a generic line. */
+    boolean redacted;
     /** True once the island has put this banner on screen (so the hooks that run on first display run once). */
     boolean shownOnce;
 
@@ -83,6 +87,7 @@ final class IslandEvent {
         replyIntent = o.replyIntent; replyInput = o.replyInput; liveKind = o.liveKind;
         mc = o.mc; playing = o.playing; posMs = o.posMs; durMs = o.durMs; posAt = o.posAt; actions = o.actions; speed = o.speed;
         level = o.level; charging = o.charging; success = o.success; incoming = o.incoming;
+        vis = o.vis;
         dirty = true;
     }
 }

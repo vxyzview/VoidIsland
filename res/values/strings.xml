@@ -12,6 +12,7 @@
     <string name="open">Open</string>
     <string name="decline">Decline</string>
     <string name="accept">Accept</string>
+    <string name="content_hidden">Content hidden</string>
     <string name="payment">Payment</string>
     <string name="prev_track">Previous track</string>
     <string name="next_track">Next track</string>
@@ -42,4 +43,10 @@
     <string name="connected">Connected</string>
     <string name="disconnected">Disconnected</string>
     <string name="flashlight">Flashlight</string>
+    <string name="clock_day">Day</string>
+    <string name="clock_hour">Hour</string>
+    <string name="clock_minute">Minute</string>
+    <string name="clock_week">Week %d</string>
+    <string name="clock_min">%d min</string>
+    <string name="clock_sec">%d s</string>
 </resources>

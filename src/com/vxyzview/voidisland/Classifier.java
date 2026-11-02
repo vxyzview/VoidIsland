@@ -24,11 +24,6 @@ import java.util.HashMap;
 final class Classifier {
     private Classifier() {}
 
-    /** Recently seen notifications (key -> {signature hash, time}), least recently used first out, so a busy phone never forgets everything at once. */
-    private static final java.util.LinkedHashMap<String, long[]> SEEN = new java.util.LinkedHashMap<String, long[]>(64, 0.75f, true) {
-        @Override protected boolean removeEldestEntry(java.util.Map.Entry<String, long[]> eldest) { return size() > 300; }
-    };
-
     private static boolean empty(CharSequence s) { return s == null || s.toString().trim().length() == 0; }
 
     static Bitmap largeIcon(Context c, Notification n) {
@@ -50,6 +45,13 @@ final class Classifier {
             }
         } catch (Throwable t) { /* malformed extras */ }
         return null;
+    }
+
+    /** True when one of the notification's buttons reads Answer / Accept / Jawab... */
+    static boolean hasAnswerAction(Notification n) {
+        if (n == null || n.actions == null) return false;
+        for (Notification.Action a : n.actions) if (a != null && Parse.actionKind(String.valueOf(a.title)) > 0) return true;
+        return false;
     }
 
     private static void actions(IslandEvent e, Notification n) {
@@ -100,7 +102,7 @@ final class Classifier {
     /** Identifies a chat for the "one banner per chat" rule. */
     private static String chatKey(String pkg, Bundle x, CharSequence title) {
         CharSequence conv = x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE);
-        return pkg + "|" + (empty(conv) ? String.valueOf(title) : conv.toString());
+        return Rules.chatKey(pkg, empty(conv) ? null : conv.toString(), String.valueOf(title));
     }
 
     /** A chronometer read out of a notification's custom layout. */
@@ -164,13 +166,7 @@ final class Classifier {
         return null;
     }
 
-    private static boolean duplicate(String nkey, String sig) {
-        long now = System.currentTimeMillis();
-        long[] seen = SEEN.get(nkey);
-        if (seen != null && seen[0] == sig.hashCode() && now - seen[1] < 30000) return true;
-        SEEN.put(nkey, new long[]{sig.hashCode(), now});
-        return false;
-    }
+    private static boolean duplicate(String nkey, String sig) { return Dedupe.repeated(nkey, sig, System.currentTimeMillis()); }
 
     /**
      * @param importance NotificationManager.IMPORTANCE_* or -1 if unknown
@@ -208,7 +204,9 @@ final class Classifier {
             if (!Prefs.b(c, Prefs.K_CALL, true)) return null;
             int ct = x.getInt("android.callType", 0);
             IslandEvent e = new IslandEvent("call", IslandEvent.CALL);
-            e.incoming = ct == 1 || (ct == 0 && !chrono);
+            // callType 0 = the app did not say (older notifications): ringing means an Answer button or a full-screen call screen
+            // and no running timer. An outgoing call that is still dialing has neither, so it reads "On call", not "Incoming call".
+            e.incoming = ct == 1 || (ct == 0 && !chrono && (n.fullScreenIntent != null || hasAnswerAction(n)));
             e.live = true;
             e.popup = e.incoming;
             e.priority = 100;
@@ -288,12 +286,9 @@ final class Classifier {
             return e;
         }
 
-        if (initial || ongoing) return null; // from here on only fresh, dismissible notifications
-        if (empty(title) && empty(text)) return null;
-        if (importance >= 0 && importance < NotificationManager.IMPORTANCE_DEFAULT) return null;
-        if (n.getGroupAlertBehavior() == Notification.GROUP_ALERT_SUMMARY) return null;
-        if (Notification.CATEGORY_SERVICE.equals(cat) || Notification.CATEGORY_SYSTEM.equals(cat)
-            || Notification.CATEGORY_STATUS.equals(cat) || Notification.CATEGORY_PROGRESS.equals(cat)) return null;
+        // from here on only fresh, dismissible notifications with something to say that are not housekeeping
+        if (!Gate.banner(initial, ongoing, !(empty(title) && empty(text)), importance, NotificationManager.IMPORTANCE_DEFAULT,
+            n.getGroupAlertBehavior() == Notification.GROUP_ALERT_SUMMARY, cat)) return null;
         if (duplicate(nkey, String.valueOf(title) + "|" + text)) return null;
 
         // ---- payments

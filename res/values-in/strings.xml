@@ -10,6 +10,7 @@
     <string name="open">Buka</string>
     <string name="decline">Tolak</string>
     <string name="accept">Terima</string>
+    <string name="content_hidden">Konten disembunyikan</string>
     <string name="payment">Pembayaran</string>
     <string name="prev_track">Lagu sebelumnya</string>
     <string name="next_track">Lagu berikutnya</string>
@@ -40,4 +41,10 @@
     <string name="connected">Terhubung</string>
     <string name="disconnected">Terputus</string>
     <string name="flashlight">Senter</string>
+    <string name="clock_day">Hari</string>
+    <string name="clock_hour">Jam</string>
+    <string name="clock_minute">Menit</string>
+    <string name="clock_week">Minggu %d</string>
+    <string name="clock_min">%d mnt</string>
+    <string name="clock_sec">%d dtk</string>
 </resources>

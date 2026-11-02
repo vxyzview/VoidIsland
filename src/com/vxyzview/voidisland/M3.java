@@ -696,7 +696,13 @@ final class M3 {
      * so a caller that must undo something can rely on exactly one of the two callbacks firing.
      */
     void confirmDialog(Activity a, String title, String body, String yes, final Runnable onYes, String no, final Runnable onNo) {
+        confirmDialog(a, title, body, yes, onYes, no, onNo, true);
+    }
+
+    /** {@code cancelable} false: back and a tap outside do nothing, so the person has to pick one of the two answers. */
+    void confirmDialog(Activity a, String title, String body, String yes, final Runnable onYes, String no, final Runnable onNo, boolean cancelable) {
         final Dialog dlg = new Dialog(a);
+        dlg.setCancelable(cancelable);
         dlg.requestWindowFeature(Window.FEATURE_NO_TITLE);
         final boolean[] answered = new boolean[1];
         LinearLayout box = col();

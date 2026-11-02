@@ -100,6 +100,14 @@ final class Backup {
         return out;
     }
 
+    /** The entries of {@code values} whose key is in {@code known}; anything else in the file (stale or foreign keys) is left out. */
+    static Map<String, Object> onlyKnown(Map<String, Object> values, Set<String> known) {
+        Map<String, Object> out = new TreeMap<String, Object>();
+        if (values == null || known == null) return out;
+        for (Map.Entry<String, Object> en : values.entrySet()) if (known.contains(en.getKey())) out.put(en.getKey(), en.getValue());
+        return out;
+    }
+
     /** Replaces every stored preference with the backup's values. */
     @SuppressWarnings("unchecked")
     static void apply(SharedPreferences sp, Map<String, Object> values) {

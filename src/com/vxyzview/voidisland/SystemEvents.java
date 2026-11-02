@@ -72,7 +72,7 @@ final class SystemEvents {
         try {
             if (on) {
                 IntentFilter tf = new IntentFilter(Intent.ACTION_TIME_TICK);
-                if (Build.VERSION.SDK_INT >= 33) c.registerReceiver(tickRx, tf, Context.RECEIVER_EXPORTED);
+                if (Build.VERSION.SDK_INT >= 33) c.registerReceiver(tickRx, tf, Context.RECEIVER_NOT_EXPORTED);   // system broadcasts still arrive; other apps cannot send us fake ones
                 else c.registerReceiver(tickRx, tf);
             } else {
                 c.unregisterReceiver(tickRx);
@@ -107,8 +107,9 @@ final class SystemEvents {
         f.addAction(Intent.ACTION_TIME_CHANGED);
         f.addAction(Intent.ACTION_TIMEZONE_CHANGED);
         f.addAction(Intent.ACTION_DATE_CHANGED);
-        // system broadcasts only; Android 14 (target 34) requires saying so explicitly
-        if (Build.VERSION.SDK_INT >= 33) c.registerReceiver(rx, f, Context.RECEIVER_EXPORTED);
+        // system broadcasts only; Android 14 (target 34) requires saying so explicitly. NOT_EXPORTED still receives system
+        // broadcasts but refuses ones sent by other apps, so none of them can fake a charger, a headset or a ringer change.
+        if (Build.VERSION.SDK_INT >= 33) c.registerReceiver(rx, f, Context.RECEIVER_NOT_EXPORTED);
         else c.registerReceiver(rx, f);
         if (interactive()) minuteTick(true);   // keeps the idle clock exact while the screen is on (the island's own timer stops while the phone sleeps)
         try {

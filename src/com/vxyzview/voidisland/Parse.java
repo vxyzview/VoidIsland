@@ -14,8 +14,8 @@ final class Parse {
 
     private static final String[] PAY_WORDS = {
         "payment", "paid", "purchase", "transaction", "transfer", "debit", "top up", "top-up", "topup", "refund",
-        "receipt", "qris", "pembayaran", "dibayar", "transaksi", "pembelian", "isi ulang", "saldo", "uang masuk",
-        "dana masuk", "tap to pay", "you sent", "sent you", "you received", "charged", "invoice", "tagihan",
+        "receipt", "qris", "pembayaran", "dibayar", "transaksi", "pembelian", "isi ulang", "uang masuk",
+        "dana masuk", "tap to pay", "you sent", "sent you", "you received", "charged",
         "pay ", "withdraw", "tarik tunai"};
     private static final String[] FAIL_WORDS = {
         "failed", "declined", "gagal", "ditolak", "unsuccessful", "error", "cancelled", "canceled", "dibatalkan"};
@@ -25,7 +25,10 @@ final class Parse {
     private static final String[] NOT_PAY_WORDS = {
         "reminder", "overdue", "payment due", "bill due", "is due", "are due", "due on", "due by", "due today", "due tomorrow",
         "due soon", "upcoming", "will be charged", "will be debited", "expires", "expiring", "promo", "discount", "voucher",
-        "cashback", "% off", " off your", " off on", "pengingat", "jatuh tempo", "diskon", "promosi"};
+        "cashback", "% off", " off your", " off on", "pengingat", "jatuh tempo", "diskon", "promosi",
+        // nothing has been paid yet ("paid" also sits inside "unpaid"), or the app is still asking for the money
+        "unpaid", "not paid", "belum dibayar", "belum lunas", "outstanding", "past due", "pay now", "bayar sekarang",
+        "segera bayar", "complete your payment", "selesaikan pembayaran", "awaiting payment", "waiting for payment", "menunggu pembayaran"};
     // prefix match on a word start, so "End call" / "Ending" count but "Send" does not
     private static final Pattern NEG_BTN = Pattern.compile(
         "(?<!\\p{L})(decline|reject|hang|end|tolak|akhiri|tutup|matikan|putus|dismiss|ignore|cancel|stop)");
@@ -50,13 +53,21 @@ final class Parse {
         String p = pkg.toLowerCase(Locale.ROOT);
         if (p.contains("payroll")) return false;
         return p.contains("pay") || p.contains("wallet") || p.equals("id.dana") || p.equals("ovo.id")
-            || p.equals("com.gojek.app") || p.equals("com.shopee.id") || p.equals("com.telkom.mwallet")
+            || p.equals("com.telkom.mwallet")
             || p.equals("com.bca") || p.equals("id.co.bri.brimo") || p.equals("id.bmri.livin")
             || p.equals("src.com.bni") || p.equals("com.btpn.dc") || p.equals("com.jago.digitalbanking")
             || p.equals("com.squareup.cash") || p.equals("com.venmo") || p.equals("com.revolut.revolut")
             || p.equals("com.transferwise.android") || p.equals("com.phonepe.app") || p.equals("net.one97.paytm")
-            || p.equals("com.grab.passenger") || p.equals("com.eg.android.alipaygphone")
+            || p.equals("com.eg.android.alipaygphone")
             || p.startsWith("com.samsung.android.spay");
+    }
+
+    /**
+     * Shopping / ride super-apps that have a wallet inside: they count as a payment source only when the text also says
+     * something was paid. A price alone ("Pesanan Rp 100.000 dikirim", a ride fare) is an order or ride update, not a payment.
+     */
+    static boolean superApp(String pkg) {
+        return "com.gojek.app".equals(pkg) || "com.shopee.id".equals(pkg) || "com.grab.passenger".equals(pkg);
     }
 
     static boolean isPayment(String pkg, String title, String text) {
@@ -64,7 +75,9 @@ final class Parse {
         String lower = all.toLowerCase(Locale.ROOT);
         if (any(lower, NOT_PAY_WORDS)) return false;
         boolean word = any(lower, PAY_WORDS), pk = payPkg(pkg), amt = amount(all) != null;
-        return (word && (pk || amt)) || (pk && amt);
+        // a payment app showing only a balance ("Saldo DANA Rp 50.000") is information; with a payment word next to it, it is a payment
+        if (!word && (lower.contains("saldo") || lower.contains("balance"))) return false;
+        return (word && (pk || superApp(pkg) || amt)) || (pk && amt);
     }
 
     /**
@@ -72,7 +85,7 @@ final class Parse {
      * tickets" in a messenger is a message, not a payment.
      */
     static boolean isPaymentFrom(boolean messaging, String pkg, String title, String text) {
-        return isPayment(pkg, title, text) && (!messaging || payPkg(pkg));
+        return isPayment(pkg, title, text) && (!messaging || payPkg(pkg) || superApp(pkg));
     }
 
     static boolean isFailure(String s) { return s != null && any(s.toLowerCase(Locale.ROOT), FAIL_WORDS); }

@@ -43,7 +43,22 @@ echo "using build-tools: $BT"
 echo "using android.jar: $AJ"
 echo "dexer: $DEXER"
 
-KS_PASS=${KS_PASS:-voidisland}   # keystore + key password; set KS_PASS to keep a private key's password out of the repo
+# Signing password: there is no built-in default. Order: $KS_PASS, else the file void.jks.pass (git-ignored), else, when no
+# keystore exists yet, a random password is generated and saved to void.jks.pass together with the new void.jks.
+# (A void.jks made by an older build.sh used the password "voidisland": run  KS_PASS=voidisland ./build.sh  once, or put that
+# word in void.jks.pass, then rotate the key.)
+if [ -z "${KS_PASS:-}" ] && [ -f void.jks.pass ]; then KS_PASS=$(head -n 1 void.jks.pass); fi
+if [ -z "${KS_PASS:-}" ]; then
+    if [ -f void.jks ]; then
+        echo "error: void.jks exists but its password is unknown: set KS_PASS or write it to void.jks.pass" >&2
+        exit 1
+    fi
+    KS_PASS=$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 24)
+    [ ${#KS_PASS} -ge 16 ] || { echo "error: could not generate a signing password" >&2; exit 1; }
+    ( umask 077; printf '%s\n' "$KS_PASS" > void.jks.pass )
+    echo "note: new signing key. Its password is in void.jks.pass: back up void.jks AND void.jks.pass (losing them means users must uninstall to update)."
+fi
+export KS_PASS   # handed to keytool / apksigner through the environment, so it never shows in the process list
 NAME=${1:-VoidIsland}
 VER=${2:-1.1}
 VCODE=${3:-2}
@@ -58,10 +73,11 @@ else
     echo "[2/6] dex (d8)";
     "$DEXER" --release --min-api 26 --lib "$AJ" --output out $(find out/classes -name '*.class')
 fi
-echo "[3/6] aapt";    "$AAPT" package -f -M AndroidManifest.xml -S res -I "$AJ" --min-sdk-version 26 --target-sdk-version 33 --version-code "$VCODE" --version-name "$VER" -F out/unsigned.apk
+echo "[3/6] aapt";    "$AAPT" package -f -M AndroidManifest.xml -S res -I "$AJ" --min-sdk-version 26 --target-sdk-version 34 --version-code "$VCODE" --version-name "$VER" -F out/unsigned.apk
 echo "[4/6] add dex"; (cd out && "$AAPT" add -f unsigned.apk classes.dex >/dev/null)
 echo "[5/6] align";   "$ZIP" -f -p 4 out/unsigned.apk out/aligned.apk
 [ -f void.jks ] || keytool -genkeypair -keystore void.jks -alias void -keyalg RSA -keysize 2048 -validity 36500 \
-    -storepass "$KS_PASS" -keypass "$KS_PASS" -dname "CN=vxyzview, OU=VoidIsland, O=vxyzview, C=ID" >/dev/null 2>&1
-echo "[6/6] sign";    "$SIGN" sign --ks void.jks --ks-pass "pass:$KS_PASS" --key-pass "pass:$KS_PASS" --out out/$NAME.apk out/aligned.apk
+    -storepass:env KS_PASS -keypass:env KS_PASS -dname "CN=vxyzview, OU=VoidIsland, O=vxyzview, C=ID" >/dev/null 2>&1 \
+    || { echo "error: keytool could not create void.jks" >&2; rm -f void.jks; exit 1; }
+echo "[6/6] sign";    "$SIGN" sign --ks void.jks --ks-pass env:KS_PASS --key-pass env:KS_PASS --out out/$NAME.apk out/aligned.apk
 ls -la out/$NAME.apk

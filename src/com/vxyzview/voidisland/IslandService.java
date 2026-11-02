@@ -176,6 +176,7 @@ public final class IslandService extends AccessibilityService {
         if (sys != null) { sys.stop(); sys = null; }
         if (ctl != null) { Bus.detach(ctl); ctl.detach(); ctl = null; }
         Bus.shadeOpen = false;
+        ReplyActivity.release();   // no reply intent may outlive the island that offered it
         fg = "";   // a new controller starts with no foreground app, so this must not remember the old one
     }
 

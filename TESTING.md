@@ -27,6 +27,14 @@ The unit checks (`test/`) cover the pure logic. Everything below needs a phone: 
 - [ ] *Rules > Stock pop-up*: tapping an app opens that app's Android notification settings; after switching off *Pop on screen* there, the island shows the message and no system pop-up appears.
 - [ ] A chat app that marks messages read on dismiss: note whether the message shows as read after the island absorbed it.
 
+## Lock screen privacy
+- [ ] PIN / pattern set, phone locked, *Show on lock screen* on: a message from a normal chat app shows as usual (Android's *Show all notification content*).
+- [ ] Settings > Notifications > Lock screen > *Hide sensitive content*, then a message: the banner shows the app name and \"Content hidden\", no text, no Reply, no action buttons.
+- [ ] A notification the app marks secret (e.g. a banking / OTP app, or a channel set to *Don't show* on the lock screen): no banner at all, and its original is still in the shade after unlocking.
+- [ ] *Only on the island* on, phone locked, a redacted banner shows: after unlocking the original notification is still in the shade.
+- [ ] Swipe-only lock (no PIN): banners show in full.
+- [ ] Lock the phone while a second banner is queued: the queued one comes out redacted, not in full.
+
 ## Calls, timers, music
 - [ ] Incoming call popup, accept / decline, ongoing call timer. Ending the call on a paired watch removes the pill.
 - [ ] Clock-app stopwatch / timer show and tick; pausing it stops the island's timer within a couple of seconds.
@@ -34,8 +42,17 @@ The unit checks (`test/`) cover the pure logic. Everything below needs a phone: 
 - [ ] Demo song for 30 s, then your real music comes back by itself.
 
 ## Backup
-- [ ] Back up, change settings, restore: settings come back; "Only on the island" stays off until re-enabled.
+- [ ] Back up, change settings, restore: a confirmation asks first (Cancel changes nothing); after *Restore* the settings come back; \"Only on the island\" stays off until re-enabled.
+- [ ] Restore a text file that is not a backup, and a backup with only unknown keys: the island reports it and no setting changes.
 - [ ] Restore a file with a wrong value type (edit `b|dur|true` into the backup): the island still starts, that setting uses its default.
+
+## First run and lyrics
+- [ ] Fresh install, first launch: the \"Lyrics on the music pill\" notice shows once and cannot be dismissed with back; *Keep on* keeps lyrics, *Turn off* switches *Behavior > Music lyrics* off. It does not come back after either answer.
+- [ ] After a restore on a phone that already answered the notice, it does not show again.
+
+## Android 14 (target 34)
+- [ ] Banner buttons and the banner itself open their apps from the background; Reply box opens (or falls back to the app).
+- [ ] System broadcasts still reach the island: plug / unplug the charger, toggle the ringer, connect headphones, change Do Not Disturb.
 
 ## Languages and accessibility
 - [ ] Phone set to Bahasa Indonesia: island texts are Indonesian.

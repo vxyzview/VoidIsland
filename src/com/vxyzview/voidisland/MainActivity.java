@@ -163,7 +163,7 @@ public final class MainActivity extends Activity {
         Page pg = pages[page];
         if (page != 1 && (pg == null || !pg.sig.equals(statusSig()))) showPage(page, true);
         if (page == 2) { h.removeCallbacks(diagRun); h.post(diagRun); }   // onPause stopped it
-        h.post(new Runnable() { @Override public void run() { askKeepAlive(); } });
+        h.post(new Runnable() { @Override public void run() { if (!askLyricsNotice()) askKeepAlive(); } });
     }
 
     @Override protected void onPause() {
@@ -340,11 +340,36 @@ public final class MainActivity extends Activity {
         go(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName())));
     }
 
+    /**
+     * Once, the first time the app opens (and once after an update that brings this notice): says exactly what the lyric lookup
+     * sends, and lets the person turn it off. The island cannot be running before the app has been opened to switch it on, so
+     * on a fresh install this comes before the first lookup.
+     * @return true when the notice is on screen now
+     */
+    private boolean askLyricsNotice() {
+        if (isFinishing() || Prefs.b(this, Prefs.K_LYRICS_NOTICE, false)) return false;
+        if (!Prefs.b(this, Prefs.K_LYRICS, true)) {   // already off: nothing leaves the phone, nothing to explain
+            Prefs.sp(this).edit().putBoolean(Prefs.K_LYRICS_NOTICE, true).apply();
+            return false;
+        }
+        m.confirmDialog(this, "Lyrics on the music pill",
+            "To show lyrics, the island asks lrclib.net (an open, community-run service) about each new song. It sends the song title, artist and length from your music player, and the app's name. Nothing else leaves the phone, and lyrics are never saved.\n\n"
+                + "You can change this any time under Behavior > Music lyrics.",
+            "Keep on", new Runnable() { @Override public void run() { Prefs.sp(MainActivity.this).edit().putBoolean(Prefs.K_LYRICS_NOTICE, true).apply(); } },
+            "Turn off", new Runnable() {
+                @Override public void run() {
+                    Prefs.sp(MainActivity.this).edit().putBoolean(Prefs.K_LYRICS_NOTICE, true).putBoolean(Prefs.K_LYRICS, false).apply();
+                    Toast.makeText(MainActivity.this, "Lyrics are off. Turn them on under Behavior > Music lyrics", Toast.LENGTH_LONG).show();
+                }
+            }, false);
+        return true;
+    }
+
     /** Once, after setup is done, on phones whose battery saver is known to close background apps. */
     private void askKeepAlive() {
-        if (isFinishing() || !KeepAlive.aggressiveHere() || Prefs.b(this, "keepalive_asked", false)) return;
+        if (isFinishing() || !KeepAlive.aggressiveHere() || Prefs.b(this, Prefs.K_KEEPALIVE, false)) return;
         if (!a11yOn() || !notifOn() || KeepAlive.batteryUnrestricted(this)) return;
-        Prefs.sp(this).edit().putBoolean("keepalive_asked", true).apply();
+        Prefs.sp(this).edit().putBoolean(Prefs.K_KEEPALIVE, true).apply();
         m.confirmDialog(this, "Keep the island running",
             KeepAlive.familyHere() + " phones often close background apps, and then the island simply disappears. "
                 + KeepAlive.hint(Build.MANUFACTURER) + " You can do this later from Home > Setup.",
@@ -909,18 +934,50 @@ public final class MainActivity extends Activity {
                             byte[] buf = new byte[8192];
                             for (int n; (n = is.read(buf)) > 0;) { bo.write(buf, 0, n); if (bo.size() > 1000000) break; }
                         } finally { is.close(); }
-                        final java.util.Map<String, Object> vals = bo.size() > 1000000 ? null : Backup.read(bo.toString("UTF-8"));
-                        if (vals == null) msg = "That file is not a VoidIsland backup";
+                        final java.util.Map<String, Object> all = bo.size() > 1000000 ? null : Backup.read(bo.toString("UTF-8"));
+                        if (all == null) msg = "That file is not a VoidIsland backup";
                         else {
-                            vals.remove(Prefs.K_ABSORB);   // removing banners from the shade is only ever switched on through its own confirmation
-                            Backup.apply(Prefs.sp(MainActivity.this), vals);
-                            msg = "Settings restored (\"Only on the island\" stays off until you turn it on again)";
-                            runOnUiThread(new Runnable() { @Override public void run() { if (!isFinishing()) recreate(); } });
+                            all.remove(Prefs.K_ABSORB);   // removing banners from the shade is only ever switched on through its own confirmation
+                            all.remove(Prefs.K_LYRICS_NOTICE);   // a file is not the person's answer to the lyrics notice
+                            final java.util.Map<String, Object> vals = Backup.onlyKnown(all, Prefs.knownKeys());   // foreign or stale keys never reach the settings
+                            final int ignored = all.size() - vals.size();
+                            if (vals.isEmpty()) msg = "That file has no settings this version knows, so nothing was changed";
+                            else {
+                                msg = null;   // the person confirms first: a restore replaces everything
+                                final boolean noticeSeen = Prefs.b(MainActivity.this, Prefs.K_LYRICS_NOTICE, false);
+                                runOnUiThread(new Runnable() {
+                                    @Override public void run() {
+                                        if (isFinishing()) return;
+                                        m.confirmDialog(MainActivity.this, "Restore settings?",
+                                            "This replaces all your current settings with the " + vals.size() + " in the file."
+                                                + (ignored > 0 ? " " + ignored + " entries this version does not know are ignored." : "")
+                                                + "\n\n\"Only on the island\" stays off until you turn it on again.",
+                                            "Restore", new Runnable() {
+                                                @Override public void run() {
+                                                    new Thread(new Runnable() {
+                                                        @Override public void run() {
+                                                            if (noticeSeen) vals.put(Prefs.K_LYRICS_NOTICE, Boolean.TRUE);   // this phone already saw the notice
+                                                            Backup.apply(Prefs.sp(MainActivity.this), vals);
+                                                            runOnUiThread(new Runnable() {
+                                                                @Override public void run() {
+                                                                    if (isFinishing()) return;
+                                                                    Toast.makeText(MainActivity.this, "Settings restored", Toast.LENGTH_LONG).show();
+                                                                    recreate();
+                                                                }
+                                                            });
+                                                        }
+                                                    }, "vi-restore").start();
+                                                }
+                                            },
+                                            "Cancel", null);
+                                    }
+                                });
+                            }
                         }
                     }
                 } catch (Throwable t) { msg = save ? "Could not save the file" : "Could not read the file"; }
                 final String shown = msg;
-                runOnUiThread(new Runnable() { @Override public void run() { Toast.makeText(MainActivity.this, shown, Toast.LENGTH_LONG).show(); } });
+                if (shown != null) runOnUiThread(new Runnable() { @Override public void run() { Toast.makeText(MainActivity.this, shown, Toast.LENGTH_LONG).show(); } });
             }
         }, "vi-backup").start();
     }

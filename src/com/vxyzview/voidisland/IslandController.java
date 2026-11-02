@@ -2,6 +2,7 @@ package com.vxyzview.voidisland;
 
 import android.accessibilityservice.AccessibilityService;
 import android.app.KeyguardManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -489,6 +490,7 @@ final class IslandController implements IslandView.Host {
     boolean post(IslandEvent e) {
         if (!attached) return false;
         if (!allowed(e) || Prefs.has(svc, Prefs.K_BLOCK, e.pkg)) return false;
+        if (!e.live && lockDecision(e) == Privacy.HIDE) return false;   // a secret notification never shows over a secure lock screen; its original stays put
         if (e.type == IslandEvent.NOTIF && e.pkg != null && e.pkg.equals(fg)) return false; // don't banner the app you're in
         if (e.live) {
             IslandEvent old = live.get(e.key);
@@ -552,16 +554,18 @@ final class IslandController implements IslandView.Host {
         if (nkey == null) return;
         ArrayList<String> dead = new ArrayList<String>();
         for (IslandEvent e : live.values()) if (nkey.equals(e.nkey)) dead.add(e.key);
+        boolean changed = !dead.isEmpty();
         for (String k : dead) {
             IslandEvent old = live.remove(k);
             if (userExpanded == old) userExpanded = null;
             if (k.equals(pinnedKey)) pinnedKey = null;
         }
         if (!liveOnly && popup != null && nkey.equals(popup.nkey)) {
+            changed = true;
             if (flow.is(popup)) { flow.markGone(); }
             else { popup = null; h.removeCallbacks(popupEnd); }
         }
-        evaluate();
+        if (changed) evaluate();   // every posted notification passes here first: skip the re-layout when nothing was removed
     }
 
     void refresh() { evaluate(); }
@@ -738,6 +742,25 @@ final class IslandController implements IslandView.Host {
         show(want, mode);
     }
 
+    /** What the lock-screen privacy rules allow for a banner right now (only messages and payments carry personal text). */
+    private int lockDecision(IslandEvent e) {
+        if (e.type != IslandEvent.NOTIF && e.type != IslandEvent.PAYMENT) return Privacy.SHOW;
+        if (!Cards.secureLocked(svc)) return Privacy.SHOW;
+        return Privacy.onLockScreen(e.vis, true, Cards.hideSensitiveOnLock(svc), Cards.lockShowsNoNotifications(svc));
+    }
+
+    /** Replaces a banner's personal content with a generic line: app name, "Content hidden", no amount, no buttons, no reply. */
+    private void redact(IslandEvent e) {
+        e.redacted = true;
+        e.absorbOk = false;   // the person could not read it here: its original must stay in the shade
+        e.title = e.appName != null ? e.appName : Str.t(svc, "payment", "Payment");
+        e.text = Str.t(svc, "content_hidden", "Content hidden");
+        e.sub = null;
+        e.icon = Img.appIcon(svc, e.pkg);
+        e.replyIntent = null; e.replyInput = null;
+        e.actLabels = new String[0]; e.actIntents = new PendingIntent[0]; e.actRuns = new Runnable[0];
+    }
+
     private void show(IslandEvent want, int mode) {
         if (want == shown && mode == shownMode) {
             if (want != null && want.dirty) {
@@ -747,6 +770,7 @@ final class IslandController implements IslandView.Host {
             }
             return;
         }
+        if (want != null && !want.redacted && !want.live && lockDecision(want) != Privacy.SHOW) redact(want);   // locked since it was queued
         shown = want;
         shownMode = mode;
         if (want != null) want.dirty = false;

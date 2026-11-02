@@ -23,6 +23,20 @@ jobs:
         with:
           fetch-depth: 0   # full history: tags + commit count for versionCode
 
+      - name: Restore signing key
+        env:
+          SIGNING_KEYSTORE: ${{ secrets.SIGNING_KEYSTORE }}
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+        run: |
+          # Every run publishes a Release, and an APK signed with a throwaway key can never be updated over a real one
+          # (users would have to uninstall first), so a missing key stops the build instead of shipping one.
+          if [ -z "$SIGNING_KEYSTORE" ] || [ -z "$SIGNING_KEYSTORE_PASSWORD" ]; then
+            echo "::error::Repository secrets SIGNING_KEYSTORE (base64 of void.jks) and SIGNING_KEYSTORE_PASSWORD are both required. If your keystore still uses the old built-in password, set SIGNING_KEYSTORE_PASSWORD to 'voidisland' for now and rotate the key later."
+            exit 1
+          fi
+          echo "$SIGNING_KEYSTORE" | base64 -d > void.jks
+          echo "Signing with the keystore from repository secrets."
+
       - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961   # v5
         with:
           distribution: temurin
@@ -32,17 +46,6 @@ jobs:
         run: |
           SDKM="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
           yes | "$SDKM" --sdk_root="$ANDROID_HOME" "platforms;android-34" "build-tools;34.0.0" "build-tools;35.0.0" >/dev/null
-
-      - name: Restore signing key
-        env:
-          SIGNING_KEYSTORE: ${{ secrets.SIGNING_KEYSTORE }}
-        run: |
-          if [ -n "$SIGNING_KEYSTORE" ]; then
-            echo "$SIGNING_KEYSTORE" | base64 -d > void.jks
-            echo "Signing with the keystore from repository secrets."
-          else
-            echo "::warning::SIGNING_KEYSTORE secret is not set -> a FRESH throwaway key will be generated for this build. Users of other builds will need to uninstall first."
-          fi
 
       - name: Work out version
         run: |
@@ -86,7 +89,7 @@ jobs:
 
       - name: Build (javac, dx, aapt, zipalign, apksigner)
         env:
-          KS_PASS: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}   # optional; empty = the default password build.sh uses
+          KS_PASS: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
         run: ./build.sh "$APK" "$VERSION" "$VERSIONCODE"
 
       - name: Unit checks

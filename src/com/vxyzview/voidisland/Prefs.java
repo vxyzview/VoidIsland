@@ -19,6 +19,8 @@ final class Prefs {
         K_LYROFF = "lyric_off", K_LYRSIZE = "lyric_size",
         K_MSTYLE = "music_style", K_EMSTYLE = "music_style_e",
         K_LIVE_RIDE = "live_ride", K_LIVE_FOOD = "live_food", K_LIVE_SPORT = "live_sport";
+    // one-off flags (not settings the person picks, but they live in the same file)
+    static final String K_KEEPALIVE = "keepalive_asked", K_LYRICS_NOTICE = "lyrics_notice";
     // shape + size
     static final String K_SHAPE = "shape", K_ESHAPE = "e_shape", K_CW = "c_w", K_CH = "c_h", K_CR = "c_r", K_CPAD = "c_pad", K_GLYPH = "glyph",
         K_EW = "e_w", K_ER = "e_r", K_PADX = "pad_x", K_PADY = "pad_y", K_TS = "t_scale";
@@ -35,6 +37,18 @@ final class Prefs {
 
     /** True while the "Remove banners from the shade?" dialog is open: the switch is already saved, but nothing may be removed yet. */
     static volatile boolean absorbUnconfirmed;
+
+    /** Every preference key this version knows (all the {@code K_} constants): a restored backup may only set these. */
+    static Set<String> knownKeys() {
+        Set<String> out = new HashSet<String>();
+        for (java.lang.reflect.Field f : Prefs.class.getDeclaredFields()) {
+            try {
+                int mod = f.getModifiers();
+                if (f.getType() == String.class && java.lang.reflect.Modifier.isStatic(mod) && f.getName().startsWith("K_")) out.add((String) f.get(null));
+            } catch (Throwable t) { /* skip a field we cannot read */ }
+        }
+        return out;
+    }
 
     private static volatile SharedPreferences cached;
 
