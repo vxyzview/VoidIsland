@@ -791,7 +791,7 @@ public final class MainActivity extends Activity {
         m.toggle(sh, "Phone events", "Silent mode, DND, headphones, Bluetooth, flashlight", Prefs.K_SYS, true, null);
 
         LinearLayout ru = m.card(p, "Rules");
-        m.toggle(ru, "Hide when an app is fullscreen", "Videos, games and readers that hide the status bar. Everywhere else the island stays visible", Prefs.K_FULL, true, null);
+        m.toggle(ru, "Hide when an app is fullscreen", "Videos, games and readers that hide the status bar. Hides everything, the idle clock too, whatever \u201cHide idle clock in apps\u201d is set to. Turn off to keep the island always visible", Prefs.K_FULL, true, null);
         m.toggle(ru, "Hide idle clock in apps", "While an app is open only the clock pill hides — banners, music and timers keep showing", Prefs.K_HIDEAPP, true, null);
         m.toggle(ru, "Hide music & call pill inside their own app", null, Prefs.K_INAPP, true, null);
         final M3Switch[] absorbSw = new M3Switch[1];

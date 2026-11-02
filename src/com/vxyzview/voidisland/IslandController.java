@@ -473,6 +473,9 @@ final class IslandController implements IslandView.Host {
     // ------------------------------------------------------------------ events in
 
     private boolean allowed(IslandEvent e) {
+        // An app switched off in Choose apps: also a pill it already had up (music, a timer...). post() only stops NEW events,
+        // so without this the old pill stayed on screen, frozen, because its later updates are refused.
+        if (e.type != IslandEvent.PREVIEW && e.type != IslandEvent.CLOCK && e.pkg != null && Prefs.has(svc, Prefs.K_BLOCK, e.pkg)) return false;
         switch (e.type) {
             case IslandEvent.MEDIA: return Prefs.b(svc, Prefs.K_MEDIA, true);
             case IslandEvent.CALL: return Prefs.b(svc, Prefs.K_CALL, true);
@@ -698,6 +701,17 @@ final class IslandController implements IslandView.Host {
         return false;
     }
 
+    /**
+     * Banners still waiting their turn cannot be seen while the island is hidden, and would pop up stale (minutes later) when it
+     * comes back; post() already refuses new ones for the same reason. Their originals were never taken out of the shade (that
+     * only happens once a banner is really on screen), and their chats are forgotten so a banner nobody saw does not silence them.
+     */
+    private void dropQueued() {
+        if (queue.isEmpty()) return;
+        for (IslandEvent q : queue) if (q.chat != null) Rules.chatForget(q.chat);
+        queue.clear();
+    }
+
     private void schedulePopup(IslandEvent e) {
         h.removeCallbacks(popupEnd);
         h.postDelayed(popupEnd, Math.max(1200, e.durationMs));
@@ -713,6 +727,7 @@ final class IslandController implements IslandView.Host {
         int mode = IslandView.HIDDEN;
         if (suppressed()) {
             if (flow.active()) cancelReply();   // lock screen, fullscreen app or shade took the island: the box goes with it
+            dropQueued();
         } else {
             IslandEvent ring = ring();
             if (ring != null) {
@@ -726,6 +741,12 @@ final class IslandController implements IslandView.Host {
                 if (popup == null && !queue.isEmpty()) {
                     popup = queue.pollFirst();
                     schedulePopup(popup);
+                }
+                // A card the person opened stays only while the rules still allow it (the idle clock inside an app, an app
+                // switched off meanwhile): otherwise it kept showing for its 8 s, and came back if the rule lifted in that time.
+                if (userExpanded != null && !allowed(userExpanded)) {
+                    userExpanded = null;
+                    h.removeCallbacks(collapse);
                 }
                 if (popup != null) {
                     want = popup;

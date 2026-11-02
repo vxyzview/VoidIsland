@@ -25,6 +25,14 @@ final class RulesCheck {
         ok(!Rules.chatQuiet("wa|Cy", 1000L, 60000L) && !Rules.chatQuiet("wa|Cy", 2000L, 60000L), "rules: looking never records a chat");
         Rules.chatShown("wa|Cy", 3000L);
         ok(Rules.chatQuiet("wa|Cy", 4000L, 60000L) && !Rules.chatQuiet("wa|Cy", 70000L, 60000L), "rules: a shown banner quiets its chat for the window");
+        // a banner dropped before anyone saw it must not silence its chat
+        Rules.chatShown("wa|Dee", 5000L);
+        ok(Rules.chatQuiet("wa|Dee", 6000L, 60000L), "rules: a recorded chat is quiet");
+        Rules.chatForget("wa|Dee");
+        ok(!Rules.chatQuiet("wa|Dee", 6000L, 60000L) && !Rules.chatRepeat("wa|Dee", 6000L, 60000L), "rules: a forgotten chat shows its next banner");
+        Rules.chatShown("wa|Eli", 5000L);
+        Rules.chatForget("wa|Fay"); Rules.chatForget(null);
+        ok(Rules.chatQuiet("wa|Eli", 6000L, 60000L), "rules: forgetting one chat (or none) leaves the others alone");
         ok("07:30".equals(Rules.hhmm(450)) && "00:00".equals(Rules.hhmm(1440)) && "23:30".equals(Rules.hhmm(-30)), "rules: clock text");
 
         // --- Live activities: judged by the app

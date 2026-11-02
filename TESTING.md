@@ -35,6 +35,17 @@ The unit checks (`test/`) cover the pure logic. Everything below needs a phone: 
 - [ ] Swipe-only lock (no PIN): banners show in full.
 - [ ] Lock the phone while a second banner is queued: the queued one comes out redacted, not in full.
 
+## Hiding, unhiding and Choose apps
+- [ ] *Hide idle clock in apps* off, *Hide when an app is fullscreen* **off**: open apps of every kind (also video, games): the idle clock never disappears.
+- [ ] *Hide when an app is fullscreen* on, *Hide idle clock in apps* off: the clock hides only while an app is really fullscreen, and returns when it ends.
+- [ ] Music playing, then switch that music app off in *Choose apps*: its pill leaves at once (not after the song ends) and does not come back frozen.
+- [ ] Switch the same app on again: its pill is back and updates normally.
+- [ ] Toggle any app in *Choose apps* (or drag *Banner time*) while a quick-reply box is open: the box stays, the island does not blink.
+- [ ] Tap the idle clock to open it, then open an app with *Hide idle clock in apps* on: the card goes away and does not come back by itself when you return home within 8 s.
+- [ ] Three message banners queued, then open a fullscreen video before they show: when the video ends the old banners do **not** pop up late, and their originals are still in the shade.
+- [ ] A chat whose queued banner was dropped this way: its next message shows a banner (it is not silenced for 5 minutes).
+- [ ] (With *Show on lock screen* on) lock the phone while a second banner is queued: it still comes out redacted.
+
 ## Calls, timers, music
 - [ ] Incoming call popup, accept / decline, ongoing call timer. Ending the call on a paired watch removes the pill.
 - [ ] Clock-app stopwatch / timer show and tick; pausing it stops the island's timer within a couple of seconds.

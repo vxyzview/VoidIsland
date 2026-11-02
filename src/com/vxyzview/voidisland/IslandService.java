@@ -31,7 +31,11 @@ public final class IslandService extends AccessibilityService {
 
     private final SharedPreferences.OnSharedPreferenceChangeListener prefs = new SharedPreferences.OnSharedPreferenceChangeListener() {
         @Override public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
-            if (ctl != null) ctl.scheduleApply();
+            if (ctl == null) return;
+            // Choose apps: only WHAT may be shown changed, so re-evaluate in place. A full re-apply would morph the island
+            // and give up an open quick-reply box just because one app was toggled.
+            if (Prefs.K_BLOCK.equals(key)) ctl.refresh();
+            else if (Restyle.needed(key)) ctl.scheduleApply();
         }
     };
 

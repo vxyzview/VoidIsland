@@ -17,6 +17,7 @@ public class Check {
         ShadeCheck.run();
         LyricsCheck.run();
         RulesCheck.run();
+        RestyleCheck.run();
         BackupCheck.run();
         PrivacyCheck.run();
         ClassifierCheck.run();

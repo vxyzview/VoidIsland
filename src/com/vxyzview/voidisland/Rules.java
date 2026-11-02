@@ -51,6 +51,11 @@ final class Rules {
         LAST.put(chatKey, now);
     }
 
+    /** The banner recorded for this chat was dropped before anyone could see it: the chat's next message may show again. */
+    static void chatForget(String chatKey) {
+        if (chatKey != null) LAST.remove(chatKey);
+    }
+
     static void resetChats() { LAST.clear(); }
 
     static String hhmm(int minutes) {
