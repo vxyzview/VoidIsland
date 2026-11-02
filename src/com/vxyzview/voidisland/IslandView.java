@@ -54,6 +54,10 @@ final class IslandView extends ViewGroup {
     private final float d;
     final int padX;
     int padB, drop;
+    // Touch margin once the island has stopped moving: the window only extends this far past the visible shape, so taps
+    // next to / under the island (a browser's search bar, for instance) reach the app underneath instead of the island.
+    // padX / padB above stay as headroom for the spring animation only.
+    private final int restX, restB;
     private final Layer compact, expanded;
     private final Spring sw = new Spring(), sh = new Spring(), sr = new Spring(), st = new Spring(), sg = new Spring(),
         swap = new Spring(), press = new Spring(), sf = new Spring();
@@ -129,6 +133,8 @@ final class IslandView extends ViewGroup {
         this.d = density;
         padX = dp(12);
         padB = dp(18);
+        restX = dp(2);
+        restB = dp(2);
         drop = dp(8);
         slop = ViewConfiguration.get(c).getScaledTouchSlop();
         compact = new Layer(c);
@@ -445,6 +451,15 @@ final class IslandView extends ViewGroup {
     private int padBottom() { return dock ? drop : padB; }
 
     /**
+     * Same, but for an island that is standing still: just a hair under the card, so nothing below it is blocked.
+     * The expanded card is pushed down by {@code drop} (st = drop), so its window needs that on top; the compact pill sits at y = 0.
+     */
+    private int restBottom() {
+        if (mode != EXPANDED) return restB;
+        return dock ? drop : drop + restB;
+    }
+
+    /**
      * A reply box is docked under the card (or let go of it): flatten / re-round the card's bottom corners and make the
      * window end exactly at the card's bottom edge, so everything under it belongs to the box.
      */
@@ -455,7 +470,7 @@ final class IslandView extends ViewGroup {
         sf.tune(380f * k, 0.95f);
         sf.to(on ? 1f : 0f);
         if (mode == EXPANDED && pendingRun == null) {
-            int hh = Math.round(sh.target) + padBottom();
+            int hh = Math.round(sh.target) + restBottom();
             if (hh != winH) {
                 winH = hh;
                 host.applyWindow(winW, hh, touchable);
@@ -496,8 +511,8 @@ final class IslandView extends ViewGroup {
             cEv = null;
         }
         if (pendingRun != null || pendingSwap != null) return;
-        int w = even((mode == HIDDEN ? dot : Math.round(sw.target)) + 2 * padX);
-        int h = (mode == HIDDEN ? dot : Math.round(sh.target)) + (mode == EXPANDED ? padBottom() : padB);
+        int w = even((mode == HIDDEN ? dot : Math.round(sw.target)) + 2 * restX);
+        int h = (mode == HIDDEN ? dot : Math.round(sh.target)) + (mode == HIDDEN ? padB : restBottom());
         boolean t = mode != HIDDEN;
         if (w == winW && h == winH && t == touchable) return;
         winW = w;
