@@ -9,11 +9,14 @@ import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.LruCache;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -58,7 +61,9 @@ public final class AppsActivity extends Activity {
         volatile String pkg;
     }
 
-    private final ArrayList<App> apps = new ArrayList<App>();
+    private final ArrayList<App> apps = new ArrayList<App>();    // every launcher app
+    private final ArrayList<App> shown = new ArrayList<App>();   // the ones the search lets through
+    private String query = "";
     private final ExecutorService io = Executors.newFixedThreadPool(2);
     private final LruCache<String, Bitmap> icons = new LruCache<String, Bitmap>(80);
     static final String EXTRA_MODE = "mode";
@@ -107,6 +112,33 @@ public final class AppsActivity extends Activity {
         s.setPadding(m.dp(4), m.dp(6), 0, m.dp(10));
         root.addView(s);
 
+        final EditText search = new EditText(this);
+        search.setHint("Search apps");
+        search.setSingleLine();
+        search.setTextSize(16f);
+        search.setTextColor(m.onSurface);
+        search.setHintTextColor(m.onSurfaceVariant);
+        search.setBackground(m.shape(m.container, 24));
+        search.setPadding(m.dp(18), 0, m.dp(18), 0);
+        search.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
+        search.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence x, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence x, int a, int b, int c) {}
+            @Override public void afterTextChanged(Editable e) { query = e.toString(); applyFilter(); }
+        });
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(M3.MATCH, m.dp(48));
+        sp.bottomMargin = m.dp(8);
+        root.addView(search, sp);
+        if (!launch) {
+            LinearLayout bulk = m.row();
+            bulk.addView(m.chip("Turn all on", new Runnable() { @Override public void run() { setShown(true); } }));
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(M3.WRAP, M3.WRAP);
+            bp.setMarginStart(m.dp(8));
+            bulk.addView(m.chip("Turn all off", new Runnable() { @Override public void run() { setShown(false); } }), bp);
+            bulk.setPadding(0, 0, 0, m.dp(8));
+            root.addView(bulk);
+        }
+
         ListView lv = new ListView(this);
         lv.setDivider(null);
         lv.setVerticalScrollBarEnabled(false);
@@ -150,13 +182,30 @@ public final class AppsActivity extends Activity {
                     @Override public void run() {
                         if (isFinishing() || isDestroyed()) return;
                         apps.addAll(out);
-                        status.setVisibility(apps.isEmpty() ? View.VISIBLE : View.GONE);
-                        if (apps.isEmpty()) status.setText("No apps found.");
-                        adapter.notifyDataSetChanged();
+                        applyFilter();
                     }
                 });
             }
         });
+    }
+
+    /** Re-lists the apps that match the search box. */
+    private void applyFilter() {
+        shown.clear();
+        for (App a : apps) if (AppFilter.matches(a.label, a.pkg, query)) shown.add(a);
+        status.setVisibility(shown.isEmpty() ? View.VISIBLE : View.GONE);
+        if (shown.isEmpty()) status.setText(apps.isEmpty() ? "No apps found." : "No app matches that search.");
+        adapter.notifyDataSetChanged();
+    }
+
+    /** "Turn all on / off" for the apps the search is showing right now (all of them when the box is empty). */
+    private void setShown(boolean on) {
+        if (shown.isEmpty()) return;
+        boolean stored = on != inverted;   // is an app that is switched this way in the stored set?
+        for (App a : shown) { if (stored) sel.add(a.pkg); else sel.remove(a.pkg); }
+        Prefs.setSet(this, prefKey, sel);
+        adapter.notifyDataSetChanged();
+        Toast.makeText(this, shown.size() + (on ? " apps turned on" : " apps turned off"), Toast.LENGTH_SHORT).show();
     }
 
     /** Android's own notification settings for one app (its channels, Pop on screen...). Falls back to the app's info page. */
@@ -174,8 +223,8 @@ public final class AppsActivity extends Activity {
     }
 
     private final class Adapter extends BaseAdapter {
-        @Override public int getCount() { return apps.size(); }
-        @Override public Object getItem(int i) { return apps.get(i); }
+        @Override public int getCount() { return shown.size(); }
+        @Override public Object getItem(int i) { return shown.get(i); }
         @Override public long getItemId(int i) { return i; }
 
         private Row make() {
@@ -208,7 +257,7 @@ public final class AppsActivity extends Activity {
 
         @Override public View getView(int i, View v, ViewGroup parent) {
             Row h = v == null ? make() : (Row) v.getTag();
-            final App a = apps.get(i);
+            final App a = shown.get(i);
             h.pkg = a.pkg;
             h.name.setText(a.label);
             if (!launch) h.sw.bind(sel.contains(a.pkg) != inverted, new M3.OnSel() {

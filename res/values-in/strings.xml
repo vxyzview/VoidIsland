@@ -7,6 +7,13 @@
     <string name="reply_to">Balas %s</string>
     <string name="reply_open_fail">Kotak balasan tidak bisa dibuka, membuka aplikasinya</string>
     <string name="reply_send_fail">Balasan tidak terkirim</string>
+    <string name="copy_code">Salin kode</string>
+    <string name="code_copied">Kode disalin</string>
+    <string name="a11y_dismiss">Tutup</string>
+    <string name="a11y_expand">Perluas</string>
+    <string name="a11y_next">Aktivitas berikutnya</string>
+    <string name="a11y_prev">Aktivitas sebelumnya</string>
+    <string name="snoozed">%s ditunda 1 jam</string>
     <string name="open">Buka</string>
     <string name="decline">Tolak</string>
     <string name="accept">Terima</string>

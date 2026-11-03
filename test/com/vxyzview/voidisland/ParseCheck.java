@@ -116,5 +116,24 @@ final class ParseCheck {
         ok(!Parse.sameLabels(new String[]{"A"}, new String[]{"A", "B"}) && Parse.sameLabels(new String[0], new String[0]), "chrono: label lists of different length differ");
         ok(Parse.isClockApp("com.google.android.deskclock") && Parse.isClockApp("com.sec.android.app.clockpackage") && Parse.isClockApp("com.coloros.alarmclock"), "chrono: known clock apps");
         ok(!Parse.isClockApp("com.whatsapp") && !Parse.isClockApp(null), "chrono: other apps are not clock apps");
+
+        // --- one-time codes (the Copy code button)
+        ok("482913".equals(Parse.otp("Messages", "Your verification code is 482913. Do not share it.")), "otp: a plain six-digit code");
+        ok("123456".equals(Parse.otp("Google", "G-123456 is your Google verification code")), "otp: Google's G- prefix is not part of the code");
+        ok("7391".equals(Parse.otp("BCA", "Kode OTP Anda 7391, jangan beritahukan kepada siapapun")), "otp: Indonesian wording, four digits");
+        ok("123456".equals(Parse.otp("Bank", "Use 123 456 to log in. OTP valid for 5 min")), "otp: a code written as 3 + 3 with a space");
+        ok("123456".equals(Parse.otp("Bank", "Your OTP is 123-456")), "otp: a code written as 3 + 3 with a dash");
+        ok("884412".equals(Parse.otp("Bank", "Transfer Rp 250.000 to Budi. OTP 884412")), "otp: an amount in the same text is not the code");
+        ok("884412".equals(Parse.otp("Shop", "Order 5521 confirmed. Your code is 884412")), "otp: the number after the keyword wins over an earlier one");
+        ok("884412".equals(Parse.otp("Shop", "Order 5521: 884412 is your code")), "otp: with the keyword last, the number just before it wins");
+        ok(Parse.otp("Bank", "Payment of Rp 150.000 received") == null, "otp: no keyword, no code");
+        ok(Parse.otp("Bank", "Your code expires in 10 minutes") == null, "otp: a keyword with no number is no code");
+        ok(Parse.otp("Courier", "Your parcel code 1234567890 is ready") == null, "otp: a ten-digit number is not a code");
+        ok(Parse.otp("Cal", "Meeting code room: call at 14:30 on 2026-11-03") == null, "otp: times and dates are not codes");
+        ok(Parse.otp("Shop", "Use promo code 2024 for 10% off") == null, "otp: a promo code is not a one-time code");
+        ok(Parse.otp("Post", "Zip code 90210 updated") == null, "otp: a zip code is not a one-time code");
+        ok("4821".equals(Parse.otp("Bank", "Your code is 4821 and it expires in 3600 seconds")), "otp: a number followed by a time unit is skipped");
+        ok(Parse.otp(null, null) == null && Parse.otp("", "") == null, "otp: no text, no code");
+        ok(Parse.otp("Decode", "barcode 123456") == null, "otp: 'code' inside another word is not a keyword");
     }
 }

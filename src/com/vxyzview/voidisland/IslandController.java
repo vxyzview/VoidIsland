@@ -21,6 +21,7 @@ import android.view.DisplayCutout;
 import android.view.Gravity;
 import android.view.WindowInsets;
 import android.view.WindowManager;
+import android.widget.Toast;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -492,9 +493,10 @@ final class IslandController implements IslandView.Host {
     /** @return true when the event was taken and the island is not suppressed right now, i.e. it will really be seen. */
     boolean post(IslandEvent e) {
         if (!attached) return false;
-        if (!allowed(e) || Prefs.has(svc, Prefs.K_BLOCK, e.pkg)) return false;
-        if (!e.live && lockDecision(e) == Privacy.HIDE) return false;   // a secret notification never shows over a secure lock screen; its original stays put
-        if (e.type == IslandEvent.NOTIF && e.pkg != null && e.pkg.equals(fg)) return false; // don't banner the app you're in
+        boolean blocked = Prefs.has(svc, Prefs.K_BLOCK, e.pkg);
+        if (!allowed(e) || blocked) { traced(e, blocked ? Trace.OFF_APP : Trace.OFF_TYPE); return false; }
+        if (!e.live && lockDecision(e) == Privacy.HIDE) { traced(e, Trace.LOCK_SECRET); return false; }   // a secret notification never shows over a secure lock screen; its original stays put
+        if (e.type == IslandEvent.NOTIF && e.pkg != null && e.pkg.equals(fg)) { traced(e, Trace.IN_APP); return false; } // don't banner the app you're in
         if (e.live) {
             IslandEvent old = live.get(e.key);
             if (old == null) live.put(e.key, e);
@@ -502,7 +504,8 @@ final class IslandController implements IslandView.Host {
         } else {
             // A banner the island cannot show right now (off, fullscreen, lock screen, shade open) is NOT queued: it would
             // pop up minutes later, stale, and the caller would still think it had been shown. Its original stays in the shade.
-            if (suppressed()) return false;
+            int why = suppressReason();
+            if (why != 0) { traced(e, why); return false; }
             if (popup != null && popup.key.equals(e.key)) {
                 popup = e;
                 if (flow.isKey(e.key)) {
@@ -515,7 +518,7 @@ final class IslandController implements IslandView.Host {
                 for (Iterator<IslandEvent> it = queue.iterator(); it.hasNext();) if (it.next().key.equals(e.key)) it.remove();
                 // A full queue refuses the newcomer instead of silently dropping an older banner that may already have
                 // been taken out of the shade: the refused one simply keeps its original notification.
-                if (queue.size() >= 4) return false;
+                if (queue.size() >= 4) { traced(e, Trace.QUEUE_FULL); return false; }
                 queue.addLast(e);
             }
         }
@@ -684,21 +687,29 @@ final class IslandController implements IslandView.Host {
     private IslandEvent topLive() {
         IslandEvent best = null;
         for (IslandEvent e : live.values()) {
-            if (hiddenBySource(e) || !allowed(e)) continue;
+            if (hiddenBySource(e) || !allowed(e) || lockHidden(e)) continue;
             if (pinnedKey != null && pinnedKey.equals(e.key)) return e;
             if (best == null || e.priority >= best.priority) best = e;
         }
         return best;
     }
 
-    private boolean suppressed() {
-        if (!Prefs.b(svc, Prefs.K_ON, true)) return true;
-        if (Fullscreen.hidden(Prefs.b(svc, Prefs.K_FULL, true), fullscreen)) return true;   // video, game, reader...
+    private boolean suppressed() { return suppressReason() != 0; }
+
+    /** Why the island cannot show a banner right now: a {@link Trace} reason, or 0 when it can. */
+    private int suppressReason() {
+        if (!Prefs.b(svc, Prefs.K_ON, true)) return Trace.ISLAND_OFF;
+        if (Fullscreen.hidden(Prefs.b(svc, Prefs.K_FULL, true), fullscreen)) return Trace.FULLSCREEN;   // video, game, reader...
         if (!layerApp) {
-            if (locked && !style.lockShow) return true;                      // above-status-bar layer would draw over the lock screen
-            if (style.qs != Style.QS_TOP && shadeOpen) return true;          // hide while Quick Settings / shade are open
+            if (locked && !style.lockShow) return Trace.LOCKED;                      // above-status-bar layer would draw over the lock screen
+            if (style.qs != Style.QS_TOP && shadeOpen) return Trace.SHADE_OPEN;     // hide while Quick Settings / shade are open
         }
-        return false;
+        return 0;
+    }
+
+    /** Remembers (for "why didn't it show?") that a message or payment banner was kept off the island. Package and reason only. */
+    private void traced(IslandEvent e, int reason) {
+        if (!e.live && e.pkg != null && (e.type == IslandEvent.NOTIF || e.type == IslandEvent.PAYMENT)) Trace.add(e.pkg, reason, System.currentTimeMillis());
     }
 
     /**
@@ -708,7 +719,11 @@ final class IslandController implements IslandView.Host {
      */
     private void dropQueued() {
         if (queue.isEmpty()) return;
-        for (IslandEvent q : queue) if (q.chat != null) Rules.chatForget(q.chat);
+        int why = suppressReason();
+        for (IslandEvent q : queue) {
+            if (q.chat != null) Rules.chatForget(q.chat);
+            if (why != 0) traced(q, why);
+        }
         queue.clear();
     }
 
@@ -744,7 +759,7 @@ final class IslandController implements IslandView.Host {
                 }
                 // A card the person opened stays only while the rules still allow it (the idle clock inside an app, an app
                 // switched off meanwhile): otherwise it kept showing for its 8 s, and came back if the rule lifted in that time.
-                if (userExpanded != null && !allowed(userExpanded)) {
+                if (userExpanded != null && (!allowed(userExpanded) || lockHidden(userExpanded))) {
                     userExpanded = null;
                     h.removeCallbacks(collapse);
                 }
@@ -760,12 +775,13 @@ final class IslandController implements IslandView.Host {
                 }
             }
         }
+        if (want != null) guardLive(want);
         show(want, mode);
     }
 
-    /** What the lock-screen privacy rules allow for a banner right now (only messages and payments carry personal text). */
+    /** What the lock-screen privacy rules allow for an event right now (see {@link Privacy#guarded} for which ones carry personal text). */
     private int lockDecision(IslandEvent e) {
-        if (e.type != IslandEvent.NOTIF && e.type != IslandEvent.PAYMENT) return Privacy.SHOW;
+        if (!Privacy.guarded(e.type)) return Privacy.SHOW;
         if (!Cards.secureLocked(svc)) return Privacy.SHOW;
         return Privacy.onLockScreen(e.vis, true, Cards.hideSensitiveOnLock(svc), Cards.lockShowsNoNotifications(svc));
     }
@@ -780,6 +796,22 @@ final class IslandController implements IslandView.Host {
         e.icon = Img.appIcon(svc, e.pkg);
         e.replyIntent = null; e.replyInput = null;
         e.actLabels = new String[0]; e.actIntents = new PendingIntent[0]; e.actRuns = new Runnable[0];
+    }
+
+    /** A live pill the lock-screen rules say must not show at all right now (it comes back by itself after unlocking). */
+    private boolean lockHidden(IslandEvent e) {
+        return e.live && Privacy.guarded(e.type) && lockDecision(e) == Privacy.HIDE;
+    }
+
+    /** Live pills follow the same lock-screen rules as banners, but their text only goes away while locked and comes back after. */
+    private void guardLive(IslandEvent e) {
+        if (!e.live || !Privacy.guarded(e.type)) return;
+        int d = lockDecision(e);
+        if (d == Privacy.REDACT && !e.contentHidden()) {
+            e.hideContent(e.appName != null ? e.appName : e.title, Str.t(svc, "content_hidden", "Content hidden"), Img.appIcon(svc, e.pkg));
+        } else if (d == Privacy.SHOW && e.contentHidden()) {
+            e.restoreContent();
+        }
     }
 
     private void show(IslandEvent want, int mode) {
@@ -829,6 +861,22 @@ final class IslandController implements IslandView.Host {
                 evaluate();
             }
         } catch (Throwable t) { Dbg.e("island", t); fault(); }
+    }
+
+    /** Long-press on a message banner snoozes its app for an hour (when the person switched that on). Anything else: not handled. */
+    @Override public boolean onLongPress(int mode) {
+        try {
+            IslandEvent e = shown;
+            if (e == null || mode != IslandView.EXPANDED || e.type != IslandEvent.NOTIF || e.pkg == null) return false;
+            if (!Prefs.b(svc, Prefs.K_SNOOZE, false)) return false;
+            Snooze.start(e.pkg, System.currentTimeMillis());
+            if (flow.is(e)) finishReply(true);
+            if (e == popup) { popup = null; h.removeCallbacks(popupEnd); }
+            evaluate();
+            String app = e.appName != null && e.appName.length() > 0 ? e.appName : Img.appLabel(svc, e.pkg);
+            Toast.makeText(svc, Str.t(svc, "snoozed", "%s snoozed for 1 hour", app), Toast.LENGTH_SHORT).show();
+            return true;
+        } catch (Throwable t) { Dbg.e("island", t); fault(); return false; }
     }
 
     @Override public void onSwipe(int dir) {
@@ -886,7 +934,7 @@ final class IslandController implements IslandView.Host {
     /** Swipe sideways on the pill to flip between simultaneous live activities. */
     private void cycle(int dir) {
         List<IslandEvent> l = new ArrayList<IslandEvent>();
-        for (IslandEvent e : live.values()) if (e != clock && !hiddenBySource(e) && allowed(e)) l.add(e);
+        for (IslandEvent e : live.values()) if (e != clock && !hiddenBySource(e) && allowed(e) && !lockHidden(e)) l.add(e);
         if (l.size() < 2) return;
         int i = Math.max(0, l.indexOf(shown));
         pinnedKey = l.get((i + dir + l.size()) % l.size()).key;

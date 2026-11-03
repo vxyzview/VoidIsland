@@ -831,6 +831,7 @@ public final class MainActivity extends Activity {
             @Override public void run() { startActivity(new Intent(MainActivity.this, AppsActivity.class).putExtra(AppsActivity.EXTRA_MODE, 2)); }
         }));
         m.toggle(qr, "Mute group chats", "Group conversations do not pop up on the island", Prefs.K_NOGROUP, false, null);
+        m.toggle(qr, "Long-press to snooze", "Hold a banner to keep that app off the island for an hour. Its notifications stay in the shade", Prefs.K_SNOOZE, false, null);
         m.toggle(qr, "One banner per chat", "Only the first message of a chat pops up; follow-ups within 5 minutes stay quiet", Prefs.K_ONEPERCHAT, false, null);
 
         LinearLayout ap = m.card(p, "Apps");
@@ -869,6 +870,12 @@ public final class MainActivity extends Activity {
         hp.addView(m.item(IconView.BELL, "Recent banners", "Missed one? The last 20 banners the island showed. Kept in memory only", null, new Runnable() {
             @Override public void run() { showRecent(); }
         }));
+        hp.addView(m.item(IconView.BELL, "Why didn't it show?", "Banners the island kept off the screen lately, and why. App names only, no message text", null, new Runnable() {
+            @Override public void run() { showTrace(); }
+        }));
+        if (Build.VERSION.SDK_INT >= 30) hp.addView(m.item(IconView.TUNE, "Why did the island stop?", "How Android ended VoidIsland the last few times: low memory, battery limits, a crash, you closing it", null, new Runnable() {
+            @Override public void run() { showExits(); }
+        }));
         hp.addView(m.item(IconView.TUNE, "Diagnostic log", "What went wrong lately, to copy into a bug report. It holds no message text", null, new Runnable() {
             @Override public void run() { showLog(); }
         }));
@@ -891,6 +898,46 @@ public final class MainActivity extends Activity {
             .setNeutralButton("Clear", new android.content.DialogInterface.OnClickListener() {
                 @Override public void onClick(android.content.DialogInterface d, int w) { Recent.clear(); }
             })
+            .setPositiveButton("Close", null).show();
+    }
+
+    private void showTrace() {
+        Trace.Item[] all = Trace.all();
+        if (all.length == 0) { Toast.makeText(this, "Nothing has been kept off the island lately", Toast.LENGTH_SHORT).show(); return; }
+        String[] rows = new String[all.length];
+        java.text.DateFormat tf = android.text.format.DateFormat.getTimeFormat(this);
+        for (int i = 0; i < all.length; i++) {
+            Trace.Item it = all[i];
+            rows[i] = tf.format(new java.util.Date(it.at)) + "  " + Img.appLabel(this, it.pkg) + " · " + Trace.text(it.reason)
+                + (it.count > 1 ? "  ×" + it.count : "") + "\n" + Trace.hint(it.reason);
+        }
+        new android.app.AlertDialog.Builder(this).setTitle("Why didn't it show?")
+            .setItems(rows, null)
+            .setNeutralButton("Clear", new android.content.DialogInterface.OnClickListener() {
+                @Override public void onClick(android.content.DialogInterface d, int w) { Trace.clear(); }
+            })
+            .setPositiveButton("Close", null).show();
+    }
+
+    @android.annotation.TargetApi(30)
+    private void showExits() {
+        java.util.List<android.app.ApplicationExitInfo> list;
+        try {
+            list = ((android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE)).getHistoricalProcessExitReasons(getPackageName(), 0, 10);
+        } catch (Throwable t) { list = null; }
+        if (list == null || list.isEmpty()) { Toast.makeText(this, "Android has not recorded any stops yet", Toast.LENGTH_SHORT).show(); return; }
+        String[] rows = new String[list.size()];
+        java.text.DateFormat df = android.text.format.DateFormat.getMediumDateFormat(this), tf = android.text.format.DateFormat.getTimeFormat(this);
+        boolean system = false;
+        for (int i = 0; i < rows.length; i++) {
+            int r = list.get(i).getReason();
+            java.util.Date when = new java.util.Date(list.get(i).getTimestamp());
+            String hint = ExitReason.hint(r);
+            rows[i] = df.format(when) + " " + tf.format(when) + "  " + ExitReason.text(r) + (hint.length() > 0 ? "\n" + hint : "");
+            system |= ExitReason.systemStopped(r);
+        }
+        new android.app.AlertDialog.Builder(this).setTitle(system ? "Android has been stopping the island" : "Recent stops")
+            .setItems(rows, null)
             .setPositiveButton("Close", null).show();
     }
 

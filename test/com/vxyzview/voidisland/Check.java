@@ -21,6 +21,12 @@ public class Check {
         BackupCheck.run();
         PrivacyCheck.run();
         ClassifierCheck.run();
+        IslandEventCheck.run();
+        TraceCheck.run();
+        AppFilterCheck.run();
+        ExitReasonCheck.run();
+        LiveCheck.run();
+        SnoozeCheck.run();
         System.out.println(fails == 0 ? "ALL CHECKS PASSED" : (fails + " FAILED"));
         System.exit(fails == 0 ? 0 : 1);
     }

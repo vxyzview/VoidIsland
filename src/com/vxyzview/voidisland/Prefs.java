@@ -15,7 +15,7 @@ final class Prefs {
         K_HAPTIC = "haptic", K_DUR = "dur", K_ABSORB = "absorb", K_BLOCK = "blocked", K_QS = "qs", K_LOCK = "lock_show", K_POKE = "poke",
         K_CLOCK = "f_clock", K_CLOCKSTYLE = "clock_style", K_ECLOCKSTYLE = "clock_style_e", K_LYRICS = "f_lyric", K_THEME = "app_theme",
         K_LIVEACT = "f_live", K_KEEP = "keep_apps", K_QUIET = "quiet_on", K_QFROM = "quiet_from", K_QTO = "quiet_to",
-        K_QAPPS = "quiet_apps", K_NOGROUP = "no_group", K_ONEPERCHAT = "one_per_chat",
+        K_QAPPS = "quiet_apps", K_NOGROUP = "no_group", K_ONEPERCHAT = "one_per_chat", K_SNOOZE = "long_snooze",
         K_LYROFF = "lyric_off", K_LYRSIZE = "lyric_size",
         K_MSTYLE = "music_style", K_EMSTYLE = "music_style_e",
         K_LIVE_RIDE = "live_ride", K_LIVE_FOOD = "live_food", K_LIVE_SPORT = "live_sport";

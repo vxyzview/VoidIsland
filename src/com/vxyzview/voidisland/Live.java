@@ -4,7 +4,20 @@ package com.vxyzview.voidisland;
 final class Live {
     private Live() {}
 
-    static final int NONE = 0, RIDE = 1, FOOD = 2, SPORT = 3;
+    static final int NONE = 0, RIDE = 1, FOOD = 2, SPORT = 3,
+        PROMOTED = 4;   // not a kind we know by name: Android 16 promoted it as a "live update"
+
+    /** Notification.FLAG_PROMOTED_ONGOING (Android 16): set by the system on a notification it promotes to a live update. */
+    static final int FLAG_PROMOTED_ONGOING = 0x40000;
+
+    /**
+     * Whether an ongoing notification is a live update by Android 16's own rules: the system promoted it, or the app built it
+     * with Notification.ProgressStyle (a journey with progress). Judged from the flags and the style name, so it needs no API 36.
+     * Older Android never sets either, and the app lists in this class stay the way to find live activities there.
+     */
+    static boolean promoted(int flags, String template) {
+        return (flags & FLAG_PROMOTED_ONGOING) != 0 || (template != null && template.endsWith("ProgressStyle"));
+    }
 
     private static final String[] RIDE_PKGS = {
         "com.grabtaxi.passenger", "com.gojek.app", "com.ubercab", "me.lyft.android", "ee.mtakso.client", "sinet.startup.inDriver",
@@ -53,6 +66,7 @@ final class Live {
             case RIDE: return 0xFF0A84FF;
             case FOOD: return 0xFFFF9F0A;
             case SPORT: return 0xFF30D158;
+            case PROMOTED: return 0xFF64D2FF;
             default: return 0xFFFFFFFF;
         }
     }

@@ -9,6 +9,13 @@
     <string name="reply_to">Reply to %s</string>
     <string name="reply_open_fail">Couldn\'t open the reply box, opening the app instead</string>
     <string name="reply_send_fail">Couldn\'t send the reply</string>
+    <string name="copy_code">Copy code</string>
+    <string name="code_copied">Code copied</string>
+    <string name="a11y_dismiss">Dismiss</string>
+    <string name="a11y_expand">Expand</string>
+    <string name="a11y_next">Next activity</string>
+    <string name="a11y_prev">Previous activity</string>
+    <string name="snoozed">%s snoozed for 1 hour</string>
     <string name="open">Open</string>
     <string name="decline">Decline</string>
     <string name="accept">Accept</string>

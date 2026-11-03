@@ -27,6 +27,16 @@ final class Privacy {
     }
 
     /**
+     * Whether an island event of this kind carries text from somebody's notification, so it follows the rules below: message and
+     * payment banners, and the pills for navigation, timers, downloads and live activities (a route, a driver, a label).
+     * Calls and music keep the system's own lock-screen behaviour, and the island's own pills carry nobody's text.
+     */
+    static boolean guarded(int type) {
+        return type == IslandEvent.NOTIF || type == IslandEvent.PAYMENT || type == IslandEvent.NAV
+            || type == IslandEvent.TIMER || type == IslandEvent.PROGRESS || type == IslandEvent.LIVE;
+    }
+
+    /**
      * @param visibility    effective {@code Notification.VISIBILITY_*} of the notification
      * @param secureLocked  the phone is locked behind a PIN / pattern / password (a plain swipe lock hides nothing)
      * @param hideSensitive the user chose "hide sensitive content" for the lock screen

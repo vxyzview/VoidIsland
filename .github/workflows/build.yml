@@ -13,11 +13,13 @@ on:
         options: [beta, alpha, stable]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # only this job publishes the Release
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4
         with:
@@ -94,8 +96,12 @@ jobs:
 
       - name: Unit checks
         run: |
-          javac -d out/test -cp out/classes $(find test -name '*.java')
-          java -cp out/test:out/classes com.vxyzview.voidisland.Check
+          AJ="$ANDROID_HOME/platforms/android-34/android.jar"
+          javac -d out/test -cp "out/classes:$AJ" $(find test -name '*.java')
+          java -cp "out/test:out/classes:$AJ" com.vxyzview.voidisland.Check
+
+      - name: Checksum
+        run: (cd out && sha256sum "$APK.apk" > "$APK.apk.sha256" && cat "$APK.apk.sha256")
 
       - name: Verify APK signature
         run: |
@@ -110,11 +116,13 @@ jobs:
           TAG="v$VERSION"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then TAG="${GITHUB_REF_NAME}"; fi
           echo "release tag: $TAG (pre-release: $PRE)"
-          gh release create "$TAG" "out/$APK.apk" --title "$APK" --generate-notes $FLAGS
+          gh release create "$TAG" "out/$APK.apk" "out/$APK.apk.sha256" --title "$APK" --generate-notes $FLAGS
 
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4
         with:
           name: ${{ env.APK }}
-          path: out/*.apk
+          path: |
+            out/*.apk
+            out/*.sha256
           if-no-files-found: error

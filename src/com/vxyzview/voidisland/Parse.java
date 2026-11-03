@@ -34,6 +34,48 @@ final class Parse {
         "(?<!\\p{L})(decline|reject|hang|end|tolak|akhiri|tutup|matikan|putus|dismiss|ignore|cancel|stop)");
     private static final Pattern POS_BTN = Pattern.compile("(?<!\\p{L})(answer|accept|jawab|angkat|terima|pick)");
 
+    // --- one-time codes (the "Copy code" button on a banner)
+    private static final Pattern OTP_KEYWORD = Pattern.compile("(?<!\\p{L})(otp|one[- ]?time|code|kode|passcode)");
+    // a code that is really something else: promos, postal codes
+    private static final String[] NOT_OTP_WORDS = {"promo", "voucher", "coupon", "kupon", "discount", "diskon", "referral",
+        "zip", "postal", "postcode", "kode pos", "area code"};
+    private static final Pattern OTP_NUMBER = Pattern.compile("(?<![\\d.,])(\\d{3}[- ]\\d{3}|\\d{4,8})(?!\\d|[.,]\\d)");
+    // dates and clock times (\"2026-11-03\", \"14:30\"): their digits are never a code
+    private static final Pattern DATE_OR_TIME = Pattern.compile("\\d{1,4}[-/.]\\d{1,2}[-/.]\\d{1,4}|\\d{1,2}:\\d{2}(?::\\d{2})?");
+    private static final Pattern UNIT_AFTER = Pattern.compile("^\\s?(%|min|menit|minute|detik|sec|jam|hour|km|kg|mb|gb)");
+
+    /**
+     * The one-time code in a notification (\"Your code is 482913\", \"Kode OTP 7391\", \"G-123456\"), digits only, or null. It needs a
+     * keyword (otp, code, kode...) next to a 4-8 digit number; amounts, dates, times and numbers followed by a unit never count,
+     * and neither do promo or postal codes. The number after the first keyword wins, else the last one before it.
+     */
+    static String otp(String title, String text) {
+        String all = (title == null ? "" : title) + " " + (text == null ? "" : text);
+        String lower = all.toLowerCase(Locale.ROOT);
+        if (any(lower, NOT_OTP_WORDS)) return null;
+        Matcher kw = OTP_KEYWORD.matcher(lower);
+        if (!kw.find()) return null;
+        int kwAt = kw.start();
+        // blank the money / date / time spans (not cut them out) so positions stay comparable with the keyword's
+        StringBuilder b = new StringBuilder(lower);
+        blank(b, AMOUNT.matcher(lower));
+        blank(b, DATE_OR_TIME.matcher(lower));
+        String clean = b.toString();
+        String before = null, after = null;
+        Matcher m = OTP_NUMBER.matcher(clean);
+        while (m.find()) {
+            if (UNIT_AFTER.matcher(clean.substring(m.end())).find()) continue;
+            String digits = m.group().replaceAll("[^0-9]", "");
+            if (m.start() >= kwAt) { after = digits; break; }
+            before = digits;
+        }
+        return after != null ? after : before;
+    }
+
+    private static void blank(StringBuilder b, Matcher m) {
+        while (m.find()) for (int i = m.start(); i < m.end(); i++) b.setCharAt(i, ' ');
+    }
+
     /** First money-looking amount in the text ("Rp 25.000", "$12.50"), or null. */
     static String amount(String s) {
         if (s == null) return null;

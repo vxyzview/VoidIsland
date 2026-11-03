@@ -27,5 +27,13 @@ final class PrivacyCheck {
         ok(Privacy.effectiveVisibility(PUB, PRIV) == PRIV && Privacy.effectiveVisibility(PUB, SEC) == SEC, "privacy: a stricter channel wins");
         ok(Privacy.effectiveVisibility(SEC, PUB) == SEC && Privacy.effectiveVisibility(PRIV, PUB) == PRIV, "privacy: a looser channel never loosens the notification");
         ok(Privacy.onLockScreen(Privacy.effectiveVisibility(PUB, SEC), true, false, false) == Privacy.HIDE, "privacy: a secret channel hides a public notification");
+
+        // which island events carry somebody's notification text and so follow these rules
+        ok(Privacy.guarded(IslandEvent.NOTIF) && Privacy.guarded(IslandEvent.PAYMENT), "privacy: message and payment banners are guarded");
+        ok(Privacy.guarded(IslandEvent.NAV) && Privacy.guarded(IslandEvent.TIMER) && Privacy.guarded(IslandEvent.PROGRESS) && Privacy.guarded(IslandEvent.LIVE),
+            "privacy: navigation, timer, download and live-activity pills are guarded too (a route, a driver, a label)");
+        ok(!Privacy.guarded(IslandEvent.CALL) && !Privacy.guarded(IslandEvent.MEDIA), "privacy: calls and music keep their own lock-screen behaviour");
+        ok(!Privacy.guarded(IslandEvent.CHARGE) && !Privacy.guarded(IslandEvent.SYSTEM) && !Privacy.guarded(IslandEvent.CLOCK) && !Privacy.guarded(IslandEvent.PREVIEW),
+            "privacy: the island's own pills carry nobody's text and are never guarded");
     }
 }

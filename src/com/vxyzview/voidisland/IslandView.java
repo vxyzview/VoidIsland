@@ -6,6 +6,7 @@ import android.graphics.Outline;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
+import android.os.Bundle;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.view.Choreographer;
@@ -31,6 +32,8 @@ final class IslandView extends ViewGroup {
     interface Host {
         void applyWindow(int w, int h, boolean touchable);
         void onTap(int mode);
+        /** A finger stayed down without moving. True when the press was used (the release is then not a tap). */
+        boolean onLongPress(int mode);
         /** 0 = up, 1 = down, 2 = left, 3 = right */
         void onSwipe(int dir);
         void onOutside();
@@ -592,9 +595,52 @@ final class IslandView extends ViewGroup {
         return false;
     }
 
+    // TalkBack cannot swipe the island, so the same moves are offered as actions (ids only need to be unique among this view's actions)
+    private static final int A_DISMISS = View.generateViewId(), A_EXPAND = View.generateViewId(),
+        A_NEXT = View.generateViewId(), A_PREV = View.generateViewId();
+
+    @Override public void onInitializeAccessibilityNodeInfo(android.view.accessibility.AccessibilityNodeInfo info) {
+        super.onInitializeAccessibilityNodeInfo(info);
+        if (mode == HIDDEN) return;
+        // touches are handled in onTouchEvent; the node alone says "clickable" so a double-tap arrives as ACTION_CLICK
+        info.setClickable(true);
+        info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK);
+        Context c = getContext();
+        if (mode == EXPANDED) {
+            info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(A_DISMISS, Str.t(c, "a11y_dismiss", "Dismiss")));
+        } else {
+            info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(A_EXPAND, Str.t(c, "a11y_expand", "Expand")));
+            info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(A_NEXT, Str.t(c, "a11y_next", "Next activity")));
+            info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(A_PREV, Str.t(c, "a11y_prev", "Previous activity")));
+        }
+    }
+
+    @Override public boolean performAccessibilityAction(int action, Bundle args) {
+        if (host != null && mode != HIDDEN) {
+            if (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK) { host.onTap(mode); return true; }
+            if (action == A_DISMISS) { host.onSwipe(0); return true; }
+            if (action == A_EXPAND) { host.onSwipe(1); return true; }
+            if (action == A_NEXT) { host.onSwipe(2); return true; }
+            if (action == A_PREV) { host.onSwipe(3); return true; }
+        }
+        return super.performAccessibilityAction(action, args);
+    }
+
+    private boolean longUsed;   // the long-press was taken: the release must not also count as a tap
+    private final Runnable longPress = new Runnable() {
+        @Override public void run() {
+            if (swiping || host == null) return;
+            longUsed = host.onLongPress(mode);
+            if (longUsed && haptics) performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        }
+    };
+
     @Override public boolean onTouchEvent(MotionEvent e) {
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
+                longUsed = false;
+                removeCallbacks(longPress);
+                postDelayed(longPress, android.view.ViewConfiguration.getLongPressTimeout());
                 downX = e.getRawX();
                 downY = e.getRawY();
                 downT = SystemClock.uptimeMillis();
@@ -604,9 +650,11 @@ final class IslandView extends ViewGroup {
                 start();
                 return true;
             case MotionEvent.ACTION_MOVE:
-                if (Math.abs(e.getRawX() - downX) > slop || Math.abs(e.getRawY() - downY) > slop) swiping = true;
+                if (Math.abs(e.getRawX() - downX) > slop || Math.abs(e.getRawY() - downY) > slop) { swiping = true; removeCallbacks(longPress); }
                 return true;
             case MotionEvent.ACTION_UP: {
+                removeCallbacks(longPress);
+                if (longUsed) { longUsed = false; return true; }
                 float dx = e.getRawX() - downX, dy = e.getRawY() - downY;
                 if (swiping) {
                     float min = 26f * d;
@@ -619,6 +667,7 @@ final class IslandView extends ViewGroup {
                 return true;
             }
             default:
+                removeCallbacks(longPress);
                 return true;
         }
     }

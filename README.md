@@ -40,7 +40,7 @@ Pure black, Material You accent, private by design.
 
 ## 📲 Install
 
-1. Download the APK from [**Releases**](https://github.com/vxyzview/VoidIsland/releases) and sideload it (**Android 8+ / API 26+**).
+1. Download the APK from [**Releases**](https://github.com/vxyzview/VoidIsland/releases) and sideload it (**Android 8+ / API 26+**). Each release also has a `.sha256` file to check the download against. To get updates without the app ever touching the network, add the repository to [Obtainium](https://github.com/ImranR98/Obtainium): it reads the Releases page for you.
 2. Turn on the two things VoidIsland asks for:
    - **Accessibility** service: draws the island and sees the shade.
    - **Notification access**: reads notifications and music.
@@ -90,6 +90,8 @@ While the phone is locked behind a PIN, pattern or password, the island follows 
 | Marked *secret* (banks, one-time codes, password managers) | Never appears |
 | *Private*, with *Hide sensitive content* on | App name and "Content hidden". No text, no amount, no buttons, no reply |
 | Anything else | Shown as usual |
+
+This covers message and payment banners **and** the live pills for navigation, timers, downloads, rides and orders. A live pill that is hidden or redacted while locked comes back in full after you unlock. Calls and music keep Android's own lock-screen behaviour.
 
 A banner that was hidden or redacted is **never removed from the shade**. A plain swipe-to-unlock lock hides nothing, same as the system.
 
@@ -176,6 +178,12 @@ Track, Beat, Timer, Bento, Wave and Cover are strictly **flat**: solid fills and
   <br>It follows the Material 3 dark-scheme roles: primary for the accent and filled buttons, secondary container for tonal buttons, tertiary for "good" things (accept, success, charging), error for "bad" ones (decline, low battery), and on-surface tones for text and tiles.
 - **Backup**: **Apps > Backup** saves every setting to a text file and restores it after a reinstall or on a new phone. A restore asks first, only sets settings this version knows (anything else in the file is ignored) and changes nothing if the file has none.
 - **Languages**: the text the island itself shows (banner buttons, call and payment titles, battery / ringer / Bluetooth pop-ups, the reply box) is translated into **English** and **Bahasa Indonesia**. Settings screens are still English. Add a language by copying `res/values/strings.xml` to `res/values-xx/`. Banners are announced by TalkBack.
+- **One-time codes**: a notification with a 4 to 8 digit code next to a word like *code*, *OTP* or *kode* gets a **Copy code** button first. The copy is marked sensitive on Android 13+ so it stays out of the clipboard preview, and the button is never shown while the lock screen hides content.
+- **Why didn't it show?**: **Behavior > Help > Why didn't it show?** lists the last banners the island kept off the screen and the reason (app switched off, silent channel, quiet hours, you were in that app, full-screen app, queue full...), with where to change it. It holds app names and reason codes only, never message text, in memory only.
+- **Why did the island stop?**: on Android 11+, **Behavior > Help > Why did the island stop?** shows how Android ended VoidIsland the last few times (low memory, battery limits, a crash, a Force stop) and what to do about it.
+- **Android 16 live updates**: an ongoing notification that Android promoted to a live update (or that uses `Notification.ProgressStyle`) appears as a live activity even when the app is not on the ride / food / score lists.
+- **App picker search**: every app list has a search box and *Turn all on / off* for the apps the search shows.
+- **TalkBack**: the island's swipes are offered as accessibility actions (Dismiss, Expand, Next / Previous activity), and a double-tap opens it.
 - **Diagnostic log**: **Behavior > Help > Diagnostic log** lists the last errors the island caught (where and what kind, never any message text) with a *Copy* button for bug reports. Memory only, gone when the process ends.
 - **Animations**: the island follows Android's animation settings (*Developer options > Animator duration scale*, and *Remove animations* in accessibility). A faster or slower scale speeds up or slows down the springs, and scale 0 makes the island jump straight to its next shape.
 
@@ -274,11 +282,12 @@ The **Build APK** workflow builds, tests and signs on every trigger.
 
 ### ✅ Tests
 
-Unit checks for the pure-Java logic live in [`test/`](test), one class per area (`ParseCheck`, `LyricsCheck`, `BackupCheck`, `PrivacyCheck` for the lock-screen rules, `ClassifierCheck` for which notifications get a banner, and so on). `Check` runs them all. Logic that has to be testable is kept free of Android types (`Privacy`, `Gate`, `Dedupe`, `Rules`, `Backup`, `Lyrics`...). CI runs them before every release. Locally, after building:
+Unit checks for the pure-Java logic live in [`test/`](test), one class per area (`ParseCheck`, `LyricsCheck`, `BackupCheck`, `PrivacyCheck` for the lock-screen rules, `ClassifierCheck` for which notifications get a banner, and so on). `Check` runs them all. Logic that has to be testable is kept free of Android types (`Privacy`, `Gate`, `Dedupe`, `Rules`, `Backup`, `Lyrics`, `Trace`, `AppFilter`, `ExitReason`...). CI runs them on every push and pull request (the **CI** workflow, no secrets needed) and again before every release. A few checks (`IslandEventCheck`) touch Android types and need `android.jar` on the classpath; without it they are skipped, not failed. Locally, after building:
 
 ```sh
-javac -d out/test -cp out/classes $(find test -name '*.java')
-java -cp out/test:out/classes com.vxyzview.voidisland.Check
+AJ="$ANDROID_HOME/platforms/android-34/android.jar"   # or libs/android-34.jar
+javac -d out/test -cp "out/classes:$AJ" $(find test -name '*.java')
+java -cp "out/test:out/classes:$AJ" com.vxyzview.voidisland.Check
 ```
 
 To add an area, write `XCheck.run()` (use `import static com.vxyzview.voidisland.Check.ok;`) and list it in `Check.main`.

@@ -70,6 +70,21 @@ final class Classifier {
         e.actRuns = new Runnable[ls.size()];
     }
 
+    /** Puts a "Copy code" button first, ahead of the app's own (at most three buttons in all). The code is read only when the button is pressed. */
+    private static void copyAction(Context c, IslandEvent e, final String code) {
+        final Context app = c.getApplicationContext();
+        int n = Math.min(e.actLabels.length, 2);
+        String[] ls = new String[n + 1];
+        PendingIntent[] ps = new PendingIntent[n + 1];
+        Runnable[] rs = new Runnable[n + 1];
+        ls[0] = Str.t(c, "copy_code", "Copy code");
+        rs[0] = new Runnable() { @Override public void run() { Clip.copyCode(app, code); } };
+        for (int i = 0; i < n; i++) { ls[i + 1] = e.actLabels[i]; ps[i + 1] = e.actIntents[i]; rs[i + 1] = e.actRuns[i]; }
+        e.actLabels = ls;
+        e.actIntents = ps;
+        e.actRuns = rs;
+    }
+
     /** The first inline-reply action that takes free text, so the island can offer a "Reply" button. */
     private static void reply(IslandEvent e, Notification n) {
         if (n.actions == null) return;
@@ -83,20 +98,23 @@ final class Classifier {
         }
     }
 
-    /** Island-only rules for text banners: quiet hours, group chats, one banner per chat. True = keep this one off the island. */
-    private static boolean ruleQuiet(Context c, String pkg, Bundle x, CharSequence title) {
+    /** Remembers (for "why didn't it show?") that a banner was kept off the island. Package and reason only, never text. */
+    private static void drop(String pkg, int reason) { Trace.add(pkg, reason, System.currentTimeMillis()); }
+
+    /** Island-only rules for text banners: quiet hours, group chats, one banner per chat. 0 = show it, else the {@link Trace} reason to keep it off. */
+    private static int ruleQuiet(Context c, String pkg, Bundle x, CharSequence title) {
         if (Prefs.b(c, Prefs.K_QUIET, false)) {
             Calendar cal = Calendar.getInstance();
             int now = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE);
             if (Rules.inQuiet(now, Prefs.i(c, Prefs.K_QFROM, 22 * 60), Prefs.i(c, Prefs.K_QTO, 7 * 60))
-                && Rules.quietCovers(pkg, Prefs.view(c, Prefs.K_QAPPS))) return true;
+                && Rules.quietCovers(pkg, Prefs.view(c, Prefs.K_QAPPS))) return Trace.QUIET_HOURS;
         }
         CharSequence conv = x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE);
         boolean group = x.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION) || !empty(conv);
-        if (group && Prefs.b(c, Prefs.K_NOGROUP, false)) return true;
+        if (group && Prefs.b(c, Prefs.K_NOGROUP, false)) return Trace.MUTED_GROUP;
         if (Prefs.b(c, Prefs.K_ONEPERCHAT, false)
-            && Rules.chatQuiet(chatKey(pkg, x, title), System.currentTimeMillis(), Rules.CHAT_WINDOW_MS)) return true;
-        return false;
+            && Rules.chatQuiet(chatKey(pkg, x, title), System.currentTimeMillis(), Rules.CHAT_WINDOW_MS)) return Trace.ONE_PER_CHAT;
+        return 0;
     }
 
     /** Identifies a chat for the "one banner per chat" rule. */
@@ -175,7 +193,11 @@ final class Classifier {
      */
     static IslandEvent from(Context c, String pkg, Notification n, String nkey, int importance, boolean initial) {
         if (pkg == null || n == null || c.getPackageName().equals(pkg)) return null;
-        if (Prefs.has(c, Prefs.K_BLOCK, pkg)) return null;
+        if (Prefs.has(c, Prefs.K_BLOCK, pkg)) {
+            // only what would have been a banner is worth explaining (not an ongoing service notice, not a group summary)
+            if (!initial && (n.flags & (Notification.FLAG_ONGOING_EVENT | Notification.FLAG_GROUP_SUMMARY)) == 0) drop(pkg, Trace.OFF_APP);
+            return null;
+        }
         if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return null;
         Bundle x = n.extras != null ? n.extras : new Bundle();
         String cat = n.category;
@@ -201,7 +223,7 @@ final class Classifier {
         // ---- phone calls
         boolean callish = Notification.CATEGORY_CALL.equals(cat) || x.containsKey("android.callType");
         if (callish && (ongoing || n.fullScreenIntent != null)) {
-            if (!Prefs.b(c, Prefs.K_CALL, true)) return null;
+            if (!Prefs.b(c, Prefs.K_CALL, true)) { if (!initial) drop(pkg, Trace.OFF_TYPE); return null; }
             int ct = x.getInt("android.callType", 0);
             IslandEvent e = new IslandEvent("call", IslandEvent.CALL);
             // callType 0 = the app did not say (older notifications): ringing means an Answer button or a full-screen call screen
@@ -255,6 +277,7 @@ final class Classifier {
 
         // ---- live activities: rides, food delivery, live scores (judged by the app that posted it)
         int lk = Live.kind(pkg, Prefs.view(c, Prefs.K_LIVE_RIDE), Prefs.view(c, Prefs.K_LIVE_FOOD), Prefs.view(c, Prefs.K_LIVE_SPORT));
+        if (lk == Live.NONE && ongoing && Live.promoted(n.flags, x.getString(Notification.EXTRA_TEMPLATE))) lk = Live.PROMOTED;   // Android 16 live updates: any app
         if (lk != Live.NONE && ongoing && (!empty(title) || !empty(text)) && Prefs.b(c, Prefs.K_LIVEACT, true)) {
             IslandEvent e = new IslandEvent("l:" + nkey, IslandEvent.LIVE);
             e.live = true; e.priority = 60; e.pkg = pkg; e.appName = app;
@@ -287,9 +310,13 @@ final class Classifier {
         }
 
         // from here on only fresh, dismissible notifications with something to say that are not housekeeping
-        if (!Gate.banner(initial, ongoing, !(empty(title) && empty(text)), importance, NotificationManager.IMPORTANCE_DEFAULT,
-            n.getGroupAlertBehavior() == Notification.GROUP_ALERT_SUMMARY, cat)) return null;
-        if (duplicate(nkey, String.valueOf(title) + "|" + text)) return null;
+        int gate = Gate.reject(initial, ongoing, !(empty(title) && empty(text)), importance, NotificationManager.IMPORTANCE_DEFAULT,
+            n.getGroupAlertBehavior() == Notification.GROUP_ALERT_SUMMARY, cat);
+        if (gate != 0) {
+            if (gate > 0) drop(pkg, gate);   // a real "why didn't it show?" (not by design)
+            return null;
+        }
+        if (duplicate(nkey, String.valueOf(title) + "|" + text)) { drop(pkg, Trace.REPEAT); return null; }
 
         // ---- payments
         String tt = empty(title) ? "" : title.toString(), bt = empty(text) ? "" : text.toString();
@@ -297,7 +324,7 @@ final class Classifier {
             || x.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION) || !empty(x.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE))
             || String.valueOf(x.getCharSequence(Notification.EXTRA_TEMPLATE)).contains("MessagingStyle");
         if (Parse.isPaymentFrom(messaging, pkg, tt, bt)) {
-            if (!Prefs.b(c, Prefs.K_PAY, true)) return null;
+            if (!Prefs.b(c, Prefs.K_PAY, true)) { drop(pkg, Trace.OFF_TYPE); return null; }
             String all = tt + " " + bt;
             IslandEvent e = new IslandEvent("pay:" + nkey, IslandEvent.PAYMENT);
             e.pkg = pkg; e.appName = app; e.nkey = nkey;
@@ -313,8 +340,10 @@ final class Classifier {
         }
 
         // ---- everything else: a banner
-        if (!Prefs.b(c, Prefs.K_NOTIF, true)) return null;
-        if (ruleQuiet(c, pkg, x, title)) return null;
+        if (!Prefs.b(c, Prefs.K_NOTIF, true)) { drop(pkg, Trace.OFF_TYPE); return null; }
+        if (Snooze.active(pkg, System.currentTimeMillis())) { drop(pkg, Trace.SNOOZED); return null; }
+        int quiet = ruleQuiet(c, pkg, x, title);
+        if (quiet != 0) { drop(pkg, quiet); return null; }
         IslandEvent e = new IslandEvent("n:" + nkey, IslandEvent.NOTIF);
         e.pkg = pkg; e.appName = app; e.nkey = nkey;
         e.title = empty(title) ? app : title;
@@ -326,6 +355,8 @@ final class Classifier {
         if (Prefs.b(c, Prefs.K_ONEPERCHAT, false)) e.chat = chatKey(pkg, x, title);
         actions(e, n);
         reply(e, n);
+        String code = Parse.otp(tt, bt);
+        if (code != null) copyAction(c, e, code);
         return e;
     }
 }

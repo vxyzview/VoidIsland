@@ -20,7 +20,7 @@ final class RestyleCheck {
         ok(Restyle.needed("some_future_key"), "restyle: an unknown key re-applies rather than risk a setting that does nothing");
         // read only when an event arrives: no reason to morph the island or close a reply box
         String[] eventTime = {Prefs.K_ABSORB, Prefs.K_KEEP, Prefs.K_QUIET, Prefs.K_QFROM, Prefs.K_QTO, Prefs.K_QAPPS, Prefs.K_NOGROUP,
-            Prefs.K_ONEPERCHAT, Prefs.K_LIVE_RIDE, Prefs.K_LIVE_FOOD, Prefs.K_LIVE_SPORT, Prefs.K_DUR, Prefs.K_KEEPALIVE, Prefs.K_LYRICS_NOTICE};
+            Prefs.K_ONEPERCHAT, Prefs.K_SNOOZE, Prefs.K_LIVE_RIDE, Prefs.K_LIVE_FOOD, Prefs.K_LIVE_SPORT, Prefs.K_DUR, Prefs.K_KEEPALIVE, Prefs.K_LYRICS_NOTICE};
         boolean none = true;
         for (String k : eventTime) none &= !Restyle.needed(k);
         ok(none, "restyle: settings only read when something arrives do not re-apply the island");

@@ -70,12 +70,50 @@ final class IslandEvent {
     /** True once the island has put this banner on screen (so the hooks that run on first display run once). */
     boolean shownOnce;
 
+    // Live pills (navigation, timers, rides...) outlive a lock: the privacy rules hide their text only while the phone is locked,
+    // so what was replaced is kept here and put back after unlocking. (A banner is redacted for good: see IslandController.redact.)
+    private boolean hidden;
+    private CharSequence hTitle, hText, hSub;
+    private Bitmap hIcon;
+    private String[] hLabels;
+    private PendingIntent[] hIntents;
+    private Runnable[] hRuns;
+
     IslandEvent(String key, int type) {
         this.key = key;
         this.type = type;
     }
 
     Bitmap appIcon() { return icon != null ? icon : art; }
+
+    boolean contentHidden() { return hidden; }
+
+    /** Swaps this pill's personal content for a generic line (no buttons) until {@link #restoreContent()}. */
+    void hideContent(CharSequence newTitle, CharSequence newText, Bitmap newIcon) {
+        if (hidden) return;
+        hTitle = title; hText = text; hSub = sub; hIcon = icon;
+        hLabels = actLabels; hIntents = actIntents; hRuns = actRuns;
+        title = newTitle; text = newText; sub = null; icon = newIcon;
+        actLabels = new String[0]; actIntents = new PendingIntent[0]; actRuns = new Runnable[0];
+        hidden = true;
+        dirty = true;
+    }
+
+    /** Puts back what {@link #hideContent} replaced (the phone was unlocked). */
+    void restoreContent() {
+        if (!hidden) return;
+        title = hTitle; text = hText; sub = hSub; icon = hIcon;
+        actLabels = hLabels; actIntents = hIntents; actRuns = hRuns;
+        forgetHidden();
+        dirty = true;
+    }
+
+    private void forgetHidden() {
+        hidden = false;
+        hTitle = hText = hSub = null;
+        hIcon = null;
+        hLabels = null; hIntents = null; hRuns = null;
+    }
 
     void copyFrom(IslandEvent o) {
         priority = o.priority; live = o.live; popup = o.popup; durationMs = o.durationMs;
@@ -88,6 +126,7 @@ final class IslandEvent {
         mc = o.mc; playing = o.playing; posMs = o.posMs; durMs = o.durMs; posAt = o.posAt; actions = o.actions; speed = o.speed;
         level = o.level; charging = o.charging; success = o.success; incoming = o.incoming;
         vis = o.vis;
+        forgetHidden();   // fresh content from the app replaces whatever was hidden: the lock rules look at it again
         dirty = true;
     }
 }
