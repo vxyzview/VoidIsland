@@ -18,7 +18,13 @@ final class Prefs {
         K_QAPPS = "quiet_apps", K_NOGROUP = "no_group", K_ONEPERCHAT = "one_per_chat", K_SNOOZE = "long_snooze",
         K_LYROFF = "lyric_off", K_LYRSIZE = "lyric_size",
         K_MSTYLE = "music_style", K_EMSTYLE = "music_style_e",
-        K_LIVE_RIDE = "live_ride", K_LIVE_FOOD = "live_food", K_LIVE_SPORT = "live_sport";
+        K_LIVE_RIDE = "live_ride", K_LIVE_FOOD = "live_food", K_LIVE_SPORT = "live_sport",
+        K_CHGLIVE = "chg_live", K_BTLIVE = "bt_live", K_AIRPLANE = "f_airplane", K_VOLUME = "f_volume";
+    // activity designs (Style > Activities): the compact pill and the expanded card of each activity pick their own, 0 = the classic one
+    static final String K_AC_CALL = "ac_call", K_AE_CALL = "ae_call", K_AC_PAY = "ac_pay", K_AE_PAY = "ae_pay",
+        K_AC_CHG = "ac_chg", K_AE_CHG = "ae_chg", K_AC_DL = "ac_dl", K_AE_DL = "ae_dl", K_AC_TIMER = "ac_timer", K_AE_TIMER = "ae_timer",
+        K_AC_DEV = "ac_dev", K_AE_DEV = "ae_dev", K_AC_NAV = "ac_nav", K_AE_NAV = "ae_nav", K_AC_LIVE = "ac_live", K_AE_LIVE = "ae_live",
+        K_AC_MSG = "ac_msg", K_AE_MSG = "ae_msg";
     // one-off flags (not settings the person picks, but they live in the same file)
     static final String K_KEEPALIVE = "keepalive_asked", K_LYRICS_NOTICE = "lyrics_notice";
     // shape + size

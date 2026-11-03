@@ -306,6 +306,7 @@ final class Classifier {
             e.icon = Img.appIcon(c, pkg);
             e.accent = Cards.GREEN;
             e.contentIntent = n.contentIntent;
+            actions(e, n);   // the app's own Pause / Cancel
             return e;
         }
 

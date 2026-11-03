@@ -30,6 +30,8 @@ final class Style {
     int musicStyle = 0;
     // music on the expanded card: 0 Classic, 1 Vinyl, 2 Poster, 3 Mini, 4 Lyrics (see Music)
     int eMusicStyle = 0;
+    // every other activity (see ActStyle): the compact pill and the expanded card each pick one of five designs, 0 = the classic one
+    final int[] cAct = new int[ActStyle.COUNT], eAct = new int[ActStyle.COUNT];
 
     // derived
     int bg = 0xFF000000, text = 0xFFFFFFFF, sub = 0xB3FFFFFF, btn = 0x2EFFFFFF, tile = 0x24FFFFFF, accent = 0xFFB388FF;
@@ -82,6 +84,10 @@ final class Style {
         s.eClockStyle = clamp(Prefs.si(sp, Prefs.K_ECLOCKSTYLE, 0), 0, 7);
         s.musicStyle = clamp(Prefs.si(sp, Prefs.K_MSTYLE, 0), 0, MusicStyle.COMPACT - 1);
         s.eMusicStyle = clamp(Prefs.si(sp, Prefs.K_EMSTYLE, 0), 0, MusicStyle.EXPANDED - 1);
+        for (int i = 0; i < ActStyle.COUNT; i++) {
+            s.cAct[i] = ActStyle.clamp(Prefs.si(sp, ActStyle.CKEY[i], 0), ActStyle.COMPACT);
+            s.eAct[i] = ActStyle.clamp(Prefs.si(sp, ActStyle.EKEY[i], 0), ActStyle.EXPANDED);
+        }
         s.derive(c);
         return s;
     }

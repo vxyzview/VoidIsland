@@ -20,7 +20,7 @@ final class Restyle {
      */
     private static final Set<String> EVENT_TIME_ONLY = new HashSet<String>(Arrays.asList(
         Prefs.K_ABSORB, Prefs.K_KEEP, Prefs.K_QUIET, Prefs.K_QFROM, Prefs.K_QTO, Prefs.K_QAPPS, Prefs.K_NOGROUP, Prefs.K_ONEPERCHAT, Prefs.K_SNOOZE,
-        Prefs.K_LIVE_RIDE, Prefs.K_LIVE_FOOD, Prefs.K_LIVE_SPORT, Prefs.K_DUR, Prefs.K_KEEPALIVE, Prefs.K_LYRICS_NOTICE));
+        Prefs.K_LIVE_RIDE, Prefs.K_LIVE_FOOD, Prefs.K_LIVE_SPORT, Prefs.K_AIRPLANE, Prefs.K_VOLUME, Prefs.K_CHGLIVE, Prefs.K_BTLIVE, Prefs.K_DUR, Prefs.K_KEEPALIVE, Prefs.K_LYRICS_NOTICE));
 
     /** Should the island re-apply after this key changed? {@code null} (everything changed, e.g. a restore) always does. */
     static boolean needed(String key) { return key == null || !EVENT_TIME_ONLY.contains(key); }

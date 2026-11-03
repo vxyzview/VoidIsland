@@ -219,7 +219,7 @@ final class Cards {
     }
 
     /** A banner's own button was pressed: it has done its job, so put it away (calls, timers and music stay on the island). */
-    private static void done(IslandEvent e) {
+    static void done(IslandEvent e) {
         if (e.type != IslandEvent.NOTIF) return;
         Bus.remove(e.key);
         ReplyActivity.closeFromIsland();   // another button was pressed while a reply box was open: the box goes with the banner
@@ -356,6 +356,7 @@ final class Cards {
         e.tC = null;
         final int g = Math.max(dp(c, 10), Math.min(h - dp(c, 4), Math.round((h - dp(c, 12)) * S.glyph / 100f))), m = dp(c, S.cPad);
         final int side = Gravity.CENTER_VERTICAL;
+        if (Acts.compact(c, e, out, h, g, m)) return;   // a flat design from Style > Activities drew it
         switch (e.type) {
             case IslandEvent.MEDIA: {
                 if (S.musicStyle != 0) { Music.compact(c, e, out, h, g, m); break; }   // Vinyl / Ring / Wave / Song live in Music
@@ -474,6 +475,16 @@ final class Cards {
             }
             case IslandEvent.CLOCK: {
                 compactClock(c, e, out, h, g, m, side);
+                break;
+            }
+            case IslandEvent.CHARGE: {   // the charging pill ("Keep charging on the island"): a bolt and the level
+                out.addView(new IconView(c, IconView.BOLT, tone(e)), fl(g, g, Gravity.START | side, m));
+                final TextView lv = tv(c, e.level + "%", 13f, WHITE, true);
+                lv.setFontFeatureSettings("tnum");
+                out.addView(lv, fl(WRAP, WRAP, Gravity.END | side, m));
+                e.uC = new IslandEvent.Updater() {
+                    @Override public boolean update() { put(lv, e.level + "%"); return true; }
+                };
                 break;
             }
             default: {
@@ -830,6 +841,8 @@ final class Cards {
     static View buildExpanded(Context c, IslandEvent e, int width) {
         e.uE = null;
         e.tE = null;
+        View flat = Acts.expanded(c, e, width);   // a flat design from Style > Activities
+        if (flat != null) return flat;
         switch (e.type) {
             case IslandEvent.MEDIA: return Music.expanded(c, e, width);
             case IslandEvent.CALL: return call(c, e);
@@ -911,7 +924,7 @@ final class Cards {
 
     private static View call(final Context c, final IslandEvent e) {
         final boolean inc = e.incoming, hadTime = e.chrono;
-        final int n = Math.min(2, e.actLabels.length);
+        final int n = Math.min(inc ? 2 : 3, e.actLabels.length);   // a ringing call: Decline / Accept; a running one: up to Hang up, Speaker, Mute
         final String[] shownLabels = e.actLabels;
         LinearLayout root = col(c);
         root.setPadding(px(c), py(c), px(c), py(c));
@@ -937,7 +950,7 @@ final class Cards {
 
         LinearLayout br = row(c);
         br.setPadding(0, dp(c, 16), 0, 0);
-        int[] kind = new int[2];
+        int[] kind = new int[3];
         for (int i = 0; i < n; i++) kind[i] = Parse.actionKind(e.actLabels[i]);
         if (inc && n >= 2 && kind[0] == 0 && kind[1] == 0) { kind[0] = -1; kind[1] = 1; }
         if (n == 0) {
@@ -953,13 +966,13 @@ final class Cards {
             else { color = BTN; fg = BTN_ON; }
             int icon = kind[i] < 0 ? IconView.HANGUP : (kind[i] > 0 ? IconView.PHONE : -1);
             LinearLayout.LayoutParams p = lpw(0, dp(c, 46), 1f);
-            if (i > 0) p.setMarginStart(dp(c, 12));
+            if (i > 0) p.setMarginStart(dp(c, n > 2 ? 8 : 12));
             br.addView(button(c, label, color, icon, fg, new Runnable() { @Override public void run() { fire(c, e, idx); } }), p);
         }
         root.addView(br);
         e.uE = new IslandEvent.Updater() {
             @Override public boolean update() {
-                if (e.incoming != inc || e.chrono != hadTime || Math.min(2, e.actLabels.length) != n
+                if (e.incoming != inc || e.chrono != hadTime || Math.min(inc ? 2 : 3, e.actLabels.length) != n
                     || !Parse.sameLabels(shownLabels, e.actLabels)) return false;
                 st.setText(e.text);
                 nm.setText(e.title);
@@ -1123,8 +1136,11 @@ final class Cards {
         LinearLayout.LayoutParams bp = lp(ViewGroup.LayoutParams.MATCH_PARENT, dp(c, 18));
         bp.topMargin = dp(c, 10);
         root.addView(bar, bp);
+        if (e.actLabels.length > 0) root.addView(actionsRow(c, e, 2));   // Pause / Cancel, when the app offers them
+        final String[] shownLabels = e.actLabels;
         e.uE = new IslandEvent.Updater() {
             @Override public boolean update() {
+                if (!Parse.sameLabels(shownLabels, e.actLabels)) return false;   // Pause <-> Resume: rebuild the buttons
                 title.setText(e.title);
                 body.setText(e.text);
                 pct.setText(Math.max(0, e.progress) + "%");

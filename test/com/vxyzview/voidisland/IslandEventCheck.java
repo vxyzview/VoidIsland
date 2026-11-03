@@ -49,5 +49,15 @@ final class IslandEventCheck {
         ok(!e.contentHidden() && "Work".equals(e.title), "event: an update from the app replaces hidden content and clears the flag");
         e.restoreContent();
         ok("Work".equals(e.title), "event: after an update, restoring does not bring the old text back");
+
+        // an update brings the new charging numbers, but not what the island itself learned while showing the event
+        IslandEvent chg = new IslandEvent("charge_live", IslandEvent.CHARGE);
+        chg.level = 50; chg.born = 1234L; chg.p0 = 7; chg.total0 = 99L;
+        IslandEvent upd = new IslandEvent("charge_live", IslandEvent.CHARGE);
+        upd.level = 51; upd.plugged = 1; upd.tempC10 = 312; upd.voltMv = 4100; upd.currentMa = 2800; upd.etaMin = 33;
+        chg.copyFrom(upd);
+        ok(chg.level == 51 && chg.plugged == 1 && chg.tempC10 == 312 && chg.voltMv == 4100 && chg.currentMa == 2800 && chg.etaMin == 33,
+            "event: a live charging update carries the charger, temperature, voltage, current and time to full");
+        ok(chg.born == 1234L && chg.p0 == 7 && chg.total0 == 99L, "event: an update keeps what the island learned (download pace start, timer length)");
     }
 }

@@ -172,6 +172,27 @@ Track, Beat, Timer, Bento, Wave and Cover are strictly **flat**: solid fills and
 
 </details>
 
+### 🎨 Activity designs
+Every activity (call, payment, charging, download, timer, device, navigation, live activity, message) picks its own **compact pill** and **expanded card** under *Style > Activities*. *Classic* is the original; the new ones are **flat** (solid fills, tonal tiles and thin lines, no gradients, no glow) and follow your accent, text size and lock-screen rules.
+
+| Compact pill | Expanded card |
+|---|---|
+| **Capsule**: a tonal icon tile and a filled accent capsule with the number | **Bento**: a big icon tile beside the title tile, a number tile with a progress line, roomy keys |
+| **Track**: icon, title over a slim progress line, number | **Hero**: one big centred number (a battery, a check or a photo above it) |
+| **Focus**: the number, centred and bold | **Strip**: one slim row, the shortest card |
+| **Signal**: icon plus a live gauge (voice bars, battery cells, a ring, pulsing dots) | **Stats**: up to four tiles of facts: speed, time left, temperature, duration... |
+
+Payments and messages are banners (they open as a card and leave), so they only have expanded designs. *Use these on every activity* applies the chosen pair everywhere.
+
+New with it:
+- **Call**: an ongoing call shows up to three of the app's buttons (Hang up, Speaker, Mute); the Stats card shows status, duration and app.
+- **Payment**: *Copy amount* and *Open* keys; status (sent / received / failed) and merchant tiles.
+- **Charging**: charger kind (Fast / AC / USB / Wireless), power in watts, temperature and time to full. *Keep charging on the island* (Behavior) leaves a live charging pill while a charger is connected.
+- **Download**: the app's own Pause / Cancel buttons, plus elapsed time and an estimate of the time left from the download's own pace.
+- **Timer**: a ring that runs down (or a lap ring on a stopwatch), end time and total length.
+- **Headset / Bluetooth**: icons by device type (headphones, speaker, phone, watch). *Keep audio devices on the island* shows the connected headphones, speaker or car as a pill.
+- **Phone events**: airplane mode pop-up, and an optional volume bar (off by default).
+
 ### 🌍 Everything else
 
 - **Material You accent on a black island**: on Android 12+ the accent follows your wallpaper colours by default (play button, seek and progress bars, rings, action buttons, glyphs, in both the compact pill and the expanded card) while the island itself stays pure black. Change it at **Style > Colors > Accent**: *Auto* (album-art / app colour), *Material You* or *Custom*.

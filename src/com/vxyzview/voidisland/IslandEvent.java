@@ -55,6 +55,16 @@ final class IslandEvent {
     // payment / call
     boolean success = true, incoming;
 
+    // charging details (SystemEvents fills them in; -1 / MIN_VALUE = the phone did not say)
+    int plugged;                              // BatteryManager.BATTERY_PLUGGED_* (0 = on battery)
+    int tempC10 = -1, voltMv = -1, etaMin = -1;
+    int currentMa = Integer.MIN_VALUE;        // + charging, - draining
+
+    // what the island learned while showing it (download speed / ETA, timer total). Never copied from an update.
+    long born;                                // SystemClock.elapsedRealtime() when a design first drew it (0 = not yet)
+    int p0 = -1;                              // the first progress value seen
+    long total0;                              // a countdown's length when first seen, ms
+
     // runtime hooks, filled in by Cards when views are built
     Updater uC, uE;
     Runnable tC, tE;
@@ -125,6 +135,7 @@ final class IslandEvent {
         replyIntent = o.replyIntent; replyInput = o.replyInput; liveKind = o.liveKind;
         mc = o.mc; playing = o.playing; posMs = o.posMs; durMs = o.durMs; posAt = o.posAt; actions = o.actions; speed = o.speed;
         level = o.level; charging = o.charging; success = o.success; incoming = o.incoming;
+        plugged = o.plugged; tempC10 = o.tempC10; voltMv = o.voltMv; currentMa = o.currentMa; etaMin = o.etaMin;   // born / p0 / total0 are what the island learned: they stay
         vis = o.vis;
         forgetHidden();   // fresh content from the app replaces whatever was hidden: the lock rules look at it again
         dirty = true;

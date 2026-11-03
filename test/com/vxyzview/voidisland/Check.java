@@ -18,6 +18,7 @@ public class Check {
         LyricsCheck.run();
         RulesCheck.run();
         RestyleCheck.run();
+        ActStyleCheck.run();
         BackupCheck.run();
         PrivacyCheck.run();
         ClassifierCheck.run();

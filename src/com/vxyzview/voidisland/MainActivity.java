@@ -44,7 +44,8 @@ public final class MainActivity extends Activity {
     private final Handler h = new Handler(Looper.getMainLooper());
     /** Everything the Try-it demos schedule for later (music timeout, download steps, preview): "Clear demos" cancels it all at once. */
     private final Handler dh = new Handler(Looper.getMainLooper());
-    private static final String[] DEMO_KEYS = {"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "sys:demo", "preview"};
+    private int actSel;   // the activity shown in Style > Activities
+    private static final String[] DEMO_KEYS = {"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "sys:demo", "chg:demo", "sys:live", "nav:demo", "l:demo", "preview"};
     private M3 m;
     private M3.Nav nav;
     private ScrollView scroll;
@@ -464,9 +465,9 @@ public final class MainActivity extends Activity {
         }));
 
         LinearLayout ty = m.card(p, "Try it");
-        String[] dNm = {"Music", "Call", "Payment", "Charging", "Message", "Download", "Timer", "Headset"};
-        String[] dCd = {"m", "c", "p", "g", "n", "d", "t", "s"};
-        int[] dIc = {IconView.NOTE, IconView.PHONE, IconView.CARD, IconView.BOLT, IconView.BELL, IconView.DOWNLOAD, IconView.TIMER, IconView.HEADSET};
+        String[] dNm = {"Music", "Call", "Payment", "Charging", "Message", "Download", "Timer", "Headset", "Navigation", "Ride"};
+        String[] dCd = {"m", "c", "p", "g", "n", "d", "t", "s", "v", "l"};
+        int[] dIc = {IconView.NOTE, IconView.PHONE, IconView.CARD, IconView.BOLT, IconView.BELL, IconView.DOWNLOAD, IconView.TIMER, IconView.HEADSET, IconView.NAV, IconView.APPS};
         LinearLayout row = null;
         for (int i = 0; i < dNm.length; i++) {
             if (i % 2 == 0) {
@@ -668,6 +669,67 @@ public final class MainActivity extends Activity {
             mu.addView(off);
         }
 
+        final int act = actSel;
+        LinearLayout ac = m.card(p, "Activities");
+        ac.addView(m.body("Call, payment, charging, download, timer, device, navigation, live activities and messages each pick their own compact pill and expanded card. "
+            + "The new designs are flat: solid fills and thin lines, no gradients."));
+        ac.addView(m.segmentedGrid(ActStyle.NAMES, act, 3, new M3.OnSel() {
+            @Override public void on(int i) { actSel = i; showPage(1, true); }
+        }), m.top(M3.MATCH, M3.WRAP, 12));
+        if (ActStyle.hasCompact(act)) {
+            ac.addView(label("Compact pill"));
+            ac.addView(m.segmentedGrid(ActStyle.CNAMES, s.cAct[act], 3, new M3.OnSel() {
+                @Override public void on(int i) {
+                    put(ActStyle.CKEY[act], i);
+                    showPage(1, true);
+                    actPreview(act, false);
+                }
+            }), m.top(M3.MATCH, M3.WRAP, 0));
+            TextView acd = m.body(ActStyle.CDESC[s.cAct[act]]);
+            acd.setPadding(0, dp(10), 0, 0);
+            ac.addView(acd);
+            boolean needs = (act == ActStyle.CHARGE && !Prefs.b(this, Prefs.K_CHGLIVE, false)) || (act == ActStyle.DEVICE && !Prefs.b(this, Prefs.K_BTLIVE, false));
+            if (needs) {   // these two are banners until their "Keep ... on the island" switch is on
+                TextView need = m.text(act == ActStyle.CHARGE ? "The charging pill only shows while Keep charging on the island is on (Behavior)."
+                    : "Connected headphones only get a pill while Keep audio devices on the island is on (Behavior). The flashlight pill always shows.", 13.5f, true, m.error);
+                need.setPadding(0, dp(10), 0, 0);
+                ac.addView(need);
+            }
+        } else {
+            TextView note = m.body(ActStyle.NAMES[act] + " shows as a banner: it opens as a card and leaves, so only the expanded card has designs.");
+            note.setPadding(0, dp(12), 0, 0);
+            ac.addView(note);
+        }
+        ac.addView(label("Expanded card"));
+        ac.addView(m.segmentedGrid(ActStyle.ENAMES, s.eAct[act], 3, new M3.OnSel() {
+            @Override public void on(int i) {
+                put(ActStyle.EKEY[act], i);
+                showPage(1, true);
+                actPreview(act, true);
+            }
+        }), m.top(M3.MATCH, M3.WRAP, 0));
+        TextView aev = m.body(ActStyle.EDESC[s.eAct[act]]);
+        aev.setPadding(0, dp(10), 0, 0);
+        ac.addView(aev);
+        if (s.eAct[act] == 4) {
+            TextView hint = m.body("Stats shows facts when the activity has some (speed, time left, temperature, duration). With nothing to show it falls back to Bento.");
+            hint.setPadding(0, dp(8), 0, 0);
+            ac.addView(hint);
+        }
+        ac.addView(m.button("Use these on every activity", 1, new Runnable() {
+            @Override public void run() {
+                SharedPreferences.Editor ed = Prefs.sp(MainActivity.this).edit();
+                Style cur = Style.load(MainActivity.this);
+                for (int i = 0; i < ActStyle.COUNT; i++) {
+                    ed.putInt(ActStyle.CKEY[i], cur.cAct[act]);
+                    ed.putInt(ActStyle.EKEY[i], cur.eAct[act]);
+                }
+                ed.apply();
+                showPage(1, true);
+                actPreview(act, true);
+            }
+        }), m.top(M3.WRAP, M3.WRAP, 12));
+
         LinearLayout ec = m.card(p, "Expanded card");
         m.slider(ec, "Card width", Prefs.K_EW, 220, 440, 340, 1, unit(" dp"), after(true));
         m.slider(ec, "Card corner radius", Prefs.K_ER, 0, 60, 38, 1, unit(" dp"), after(true));
@@ -795,6 +857,10 @@ public final class MainActivity extends Activity {
         m.toggle(sh, "Live activities", "Rides, food delivery and live scores stay on the island while they run", Prefs.K_LIVEACT, true, null);
         m.toggle(sh, "Charging & battery", "Plugged in, full, low battery", Prefs.K_CHG, true, null);
         m.toggle(sh, "Phone events", "Silent mode, DND, headphones, Bluetooth, flashlight", Prefs.K_SYS, true, null);
+        m.toggle(sh, "Airplane mode", "A pop-up when airplane mode turns on or off", Prefs.K_AIRPLANE, true, null);
+        m.toggle(sh, "Volume bar", "Show the volume on the island when you press the volume keys. Android still shows its own panel", Prefs.K_VOLUME, false, null);
+        m.toggle(sh, "Keep charging on the island", "While a charger is connected a charging pill stays: level, charger, time to full. Tap it for temperature and power", Prefs.K_CHGLIVE, false, null);
+        m.toggle(sh, "Keep audio devices on the island", "A pill with your headphones, speaker or car while they are connected", Prefs.K_BTLIVE, false, null);
 
         LinearLayout ru = m.card(p, "Rules");
         m.toggle(ru, "Hide when an app is fullscreen", "Videos, games and readers that hide the status bar. Hides everything, the idle clock too, whatever \u201cHide idle clock in apps\u201d is set to. Turn off to keep the island always visible", Prefs.K_FULL, true, null);
@@ -1134,7 +1200,8 @@ public final class MainActivity extends Activity {
             Bus.post(e);
         } else if ("g".equals(code)) {
             IslandEvent e = ev("charge", IslandEvent.CHARGE);
-            e.level = 78; e.charging = true; e.title = "Charging"; e.accent = Cards.GREEN; e.durationMs = 3600;
+            e.level = 78; e.charging = true; e.title = "Charging"; e.accent = Cards.GREEN; e.durationMs = 4200;
+            demoCharge(e);
             Bus.post(e);
         } else if ("n".equals(code)) {
             IslandEvent e = ev("n:test", IslandEvent.NOTIF);
@@ -1151,6 +1218,12 @@ public final class MainActivity extends Activity {
             e.actIntents = new PendingIntent[1];
             e.actRuns = new Runnable[]{new Runnable() { @Override public void run() { Bus.remove("t:demo"); } }};
             Bus.post(e);
+        } else if ("v".equals(code)) {
+            navDemo();
+            dh.postDelayed(new Runnable() { @Override public void run() { Bus.expand("nav:demo"); } }, 260);
+        } else if ("l".equals(code)) {
+            rideDemo();
+            dh.postDelayed(new Runnable() { @Override public void run() { Bus.expand("l:demo"); } }, 260);
         } else if ("s".equals(code)) {
             IslandEvent e = new IslandEvent("sys:demo", IslandEvent.SYSTEM);
             e.title = "Headphones connected"; e.iconType = IconView.HEADSET; e.accent = Cards.GREEN; e.durationMs = 2400;
@@ -1162,20 +1235,84 @@ public final class MainActivity extends Activity {
         IslandEvent e = ev("call", IslandEvent.CALL);
         e.live = true; e.priority = 100; e.incoming = false; e.chrono = true; e.when = System.currentTimeMillis();
         e.title = "Void Dev"; e.text = "On call";
-        e.actLabels = new String[]{"Hang up"};
-        e.actIntents = new PendingIntent[1];
-        e.actRuns = new Runnable[]{new Runnable() { @Override public void run() { Bus.remove("call"); } }};
+        e.actLabels = new String[]{"Hang up", "Speaker", "Mute"};
+        e.actIntents = new PendingIntent[3];
+        e.actRuns = new Runnable[]{new Runnable() { @Override public void run() { Bus.remove("call"); } }, null, null};
         Bus.post(e);
     }
 
     private void download(final int pct) {
         IslandEvent e = ev("p:demo", IslandEvent.PROGRESS);
         e.live = true; e.priority = 50; e.title = "void-island-v2.apk"; e.text = "Downloading"; e.progress = pct; e.accent = Cards.GREEN;
+        e.actLabels = new String[]{"Pause", "Cancel"};
+        e.actIntents = new PendingIntent[2];
+        e.actRuns = new Runnable[]{null, new Runnable() { @Override public void run() { dh.removeCallbacksAndMessages(null); Bus.remove("p:demo"); } }};
         Bus.post(e);
         if (pct >= 100) {
             dh.postDelayed(new Runnable() { @Override public void run() { Bus.remove("p:demo"); } }, 900);
         } else {
             dh.postDelayed(new Runnable() { @Override public void run() { if (Bus.active()) download(Math.min(100, pct + 5)); } }, 280);
+        }
+    }
+
+    private void demoCharge(IslandEvent e) {
+        e.plugged = 1; e.tempC10 = 315; e.voltMv = 4180; e.currentMa = 3400; e.etaMin = 42;
+    }
+
+    private void navDemo() {
+        IslandEvent e = ev("nav:demo", IslandEvent.NAV);
+        e.live = true; e.priority = 70; e.title = "Turn left in 200 m"; e.text = "Jalan Merdeka \u00b7 12 min \u00b7 4.2 km"; e.accent = 0xFF4DA3FF;
+        Bus.post(e);
+    }
+
+    private void rideDemo() {
+        IslandEvent e = ev("l:demo", IslandEvent.LIVE);
+        e.live = true; e.priority = 45; e.liveKind = Live.RIDE; e.title = "Driver is arriving"; e.text = "Toyota Avanza \u00b7 B 1234 XY \u00b7 3 min";
+        e.progress = 60; e.accent = Live.accent(Live.RIDE);
+        e.actLabels = new String[]{"Call driver", "Chat"};
+        e.actIntents = new PendingIntent[2];
+        e.actRuns = new Runnable[]{null, null};
+        Bus.post(e);
+    }
+
+    /** The audio-device pill, for the preview of Device > Compact (the real one needs "Keep audio devices on the island"). */
+    private void deviceLiveDemo() {
+        IslandEvent e = new IslandEvent("sys:live", IslandEvent.SYSTEM);
+        e.live = true; e.priority = 30; e.title = "Void Buds"; e.sub = "Connected"; e.iconType = IconView.HEADSET; e.accent = Cards.BLUE;
+        Bus.post(e);
+        dh.postDelayed(new Runnable() { @Override public void run() { Bus.remove("sys:live"); } }, 9000);
+    }
+
+    private void chargeLiveDemo() {
+        IslandEvent e = ev("chg:demo", IslandEvent.CHARGE);
+        e.live = true; e.priority = 25; e.level = 78; e.charging = true; e.title = "Charging"; e.accent = Cards.GREEN;
+        demoCharge(e);
+        Bus.post(e);
+        dh.postDelayed(new Runnable() { @Override public void run() { Bus.remove("chg:demo"); } }, 9000);
+    }
+
+    /**
+     * After picking a design in Style > Activities: put that activity on the island so you can see it. Live activities
+     * (call, download, timer, navigation, ride, charging, device) show as the pill, and the card opens a moment later for the
+     * expanded design; payments and messages are banners, so they just pop up.
+     */
+    private void actPreview(final int act, final boolean expanded) {
+        if (!ready()) return;
+        String key = null;
+        switch (act) {
+            case ActStyle.CALL: ongoingCall(); key = "call"; break;
+            case ActStyle.PAYMENT: demo("p"); break;
+            case ActStyle.CHARGE: chargeLiveDemo(); key = "chg:demo"; break;
+            case ActStyle.DOWNLOAD: if (!Bus.has("p:demo")) download(30); key = "p:demo"; break;
+            case ActStyle.TIMER: if (!Bus.has("t:demo")) demo("t"); key = "t:demo"; break;
+            case ActStyle.DEVICE: deviceLiveDemo(); key = "sys:live"; break;
+            case ActStyle.NAV: navDemo(); key = "nav:demo"; break;
+            case ActStyle.LIVE: rideDemo(); key = "l:demo"; break;
+            default: demo("n");
+        }
+        if (expanded && key != null) {
+            final String k = key;
+            dh.postDelayed(new Runnable() { @Override public void run() { Bus.expand(k); } }, 300);
         }
     }
 
