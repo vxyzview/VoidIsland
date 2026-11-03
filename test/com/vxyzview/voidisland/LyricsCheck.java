@@ -33,6 +33,7 @@ final class LyricsCheck {
         ok(Lyrics.cleanTitle("(Only)").equals("(Only)") && Lyrics.cleanTitle("Plain").equals("Plain"), "lyrics: a title is never cleaned down to nothing");
         ok(Lyrics.cleanArtist("Main, Other").equals("Main") && Lyrics.cleanArtist("Main & Other").equals("Main") && Lyrics.cleanArtist("Band - Topic").equals("Band"), "lyrics: first artist is used for the loose lookup");
         ok(Lyrics.cleanArtist("Solo").equals("Solo") && Lyrics.cleanArtist("").equals(""), "lyrics: a single artist is kept as is");
+        ok(Lyrics.cleanArtist(",").equals(",") && Lyrics.cleanArtist(" & ").equals("&"), "lyrics: an artist made only of separators falls back instead of throwing");
         Lyrics.clearAll();
         for (int i = 0; i < 6; i++) Lyrics.remember("song" + i, "a", Lyrics.parse(null, "x" + i));
         Lyrics.cached("song0", "a");   // touched last: now the most recently used

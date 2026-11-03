@@ -50,7 +50,7 @@ public final class ListenerService extends NotificationListenerService {
     @Override public void onTrimMemory(int level) {
         super.onTrimMemory(level);
         try {
-            if (Trim.shortage(level)) { Img.trim(); MediaTracker.trim(); }
+            if (Trim.shortage(level)) { Img.trim(); MediaTracker.trim(); Lyrics.trim(Trim.keepSongs(level)); }   // the listener can outlive the island window, so it frees the lyric cache too
         } catch (Throwable t) { /* never crash over a cache */ }
     }
 

@@ -190,23 +190,35 @@ final class LyricsNet {
         try { return b == null ? null : new JSONArray(b); } catch (Throwable t) { NET_ERR.set(Boolean.TRUE); return null; }
     }
 
+    /**
+     * One GET. The connection is only torn down when something went wrong or the body was not read to its end: a clean finish
+     * (including a small 404 body, which is drained) lets the platform keep the socket for the next request, so the exact lookup
+     * plus up to three searches for one song share one TLS handshake instead of paying for each.
+     */
     private static String httpText(String url) {
         HttpURLConnection con = null;
+        boolean reusable = false;
         try {
             con = (HttpURLConnection) new URL(url).openConnection();
             con.setConnectTimeout(5000);
             con.setReadTimeout(6000);
             con.setRequestProperty("User-Agent", "VoidIsland/" + Cards.appVersion + " (https://github.com/vxyzview/VoidIsland)");
+            con.setRequestProperty("Accept", "application/json");
             int code = con.getResponseCode();
-            if (code != 200) { if (code != 404) NET_ERR.set(Boolean.TRUE); return null; }   // 404 = the song is simply not there
-            BufferedReader r = new BufferedReader(new InputStreamReader(con.getInputStream(), "UTF-8"));
+            if (code != 200) {   // 404 = the song is simply not there
+                if (code != 404) NET_ERR.set(Boolean.TRUE);
+                reusable = drain(con.getErrorStream());
+                return null;
+            }
+            BufferedReader r = new BufferedReader(new InputStreamReader(con.getInputStream(), "UTF-8"), 8192);
             try {
-                StringBuilder b = new StringBuilder();
+                StringBuilder b = new StringBuilder(16384);
                 char[] buf = new char[8192];
                 for (int n; (n = r.read(buf)) > 0;) {
                     b.append(buf, 0, n);
                     if (b.length() > 600000) { NET_ERR.set(Boolean.TRUE); return null; }   // far bigger than any lyric sheet: don't buffer it (and not a believable "no lyrics")
                 }
+                reusable = true;   // read to the end: the socket can go back to the pool
                 return b.length() > 0 ? b.toString() : null;
             } finally {
                 try { r.close(); } catch (Throwable ignored) {}
@@ -215,7 +227,25 @@ final class LyricsNet {
             NET_ERR.set(Boolean.TRUE);
             return null;
         } finally {
-            if (con != null) try { con.disconnect(); } catch (Throwable ignored) {}
+            if (con != null && !reusable) try { con.disconnect(); } catch (Throwable ignored) {}
+        }
+    }
+
+    /** Reads (and closes) a small error body so the connection stays reusable. False when there was nothing to read or it was large. */
+    private static boolean drain(java.io.InputStream es) {
+        if (es == null) return false;
+        try {
+            byte[] buf = new byte[2048];
+            int total = 0;
+            for (int n; (n = es.read(buf)) > 0;) {
+                total += n;
+                if (total > 16384) return false;
+            }
+            return true;
+        } catch (Throwable t) {
+            return false;
+        } finally {
+            try { es.close(); } catch (Throwable ignored) {}
         }
     }
 }

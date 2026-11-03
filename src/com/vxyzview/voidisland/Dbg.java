@@ -47,7 +47,10 @@ final class Dbg {
         LOG.addLast(stamp() + line);
     }
 
-    private static String stamp() { return new SimpleDateFormat("MM-dd HH:mm:ss ", Locale.US).format(new Date()); }
+    // Only ever used from the synchronized methods above, so one shared formatter is safe (a new one per line was wasted work).
+    private static final SimpleDateFormat STAMP = new SimpleDateFormat("MM-dd HH:mm:ss ", Locale.US);
+
+    private static String stamp() { return STAMP.format(new Date()); }
 
     static synchronized String dump() {
         if (LOG.isEmpty()) return "Nothing logged since the island started.";

@@ -1,5 +1,6 @@
 package com.vxyzview.voidisland;
 
+import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -66,9 +67,33 @@ final class MediaTracker {
         if (inst != null) inst.soon();
     }
 
+    /**
+     * One media session. {@code ps}/{@code md} mirror what the session last announced through its callback: asking the session
+     * (getMetadata / getPlaybackState are binder calls, and getMetadata marshals the album art) on every refresh was the main
+     * steady-state cost while music plays. They are fetched once, lazily, and then only replaced by the callbacks.
+     */
     private static final class Holder {
         MediaController mc;
         MediaController.Callback cb;
+        PlaybackState ps;
+        MediaMetadata md;
+        boolean psKnown, mdKnown;
+        PendingIntent act;   // the session's "open the player" intent; re-asked while it is still null
+
+        PlaybackState state() {
+            if (!psKnown) { ps = mc.getPlaybackState(); psKnown = true; }
+            return ps;
+        }
+
+        MediaMetadata meta() {
+            if (!mdKnown) { md = mc.getMetadata(); mdKnown = true; }
+            return md;
+        }
+
+        PendingIntent activity() {
+            if (act == null) { try { act = mc.getSessionActivity(); } catch (Throwable t) { /* ignore */ } }
+            return act;
+        }
     }
 
     private final Context c;
@@ -157,20 +182,20 @@ final class MediaTracker {
             boolean have = false;
             for (Holder x : holders) if (x.mc.getSessionToken().equals(m.getSessionToken())) have = true;
             if (have) continue;
-            Holder x = new Holder();
+            final Holder x = new Holder();
             x.mc = m;
             x.cb = new MediaController.Callback() {
-                @Override public void onPlaybackStateChanged(PlaybackState s) { soon(); }
-                @Override public void onMetadataChanged(MediaMetadata md) { soon(); }
-                @Override public void onSessionDestroyed() { soon(); }
+                @Override public void onPlaybackStateChanged(PlaybackState s) { x.ps = s; x.psKnown = true; soon(); }
+                @Override public void onMetadataChanged(MediaMetadata md) { x.md = md; x.mdKnown = true; soon(); }
+                @Override public void onSessionDestroyed() { x.psKnown = false; x.mdKnown = false; soon(); }
             };
             try { m.registerCallback(x.cb, h); holders.add(x); } catch (Throwable t) { /* ignore */ }
         }
         soon();
     }
 
-    private static int score(MediaController mc) {
-        PlaybackState s = mc.getPlaybackState();
+    private static int score(Holder x) {
+        PlaybackState s = x.state();
         int st = s == null ? PlaybackState.STATE_NONE : s.getState();
         if (st == PlaybackState.STATE_PLAYING) return 3;
         if (st == PlaybackState.STATE_BUFFERING) return 2;
@@ -192,7 +217,7 @@ final class MediaTracker {
         Holder best = null;
         int bestScore = 0;
         for (Holder x : holders) {
-            int s = score(x.mc);
+            int s = score(x);
             if (s > bestScore) { best = x; bestScore = s; }
         }
         if (best == null || !Prefs.b(c, Prefs.K_MEDIA, true)) {
@@ -201,8 +226,8 @@ final class MediaTracker {
             return;
         }
         MediaController mc = best.mc;
-        PlaybackState ps = mc.getPlaybackState();
-        MediaMetadata md = mc.getMetadata();
+        PlaybackState ps = best.state();
+        MediaMetadata md = best.meta();
         String pkg = mc.getPackageName();
 
         IslandEvent e = new IslandEvent("media", IslandEvent.MEDIA);
@@ -223,7 +248,7 @@ final class MediaTracker {
         e.speed = ps.getPlaybackSpeed() > 0 ? ps.getPlaybackSpeed() : 1f;
         e.actions = ps.getActions();
         e.icon = Img.appIcon(c, pkg);
-        try { e.contentIntent = mc.getSessionActivity(); } catch (Throwable t) { /* ignore */ }
+        e.contentIntent = best.activity();
 
         Bitmap art = null;
         if (md != null) {
@@ -233,8 +258,9 @@ final class MediaTracker {
         }
         boolean own = false;   // true = the picture is our cached copy (one stable instance), false = fresh from the session
         if (art == null) { art = ART.get(pkg); own = art != null; }
-        // getMetadata() is a binder call: every refresh hands back a NEW Bitmap object for the same picture, so the object's
-        // identity says nothing. Re-scaling the art and re-reading its colour on every refresh was pure churn; size + track is enough.
+        // The metadata object is now the session's own cached copy, but a player may still hand over a NEW Bitmap object for the
+        // same picture, so the object's identity says little. Re-scaling the art and re-reading its colour on every refresh was
+        // pure churn; size + track is enough.
         int asig = art == null ? 0 : (own ? System.identityHashCode(art) : art.getWidth() * 31 + art.getHeight());
         String key = pkg + "|" + e.title + "|" + e.text + "|" + own + asig;
         if (!key.equals(artKey)) {

@@ -131,10 +131,15 @@ final class Lyrics {
         return (track == null ? "" : track.trim().toLowerCase()) + "|" + (artist == null ? "" : artist.trim().toLowerCase());
     }
 
+    // compiled once: String.replaceAll / split would compile the same pattern on every lookup
+    private static final java.util.regex.Pattern BRACKETS = java.util.regex.Pattern.compile("\\s*[\\(\\[][^\\)\\]]*[\\)\\]]");
+    private static final java.util.regex.Pattern TOPIC = java.util.regex.Pattern.compile("(?i)\\s+-\\s+topic$");
+    private static final java.util.regex.Pattern ARTIST_SPLIT = java.util.regex.Pattern.compile("(?i)\\s*(,|;|&|\\sfeat\\.?\\s|\\sft\\.?\\s|\\sx\\s)\\s*");
+
     /** A song title without "(feat. X)", "[Remastered]" and a trailing " - Live / Remastered 2011" part: the looser lookup uses it. */
     static String cleanTitle(String t) {
         if (t == null) return "";
-        String s = t.replaceAll("\\s*[\\(\\[][^\\)\\]]*[\\)\\]]", "");
+        String s = BRACKETS.matcher(t).replaceAll("");
         int dash = s.indexOf(" - ");
         if (dash > 0) s = s.substring(0, dash);
         s = s.trim();
@@ -144,8 +149,9 @@ final class Lyrics {
     /** The first artist of "A, B", "A & B", "A feat. B" or "A - Topic" (players list several, LRCLIB usually has one). */
     static String cleanArtist(String a) {
         if (a == null) return "";
-        String s = a.replaceAll("(?i)\\s+-\\s+topic$", "");
-        s = s.split("(?i)\\s*(,|;|&|\\sfeat\\.?\\s|\\sft\\.?\\s|\\sx\\s)\\s*")[0].trim();
+        String s = TOPIC.matcher(a).replaceAll("");
+        String[] parts = ARTIST_SPLIT.split(s);   // empty when the name is only separators ("," or "&"): fall back to the name as given
+        s = parts.length > 0 ? parts[0].trim() : "";
         return s.length() > 0 ? s : a.trim();
     }
 

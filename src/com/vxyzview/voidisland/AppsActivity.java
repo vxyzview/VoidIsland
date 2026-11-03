@@ -65,7 +65,10 @@ public final class AppsActivity extends Activity {
     private final ArrayList<App> shown = new ArrayList<App>();   // the ones the search lets through
     private String query = "";
     private final ExecutorService io = Executors.newFixedThreadPool(2);
-    private final LruCache<String, Bitmap> icons = new LruCache<String, Bitmap>(80);
+    /** Bounded by memory, not by count (about 3 MB: enough for several screens of rows) and emptied when the system needs RAM. */
+    private final LruCache<String, Bitmap> icons = new LruCache<String, Bitmap>(3 * 1024 * 1024) {
+        @Override protected int sizeOf(String k, Bitmap b) { return Math.max(1, b.getByteCount()); }
+    };
     static final String EXTRA_MODE = "mode";
     private Set<String> sel;          // the apps stored in the preference behind this screen
     private String prefKey;
@@ -156,9 +159,16 @@ public final class AppsActivity extends Activity {
         load();
     }
 
+    @Override public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        // the screen is no longer visible, or the phone is short on memory: the rows re-decode their icons when it comes back
+        if (level >= Trim.UI_HIDDEN) icons.evictAll();
+    }
+
     @Override protected void onDestroy() {
         super.onDestroy();
         io.shutdownNow();
+        icons.evictAll();
     }
 
     /** Scans and sorts the launcher apps off the UI thread; the list appears when it is ready. */
