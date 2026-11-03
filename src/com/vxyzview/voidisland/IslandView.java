@@ -233,6 +233,7 @@ final class IslandView extends ViewGroup {
     /** @param fade false = replace content instantly and let the springs animate the surface to its new size (live restyling) */
     void present(final IslandEvent ev, final int m, boolean fade) {
         final int g = ++gen;
+        removeCallbacks(settleRun);   // a late teardown must never run under a newer present()
         pendingRun = null;
         pendingSwap = null;
         // A swap-out (content fading to 0) may have been interrupted by this newer change. Its swap-in was just discarded,
@@ -356,6 +357,7 @@ final class IslandView extends ViewGroup {
     }
 
     private void start() {
+        removeCallbacks(settleRun);
         if (!running) {
             syncAnimScale();
             running = true;
@@ -498,14 +500,31 @@ final class IslandView extends ViewGroup {
         return out[2] > 0;
     }
 
-    /** Everything stopped moving: free views, shrink the window so it stops catching touches. */
+    /**
+     * Everything stopped moving. Hiding is instant, but freeing the unused card and shrinking the window (a full relayout of
+     * the overlay) wait a beat: doing them inside the very frame the springs finish put a long frame at the end of every
+     * expand / collapse. {@link #settleRun} is cancelled by anything that starts moving again.
+     */
     private void settled() {
+        if (mode == HIDDEN) setVisibility(INVISIBLE);
+        removeCallbacks(settleRun);
+        postDelayed(settleRun, 160);
+    }
+
+    private final Runnable settleRun = new Runnable() {
+        @Override public void run() {
+            if (running) return;   // moving again: the next settled() schedules this once more
+            guarded(new Runnable() { @Override public void run() { settleNow(); } });
+        }
+    };
+
+    /** Free views and shrink the window so it stops catching touches. */
+    private void settleNow() {
         if (mode == HIDDEN) {
             compact.removeAllViews();
             expanded.removeAllViews();
             cEv = null;
             eEv = null;
-            setVisibility(INVISIBLE);
         } else if (mode == COMPACT) {
             expanded.removeAllViews();
             eEv = null;
@@ -557,6 +576,7 @@ final class IslandView extends ViewGroup {
 
     @Override protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        removeCallbacks(settleRun);
         Choreographer.getInstance().removeFrameCallback(frame);
         running = false;
         last = 0;

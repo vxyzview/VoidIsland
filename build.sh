@@ -73,7 +73,7 @@ else
     echo "[2/6] dex (d8)";
     "$DEXER" --release --min-api 26 --lib "$AJ" --output out $(find out/classes -name '*.class')
 fi
-echo "[3/6] aapt";    "$AAPT" package -f -M AndroidManifest.xml -S res -I "$AJ" --min-sdk-version 26 --target-sdk-version 34 --version-code "$VCODE" --version-name "$VER" -F out/unsigned.apk
+echo "[3/6] aapt";    "$AAPT" package -f -M AndroidManifest.xml -S res -I "$AJ" --min-sdk-version 26 --target-sdk-version 34 --version-code "$VCODE" --version-name "$VER" --replace-version -F out/unsigned.apk
 echo "[4/6] add dex"; (cd out && "$AAPT" add -f unsigned.apk classes.dex >/dev/null)
 echo "[5/6] align";   "$ZIP" -f -p 4 out/unsigned.apk out/aligned.apk
 [ -f void.jks ] || keytool -genkeypair -keystore void.jks -alias void -keyalg RSA -keysize 2048 -validity 36500 \

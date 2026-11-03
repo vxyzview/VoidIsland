@@ -87,6 +87,20 @@ final class IslandController implements IslandView.Host {
             evaluate();
         }
     };
+    /**
+     * The island has sat on the idle clock for a minute: nothing real is on screen, so the icon / artwork / lyric caches
+     * (filled by whatever was shown earlier) are let go. An always-on service should not hold them for hours. They refill
+     * on demand, and anything on screen is held by its own event.
+     */
+    private static final long IDLE_TRIM_MS = 60000L;
+    private final Runnable idleTrim = new Runnable() {
+        @Override public void run() {
+            if (closed || shown != clock) return;
+            Img.trim();
+            MediaTracker.trim();
+            Lyrics.trim(Trim.keepSongs(Trim.RUNNING_LOW));
+        }
+    };
     private final Runnable collapse = new Runnable() {
         @Override public void run() {
             if (flow.is(userExpanded)) return;
@@ -826,6 +840,8 @@ final class IslandController implements IslandView.Host {
         if (want != null && !want.redacted && !want.live && lockDecision(want) != Privacy.SHOW) redact(want);   // locked since it was queued
         shown = want;
         shownMode = mode;
+        h.removeCallbacks(idleTrim);
+        if (want == clock) h.postDelayed(idleTrim, IDLE_TRIM_MS);
         if (want != null) want.dirty = false;
         view.present(want, mode, !restyle);
         if (want != null && mode == IslandView.EXPANDED && !want.shownOnce

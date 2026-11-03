@@ -59,7 +59,10 @@ public final class ListenerService extends NotificationListenerService {
     }
 
     @Override public void onNotificationRemoved(StatusBarNotification sbn, RankingMap rm, int reason) {
-        if (sbn == null || reason == REASON_SNOOZED) return;
+        if (sbn == null) return;
+        // A snoozed notification has left the shade for now, so a live pill built from it must go too (it comes back through
+        // onNotificationPosted when the snooze ends). The banner itself is left alone: it is already on its own timer.
+        if (reason == REASON_SNOOZED) { Bus.removeByNkey(sbn.getKey(), true); return; }
         // our own absorb removes the original while the island shows it: that removal must not clear the banner.
         // A removal by ANOTHER listener (watch, Android Auto) is a real one and must also clear live pills (call, timer...).
         if (reason == REASON_LISTENER_CANCEL && SELF.remove(sbn.getKey())) return;

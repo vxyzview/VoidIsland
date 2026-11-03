@@ -71,3 +71,22 @@ The unit checks (`test/`) cover the pure logic. Everything below needs a phone: 
 
 ## Help
 - [ ] Behavior > Help > Diagnostic log opens, *Copy* works, *Clear* empties it.
+
+## Known behaviour and log noise (not bugs in this app)
+
+- **Icon-only pill after a notification.** A live pill (call, timer, navigation, ride / food / score, download) stays on the
+  island for as long as its source notification is in the shade, by design. When that notification leaves the shade (swiped,
+  cancelled, or snoozed) the pill is removed and the island goes back to the idle clock. Plain message banners are different:
+  they always end on their own timer. If a pill lingers, check `adb shell dumpsys notification --noredact` for the source.
+- **Idle memory.** After a minute on the idle clock the icon, artwork and lyric caches are released (`IslandController.idleTrim`),
+  and closing the Settings screen releases the icon cache. Re-measure with `adb shell dumpsys meminfo com.vxyzview.voidisland`
+  after a few minutes idle; the native heap that remains is mostly the overlay window's own render buffers.
+- **Animation smoothness.** The end of an expand / collapse no longer rebuilds the window in the same frame the springs finish
+  (it runs 160 ms later). Check with `adb shell dumpsys gfxinfo com.vxyzview.voidisland reset`, expand and collapse a banner ten
+  times, then `dumpsys gfxinfo com.vxyzview.voidisland` and compare the 99th percentile with the previous build.
+- **`SURFACE DESTROY` RuntimeException lines and `NotificationHistoryDatabase ... Icon.getType()` NPE in logcat.** These come
+  from the system server relaying out the "displaying over other apps" channel when an overlay window is resized. They are
+  logged by Android, not thrown in this process, and do not affect the island. Likewise the single "splash input channel
+  disposed" warning on relaunch.
+- **Bluetooth permission.** Never requested at launch: only when the person taps "Allow" on the Bluetooth row in Setup.
+  If a dialog shows at first start, something other than this app asked for it.

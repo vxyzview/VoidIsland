@@ -171,6 +171,12 @@ public final class MainActivity extends Activity {
         h.removeCallbacks(diagRun);
     }
 
+    /** The settings screen is gone (it is what pushes the process to its peak): let go of the cached icons it filled. */
+    @Override protected void onStop() {
+        super.onStop();
+        Img.trim();
+    }
+
     /** Back from Style / Behavior lands on Home first (the start destination); back from Home leaves the app. */
     @Override public void onBackPressed() {
         if (page != 0) {

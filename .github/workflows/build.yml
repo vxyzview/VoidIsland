@@ -94,6 +94,15 @@ jobs:
           KS_PASS: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
         run: ./build.sh "$APK" "$VERSION" "$VERSIONCODE"
 
+      - name: Verify APK version matches the build
+        run: |
+          BADGING="$("$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "out/$APK.apk" | head -1)"
+          echo "$BADGING"
+          case "$BADGING" in
+            *"versionCode='$VERSIONCODE'"*"versionName='$VERSION'"*) ;;
+            *) echo "::error::APK manifest version does not match $VERSION ($VERSIONCODE)"; exit 1 ;;
+          esac
+
       - name: Unit checks
         run: |
           AJ="$ANDROID_HOME/platforms/android-34/android.jar"
