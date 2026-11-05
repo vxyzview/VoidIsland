@@ -21,7 +21,15 @@ Pure black, Material You accent, private by design.
 
 <br>
 
-<!-- Tip: add screenshots in assets/ and show them here, e.g. <img src="assets/music.png" width="30%"> -->
+<!-- Screenshots: capture the files listed in assets/screenshots/README.md, then delete this comment's opening and closing marks.
+<div align="center">
+<img src="assets/screenshots/banner.png" width="30%" alt="A message banner">
+<img src="assets/screenshots/music.png" width="30%" alt="The music pill and card">
+<img src="assets/screenshots/clock.png" width="30%" alt="The idle clock">
+</div>
+
+<br>
+-->
 
 ## ✨ Highlights
 
@@ -33,6 +41,7 @@ Pure black, Material You accent, private by design.
 | 🕒 **Idle clock** | 10 compact and 8 expanded clock styles for when nothing is happening. |
 | 🔒 **Lock-screen privacy** | Follows what Android's own lock screen would show. Secret notifications never appear. |
 | 🚗 **Live activities** | Rides, food delivery and live scores stay on the island while they run. |
+| 🧊 **Flat activity cards** | Calls, payments, charging, downloads, timers, headset / Bluetooth, navigation and live activities share one flat, gradient-free look, compact and expanded. |
 | 🎨 **Material You** | The accent follows your wallpaper while the island itself stays pure black. |
 | 🔋 **Light on battery** | Quiet with the screen off, bounded caches, no idle threads. |
 
@@ -96,6 +105,25 @@ This covers message and payment banners **and** the live pills for navigation, t
 A banner that was hidden or redacted is **never removed from the shade**. A plain swipe-to-unlock lock hides nothing, same as the system.
 
 </details>
+
+### 🧊 Flat activity cards
+
+Every activity has one flat look in both sizes: solid fills, tonal capsules and badges, segmented bars. No gradients, glows or shadows, and there is nothing to pick: it is simply how they look. Colours come from the island's theme, so Material You and custom accents apply as before.
+
+| Activity | Compact pill | Expanded card |
+| :-- | :-- | :-- |
+| 📞 **Call** | caller photo (or initial), name, timer capsule | rings that swell out of the photo while it rings, status chip, big timer, Decline / Accept, or up to three of the app's own buttons (Speaker, Mute, Hang up) |
+| 💳 **Payment** | check or cross badge, amount | check ring, amount large, who, time, and a one-tap **copy amount** button |
+| 🔋 **Charging** | bolt badge, level | level, segmented bar, **time to full** (Android 9+), plug type, battery temperature, *Charge soon* when low |
+| ⬇️ **Download** | app icon, title, ring with the percent | app icon with a download badge, percent, segmented bar, **time left** (from the speed so far) and the app's own Pause / Cancel buttons |
+| ⏱ **Timer, stopwatch** | draining ring, time capsule | ring around a glyph, big time, when it **ends**, the app's buttons (up to three), red at 0:00 |
+| 🎧 **Headset, Bluetooth** | badge, name, state | the device's name, what **kind** it is (headphones, speaker, car, watch, phone, computer...) with a matching icon, a connected / disconnected chip; wired headsets say whether they have a microphone |
+| 🔔 **Ringer, Do Not Disturb, flashlight** | badge, state | three pips for the ringer mode, an on / off chip, and a **Turn off** button for the flashlight |
+| 🧭 **Navigation** | direction badge, instruction | app, large direction badge, the instruction and where it leads |
+| 🚗 **Live activities** | app icon, ring with the percent | ride / order / score badge, status, segmented bar, the app's buttons |
+| 💬 **Messages** | app icon, title | the sender's picture with the app's icon on its corner, app, text, Reply and actions |
+
+Payments, charging, headset / Bluetooth, ringer and Do Not Disturb are short pop-ups that open straight to their card; the compact pill carries what stays on the island (calls, timers, downloads, navigation, live activities, the flashlight). The animations (rings while a call rings, the bar filling in) stop while the display is off.
 
 ### 🎵 Music and lyrics
 
@@ -177,7 +205,7 @@ Track, Beat, Timer, Bento, Wave and Cover are strictly **flat**: solid fills and
 - **Material You accent on a black island**: on Android 12+ the accent follows your wallpaper colours by default (play button, seek and progress bars, rings, action buttons, glyphs, in both the compact pill and the expanded card) while the island itself stays pure black. Change it at **Style > Colors > Accent**: *Auto* (album-art / app colour), *Material You* or *Custom*.
   <br>It follows the Material 3 dark-scheme roles: primary for the accent and filled buttons, secondary container for tonal buttons, tertiary for "good" things (accept, success, charging), error for "bad" ones (decline, low battery), and on-surface tones for text and tiles.
 - **Backup**: **Apps > Backup** saves every setting to a text file and restores it after a reinstall or on a new phone. A restore asks first, only sets settings this version knows (anything else in the file is ignored) and changes nothing if the file has none.
-- **Languages**: the text the island itself shows (banner buttons, call and payment titles, battery / ringer / Bluetooth pop-ups, the reply box) is translated into **English** and **Bahasa Indonesia**. Settings screens are still English. Add a language by copying `res/values/strings.xml` to `res/values-xx/`. Banners are announced by TalkBack.
+- **Languages**: the text the island itself shows (banner buttons, call and payment titles, battery / ringer / Bluetooth pop-ups, the reply box) is translated into **English** and **Bahasa Indonesia**. Settings screens are still English (their dialogs and toasts are translatable, the labels are not yet). Add a language by copying `res/values/strings.xml` to `res/values-xx/`, then run `tools/check-strings.sh`: it fails on a missing key, a stale key, a different number of `%` placeholders, or a `Str.t` key in the code that is not in `strings.xml`. Banners are announced by TalkBack.
 - **One-time codes**: a notification with a 4 to 8 digit code next to a word like *code*, *OTP* or *kode* gets a **Copy code** button first. The copy is marked sensitive on Android 13+ so it stays out of the clipboard preview, and the button is never shown while the lock screen hides content.
 - **Why didn't it show?**: **Behavior > Help > Why didn't it show?** lists the last banners the island kept off the screen and the reason (app switched off, silent channel, quiet hours, you were in that app, full-screen app, queue full...), with where to change it. It holds app names and reason codes only, never message text, in memory only.
 - **Why did the island stop?**: on Android 11+, **Behavior > Help > Why did the island stop?** shows how Android ended VoidIsland the last few times (low memory, battery limits, a crash, a Force stop) and what to do about it.
@@ -282,7 +310,7 @@ The **Build APK** workflow builds, tests and signs on every trigger.
 
 ### ✅ Tests
 
-Unit checks for the pure-Java logic live in [`test/`](test), one class per area (`ParseCheck`, `LyricsCheck`, `BackupCheck`, `PrivacyCheck` for the lock-screen rules, `ClassifierCheck` for which notifications get a banner, and so on). `Check` runs them all. Logic that has to be testable is kept free of Android types (`Privacy`, `Gate`, `Dedupe`, `Rules`, `Backup`, `Lyrics`, `Trace`, `AppFilter`, `ExitReason`...). CI runs them on every push and pull request (the **CI** workflow, no secrets needed) and again before every release. A few checks (`IslandEventCheck`) touch Android types and need `android.jar` on the classpath; without it they are skipped, not failed. Locally, after building:
+`tools/check-strings.sh` checks the string resources (CI runs it too). Unit checks for the pure-Java logic live in [`test/`](test), one class per area (`ParseCheck`, `LyricsCheck`, `BackupCheck`, `PrivacyCheck` for the lock-screen rules, `ClassifierCheck` for which notifications get a banner, and so on). `Check` runs them all. Logic that has to be testable is kept free of Android types (`Privacy`, `Gate`, `Dedupe`, `Rules`, `Backup`, `Lyrics`, `Trace`, `AppFilter`, `ExitReason`...). CI runs them on every push and pull request (the **CI** workflow, no secrets needed) and again before every release. A few checks (`IslandEventCheck`) touch Android types and need `android.jar` on the classpath; without it they are skipped, not failed. Locally, after building:
 
 ```sh
 AJ="$ANDROID_HOME/platforms/android-34/android.jar"   # or libs/android-34.jar

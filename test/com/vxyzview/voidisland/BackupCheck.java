@@ -33,5 +33,29 @@ final class BackupCheck {
             "backup: no known keys (or no input) leaves nothing to restore, so nothing would be cleared");
         java.util.Map<String, Object> viaFile = Backup.read(Backup.HEADER + "\ni|dur|9\nb|f_lyric|true\ns|other_app_key|v\n");
         ok(viaFile != null && Backup.onlyKnown(viaFile, known).size() == 2 && viaFile.size() == 3, "backup: a file with a foreign key restores only the known ones");
+
+        // --- Backup: reading a picked file is size-capped
+        try {
+            byte[] small = new byte[5000];
+            ok(Backup.readCapped(new java.io.ByteArrayInputStream(small), Backup.MAX_BYTES).length == 5000, "backup: a small file is read whole");
+            ok(Backup.readCapped(new java.io.ByteArrayInputStream(new byte[20000]), 20000).length == 20000, "backup: a file of exactly the limit is still read");
+            ok(Backup.readCapped(new java.io.ByteArrayInputStream(new byte[20001]), 20000) == null, "backup: a file one byte over the limit is refused");
+            ok(Backup.readCapped(new java.io.ByteArrayInputStream(new byte[0]), 100).length == 0, "backup: an empty file reads as empty (and is then not a backup)");
+            boolean threw = false;
+            try { Backup.readCapped(null, 100); } catch (java.io.IOException e) { threw = true; }
+            ok(threw, "backup: a picker that gives no stream is an error, not 'not a backup'");
+        } catch (java.io.IOException e) { ok(false, "backup: readCapped threw " + e); }
+
+        // --- Backup: the restore plan
+        java.util.Set<String> never = new java.util.HashSet<String>(java.util.Arrays.asList("absorb", "lyrics_notice"));
+        String file = Backup.HEADER + "\ni|dur|9\nb|f_lyric|true\nb|absorb|true\nb|lyrics_notice|true\ns|foreign|v\n";
+        Backup.Plan plan = Backup.plan(file, known, never);
+        ok(plan != null && plan.values.size() == 2 && Integer.valueOf(9).equals(plan.values.get("dur")), "backup plan: the known settings are kept");
+        ok(plan != null && !plan.values.containsKey("absorb") && !plan.values.containsKey("lyrics_notice"), "backup plan: keys with their own confirmation are never set from a file");
+        ok(plan != null && plan.ignored == 1, "backup plan: only the foreign key counts as ignored, not the keys held back on purpose");
+        ok(Backup.plan("not a backup", known, never) == null && Backup.plan(null, known, never) == null, "backup plan: a file that is not a backup gives no plan");
+        Backup.Plan none = Backup.plan(Backup.HEADER + "\ns|foreign|v\n", known, never);
+        ok(none != null && none.values.isEmpty() && none.ignored == 1, "backup plan: nothing known means an empty plan (the app then changes nothing)");
+        ok(Backup.plan(file, known, null).values.containsKey("dur"), "backup plan: no held-back keys is fine");
     }
 }

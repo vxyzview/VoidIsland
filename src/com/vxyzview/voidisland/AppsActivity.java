@@ -215,7 +215,7 @@ public final class AppsActivity extends Activity {
         for (App a : shown) { if (stored) sel.add(a.pkg); else sel.remove(a.pkg); }
         Prefs.setSet(this, prefKey, sel);
         adapter.notifyDataSetChanged();
-        Toast.makeText(this, shown.size() + (on ? " apps turned on" : " apps turned off"), Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, on ? Str.t(this, "apps_on", "%d apps turned on", shown.size()) : Str.t(this, "apps_off", "%d apps turned off", shown.size()), Toast.LENGTH_SHORT).show();
     }
 
     /** Android's own notification settings for one app (its channels, Pop on screen...). Falls back to the app's info page. */
@@ -227,7 +227,7 @@ public final class AppsActivity extends Activity {
             try {
                 startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", pkg, null)));
             } catch (RuntimeException second) {
-                Toast.makeText(this, "This phone has no settings page for that app", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, Str.t(this, "no_app_settings", "This phone has no settings page for that app"), Toast.LENGTH_LONG).show();
             }
         }
     }

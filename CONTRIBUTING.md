@@ -11,7 +11,7 @@ By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md), an
 | Report a bug | Open a [bug report](https://github.com/vxyzview/VoidIsland/issues/new/choose). Add the diagnostic log (**Behavior > Help > Diagnostic log > Copy**). |
 | Suggest something | Open a [feature request](https://github.com/vxyzview/VoidIsland/issues/new/choose). |
 | Report a security problem | Follow [SECURITY.md](SECURITY.md). Please do not open a public issue. |
-| Translate the island | Copy `res/values/strings.xml` to `res/values-xx/strings.xml` (`xx` is the language code) and translate the text. `res/values-in/` is a ready example. |
+| Translate the island | Copy `res/values/strings.xml` to `res/values-xx/strings.xml` (`xx` is the language code) and translate the text. `res/values-in/` is a ready example. Run `tools/check-strings.sh` afterwards: it lists missing keys and `%` placeholders that do not match. |
 | Fix or build something | Fork, branch, change, open a pull request (see below). |
 
 ## Set up

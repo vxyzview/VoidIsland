@@ -195,6 +195,7 @@ final class IslandController implements IslandView.Host {
             List<ResolveInfo> all = pm.queryIntentActivities(home, 0);
             if (all != null) for (ResolveInfo x : all) addHome(x);
         } catch (Throwable t) {
+            Dbg.e("homes", t);
             // detection failed: homes stays as far as it got; empty means "never treat an unknown window as an app being open"
         }
     }

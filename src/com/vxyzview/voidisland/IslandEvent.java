@@ -55,6 +55,22 @@ final class IslandEvent {
     // payment / call
     boolean success = true, incoming;
 
+    // charging card extras (set by SystemEvents)
+    int plug;                       // BatteryManager.BATTERY_PLUGGED_* (0 = not known)
+    int temp = Integer.MIN_VALUE;   // battery temperature in tenths of a degree C (MIN_VALUE = not known)
+    long etaMs = -1L;               // time until full in ms (-1 = not known)
+
+    // phone cards (headset, Bluetooth, ringer, Do Not Disturb, flashlight)
+    int state;                      // 0 = none, 1 = on / connected, 2 = off / disconnected
+    CharSequence tag;               // the short status chip at the end of the card ("Connected", "On"...)
+    int slot = -1;                  // ringer mode lit in the card's three pips: 0 ring, 1 vibrate, 2 silent (-1 = none)
+
+    // Kept on the live event itself: a newer copy of the same event never overwrites these.
+    /** How fast a download is moving, fed by every update. */
+    final Pace pace = new Pace();
+    /** A count-down's longest time left seen so far: the full circle of its ring. */
+    long span;
+
     // runtime hooks, filled in by Cards when views are built
     Updater uC, uE;
     Runnable tC, tE;
@@ -121,10 +137,12 @@ final class IslandEvent {
         title = o.title; text = o.text; sub = o.sub;
         icon = o.icon; art = o.art; accent = o.accent; iconType = o.iconType;
         when = o.when; countDown = o.countDown; chrono = o.chrono; progress = o.progress;
+        if (progress >= 0) pace.add(progress, System.currentTimeMillis());
         contentIntent = o.contentIntent; actLabels = o.actLabels; actIntents = o.actIntents; actRuns = o.actRuns;
         replyIntent = o.replyIntent; replyInput = o.replyInput; liveKind = o.liveKind;
         mc = o.mc; playing = o.playing; posMs = o.posMs; durMs = o.durMs; posAt = o.posAt; actions = o.actions; speed = o.speed;
         level = o.level; charging = o.charging; success = o.success; incoming = o.incoming;
+        plug = o.plug; temp = o.temp; etaMs = o.etaMs; state = o.state; tag = o.tag; slot = o.slot;
         vis = o.vis;
         forgetHidden();   // fresh content from the app replaces whatever was hidden: the lock rules look at it again
         dirty = true;

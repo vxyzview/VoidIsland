@@ -4,7 +4,7 @@ The unit checks (`test/`) cover the pure logic. Everything below needs a phone: 
 
 ## Setup
 - [ ] Fresh install: Accessibility and Notification access can be enabled (Android 13+: after *Allow restricted settings*).
-- [ ] Island shows the idle clock; "Try it" demos (music, call, payment, charge, notification, download, timer, system) all appear and go away.
+- [ ] Island shows the idle clock; "Try it" demos (music, call, payment, charge, notification, download, timer, headset, Bluetooth, navigation, ride, ringer) all appear and go away.
 - [ ] Rotate the phone with a banner showing: the island recovers.
 
 ## Banners and quick reply
@@ -51,6 +51,18 @@ The unit checks (`test/`) cover the pure logic. Everything below needs a phone: 
 - [ ] Clock-app stopwatch / timer show and tick; pausing it stops the island's timer within a couple of seconds.
 - [ ] Music pill and card, seek, lyrics; skip through five songs quickly: only the song you stay on is looked up.
 - [ ] Demo song for 30 s, then your real music comes back by itself.
+
+## Activity cards (flat look, compact and expanded)
+- [ ] Try it > Call: the incoming card has rings swelling out of the photo; *Accept* makes an ongoing call with a timer capsule and three buttons; Speaker / Mute flip their labels, Hang up ends it. The pill shows photo, name and timer.
+- [ ] Try it > Payment: check ring, amount, time and a copy button; tapping it puts the amount on the clipboard and the icon turns into a tick. With the lock screen hiding content there is no amount and no copy button.
+- [ ] Try it > Charging: the bar fills in, plug type and temperature chips, \"min to full\" when Android has an estimate. Unplugged at 15% or less: a red card with *Charge soon*.
+- [ ] Try it > Download: icon with a download badge, percent and bar move, a \"time left\" chip appears after a few seconds, *Cancel* stops it. The pill shows icon, title and a ring with the percent.
+- [ ] Try it > Timer: the ring drains and \"Ends\" shows the time, *+1 min* makes the ring jump and the end time move, *Stop* removes it. At 0:00 the ring and time turn red. A stopwatch sweeps one lap a minute.
+- [ ] Try it > Headset / Bluetooth / Ringer, then for real: plug a wired headset, connect Bluetooth devices of different kinds (the icon follows the kind), flip the ringer switch. Each card shows its state; the ringer's pips light the right mode.
+- [ ] Flashlight: switch the torch on; the pill shows a bolt and *On*; tapping it shows *Turn off*, which really switches the torch off.
+- [ ] Try it > Navigation / Ride: they open as the navigation card and the ride card (car badge, bar, *Cancel ride*).
+- [ ] Every card in light and dark theme, with Material You and a custom accent, at the smallest and largest island width and with large text: nothing clipped, no gradients, text readable.
+- [ ] Display off while a call rings: the rings stop; they resume when the display comes on.
 
 ## Backup
 - [ ] Back up, change settings, restore: a confirmation asks first (Cancel changes nothing); after *Restore* the settings come back; \"Only on the island\" stays off until re-enabled.

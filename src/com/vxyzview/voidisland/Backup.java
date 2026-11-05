@@ -16,6 +16,43 @@ final class Backup {
 
     static final String HEADER = "VoidIsland backup 1";
 
+    /** The largest backup file that is read: a real one is a few KB, so anything bigger is not a backup. */
+    static final int MAX_BYTES = 1000000;
+
+    /**
+     * Reads the whole stream, or returns null when it holds more than {@code max} bytes (a huge file is never buffered).
+     * A null stream (a picker that handed back nothing) is an IOException, so the caller reports "could not read" rather than "not a backup".
+     */
+    static byte[] readCapped(java.io.InputStream in, int max) throws java.io.IOException {
+        if (in == null) throw new java.io.IOException("no stream");
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        for (int n; (n = in.read(buf)) != -1;) {
+            if (out.size() + n > max) return null;
+            out.write(buf, 0, n);
+        }
+        return out.toByteArray();
+    }
+
+    /** What a restore would set: the known settings of a file, and how many entries were left out. */
+    static final class Plan {
+        final Map<String, Object> values;
+        final int ignored;
+        Plan(Map<String, Object> values, int ignored) { this.values = values; this.ignored = ignored; }
+    }
+
+    /**
+     * The plan for restoring {@code text}, or null when it is not a backup. {@code never} are keys a file may not decide (they have their
+     * own confirmation in the app): they are dropped without counting as ignored. Keys this version does not know are dropped and counted.
+     */
+    static Plan plan(String text, Set<String> known, Set<String> never) {
+        Map<String, Object> all = read(text);
+        if (all == null) return null;
+        if (never != null) for (String k : never) all.remove(k);
+        Map<String, Object> vals = onlyKnown(all, known);
+        return new Plan(vals, all.size() - vals.size());
+    }
+
     private static String esc(String s) {
         StringBuilder b = new StringBuilder();
         for (int i = 0; i < s.length(); i++) {

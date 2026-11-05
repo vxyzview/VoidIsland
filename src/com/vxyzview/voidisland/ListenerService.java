@@ -44,14 +44,14 @@ public final class ListenerService extends NotificationListenerService {
         media = null;
         super.onListenerDisconnected();
         // some OEMs kill listeners in the background: ask the system to bind us again (no-op if the user turned it off)
-        try { NotificationListenerService.requestRebind(new ComponentName(this, ListenerService.class)); } catch (Throwable t) { /* ignore */ }
+        try { NotificationListenerService.requestRebind(new ComponentName(this, ListenerService.class)); } catch (Throwable t) { Dbg.e("rebind", t); }
     }
 
     @Override public void onTrimMemory(int level) {
         super.onTrimMemory(level);
         try {
             if (Trim.shortage(level)) { Img.trim(); MediaTracker.trim(); Lyrics.trim(Trim.keepSongs(level)); }   // the listener can outlive the island window, so it frees the lyric cache too
-        } catch (Throwable t) { /* never crash over a cache */ }
+        } catch (Throwable t) { Dbg.e("trim", t); /* never crash over a cache */ }
     }
 
     @Override public void onNotificationPosted(StatusBarNotification sbn, RankingMap rm) {

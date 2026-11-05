@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="a11y_desc">Menggambar pil VoidIsland, mengetahui aplikasi mana yang terbuka, dan kapan Pengaturan Cepat dibuka atau ditutup. Layanan ini tidak membaca isi layar aplikasi lain.</string>
     <string name="reply">Balas</string>
     <string name="cancel">Batal</string>
     <string name="send">Kirim</string>
@@ -42,8 +43,6 @@
     <string name="dnd">Jangan Ganggu</string>
     <string name="on">Aktif</string>
     <string name="off">Nonaktif</string>
-    <string name="headphones_on">Headphone terhubung</string>
-    <string name="headphones_off">Headphone terputus</string>
     <string name="bt_device">Perangkat Bluetooth</string>
     <string name="connected">Terhubung</string>
     <string name="disconnected">Terputus</string>
@@ -54,4 +53,69 @@
     <string name="clock_week">Minggu %d</string>
     <string name="clock_min">%d mnt</string>
     <string name="clock_sec">%d dtk</string>
+    <string name="choose_apps">Pilih aplikasi</string>
+    <string name="no_file_picker">Tidak ada pemilih berkas di ponsel ini</string>
+    <string name="open_settings_manual">Buka Pengaturan secara manual untuk yang satu ini</string>
+    <string name="lyrics_off_hint">Lirik dimatikan. Nyalakan lagi di Behavior &gt; Music lyrics</string>
+    <string name="a11y_first">Aktifkan layanan Aksesibilitas dulu (langkah 1)</string>
+    <string name="apps_on">%d aplikasi diaktifkan</string>
+    <string name="apps_off">%d aplikasi dinonaktifkan</string>
+    <string name="no_app_settings">Ponsel ini tidak punya halaman pengaturan untuk aplikasi itu</string>
+    <string name="close">Tutup</string>
+    <string name="clear">Hapus</string>
+    <string name="copy">Salin</string>
+    <string name="copied">Disalin</string>
+    <string name="no_banners_yet">Belum ada banner</string>
+    <string name="recent_banners">Banner terbaru</string>
+    <string name="why_not_shown">Kenapa tidak muncul?</string>
+    <string name="nothing_kept_off">Belakangan ini tidak ada yang ditahan dari island</string>
+    <string name="no_stops">Android belum mencatat penghentian apa pun</string>
+    <string name="android_stopping">Android telah menghentikan island</string>
+    <string name="recent_stops">Penghentian terbaru</string>
+    <string name="diag_log">Log diagnostik</string>
+    <string name="backup_saved">Pengaturan disimpan</string>
+    <string name="backup_save_fail">Tidak bisa menyimpan berkas</string>
+    <string name="backup_read_fail">Tidak bisa membaca berkas</string>
+    <string name="backup_not_valid">Berkas itu bukan cadangan VoidIsland</string>
+    <string name="backup_nothing_known">Berkas itu tidak berisi pengaturan yang dikenal versi ini, jadi tidak ada yang diubah</string>
+    <string name="backup_apply_fail">Tidak bisa memulihkan pengaturan</string>
+    <string name="backup_restored">Pengaturan dipulihkan</string>
+    <string name="restore_title">Pulihkan pengaturan?</string>
+    <string name="restore">Pulihkan</string>
+    <string name="restore_body">Ini mengganti semua pengaturan Anda saat ini dengan %d pengaturan di dalam berkas.</string>
+    <string name="restore_ignored">%d entri yang tidak dikenal versi ini diabaikan.</string>
+    <string name="restore_absorb_note">\"Only on the island\" tetap mati sampai Anda menyalakannya lagi.</string>
+
+    <!-- Activity cards: call, payment, charging, download, timer, headset / Bluetooth, navigation, live -->
+    <string name="via_app">via %s</string>
+    <string name="copy_amount">Salin jumlah</string>
+    <string name="amount_copied">Jumlah disalin</string>
+    <string name="eta_sec">%d dtk lagi</string>
+    <string name="eta_min">%d mnt lagi</string>
+    <string name="eta_hm">%1$d j %2$d mnt lagi</string>
+    <string name="full_min">%d mnt hingga penuh</string>
+    <string name="full_hm">%1$d j %2$d mnt hingga penuh</string>
+    <string name="plug_ac">AC</string>
+    <string name="plug_usb">USB</string>
+    <string name="charge_soon">Segera isi daya</string>
+    <string name="navigation">Navigasi</string>
+    <string name="live_ride">Perjalanan</string>
+    <string name="live_food">Pesanan</string>
+    <string name="live_sport">Skor langsung</string>
+    <string name="live_update">Pembaruan langsung</string>
+    <string name="timer_kind">Timer</string>
+    <string name="stopwatch_kind">Stopwatch</string>
+    <string name="ends_at">Berakhir %s</string>
+    <string name="headset_wired">Headphone berkabel</string>
+    <string name="headset_wired_mic">Headset berkabel</string>
+    <string name="with_mic">Dengan mikrofon</string>
+    <string name="bt_headphones">Headphone</string>
+    <string name="bt_speaker">Speaker</string>
+    <string name="bt_car">Mobil</string>
+    <string name="bt_watch">Jam tangan</string>
+    <string name="bt_phone">Ponsel</string>
+    <string name="bt_computer">Komputer</string>
+    <string name="bt_input">Perangkat input</string>
+    <string name="bt_audio">Perangkat audio</string>
+    <string name="turn_off">Matikan</string>
 </resources>

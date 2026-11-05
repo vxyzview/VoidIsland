@@ -47,7 +47,7 @@
         <activity
             android:name=".AppsActivity"
             android:exported="false"
-            android:label="Choose apps" />
+            android:label="@string/choose_apps" />
 
         <activity
             android:name=".ReplyActivity"

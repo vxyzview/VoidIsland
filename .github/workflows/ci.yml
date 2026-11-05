@@ -30,6 +30,9 @@ jobs:
         # build.sh makes its own random key when there is none, so this needs no secrets.
         run: ./build.sh ci 0.0-ci 1
 
+      - name: String resources (same keys in every language, no typo'd Str.t keys)
+        run: bash tools/check-strings.sh
+
       - name: Compiler warnings (listed, not fatal)
         run: |
           AJ="$ANDROID_HOME/platforms/android-34/android.jar"

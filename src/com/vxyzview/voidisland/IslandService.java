@@ -166,7 +166,7 @@ public final class IslandService extends AccessibilityService {
                 MediaTracker.trim();
                 Lyrics.trim(Trim.keepSongs(level));
             }
-        } catch (Throwable t) { /* a failed trim must never take the service down */ }
+        } catch (Throwable t) { Dbg.e("trim", t); /* a failed trim must never take the service down */ }
     }
 
     @Override public void onConfigurationChanged(Configuration c) {

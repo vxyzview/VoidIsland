@@ -83,7 +83,7 @@ final class LyricsNet {
                             if (l == null && !stale) Lyrics.rememberMiss(track, artist, System.currentTimeMillis(), none ? Lyrics.NONE_TTL_MS : Lyrics.MISS_TTL_MS);
                             java.util.ArrayList<GotLyrics> all = INFLIGHT.remove(fk);
                             if (all != null) for (GotLyrics g : all) {
-                                try { g.got(track, artist, l); } catch (Throwable t) { /* that card is gone or broken: the rest still get their answer */ }
+                                try { g.got(track, artist, l); } catch (Throwable t) { Dbg.e("lyrics.card", t); /* that card is gone or broken: the rest still get their answer */ }
                             }
                         }
                     });
@@ -131,7 +131,7 @@ final class LyricsNet {
                 + (durS > 0 ? "&duration=" + durS : "");
             best = httpJson(q);   // null = no exact record (404) or a busy-server 503: the searches below still run
             if (best != null && !hasLyrics(best)) best = null;   // instrumental / empty record
-        } catch (Throwable t) { /* fall through to search */ }
+        } catch (Throwable t) { Dbg.e("lyrics.get", t); /* fall through to search */ }
         if (best == null) {
             NET_ERR.set(Boolean.FALSE);   // only the searches decide whether this miss is believable (the exact lookup 404s for most songs)
             try {
@@ -146,7 +146,7 @@ final class LyricsNet {
                     JSONArray arr = httpArray(urls[u]);
                     if (arr != null) best = pickBest(arr, cleanArtist, durS, u > 0);
                 }
-            } catch (Throwable t) { /* offline or rate-limited: no lyrics this round, no caching of failures */ }
+            } catch (Throwable t) { Dbg.e("lyrics.search", t); /* the HTTP layer already absorbs network errors, so only odd data gets here */ }
         }
         if (best == null) return null;
         String s0 = jstr(best, "syncedLyrics"), p0 = jstr(best, "plainLyrics");

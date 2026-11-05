@@ -44,7 +44,7 @@ public final class MainActivity extends Activity {
     private final Handler h = new Handler(Looper.getMainLooper());
     /** Everything the Try-it demos schedule for later (music timeout, download steps, preview): "Clear demos" cancels it all at once. */
     private final Handler dh = new Handler(Looper.getMainLooper());
-    private static final String[] DEMO_KEYS = {"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "sys:demo", "preview"};
+    private static final String[] DEMO_KEYS = {"media", "call", "pay", "charge", "n:test", "p:demo", "t:demo", "sys:demo", "nav:demo", "l:demo", "preview"};
     private M3 m;
     private M3.Nav nav;
     private ScrollView scroll;
@@ -331,7 +331,7 @@ public final class MainActivity extends Activity {
     }
 
     private void go(Intent i) {
-        try { startActivity(i); } catch (ActivityNotFoundException e) { Toast.makeText(this, "Open Settings manually for this one", Toast.LENGTH_LONG).show(); }
+        try { startActivity(i); } catch (ActivityNotFoundException e) { Toast.makeText(this, Str.t(this, "open_settings_manual", "Open Settings manually for this one"), Toast.LENGTH_LONG).show(); }
     }
 
     private Runnable open(final String action) {
@@ -365,7 +365,7 @@ public final class MainActivity extends Activity {
             "Turn off", new Runnable() {
                 @Override public void run() {
                     Prefs.sp(MainActivity.this).edit().putBoolean(Prefs.K_LYRICS_NOTICE, true).putBoolean(Prefs.K_LYRICS, false).apply();
-                    Toast.makeText(MainActivity.this, "Lyrics are off. Turn them on under Behavior > Music lyrics", Toast.LENGTH_LONG).show();
+                    Toast.makeText(MainActivity.this, Str.t(MainActivity.this, "lyrics_off_hint", "Lyrics are off. Turn them on under Behavior > Music lyrics"), Toast.LENGTH_LONG).show();
                 }
             }, false);
         return true;
@@ -464,9 +464,9 @@ public final class MainActivity extends Activity {
         }));
 
         LinearLayout ty = m.card(p, "Try it");
-        String[] dNm = {"Music", "Call", "Payment", "Charging", "Message", "Download", "Timer", "Headset"};
-        String[] dCd = {"m", "c", "p", "g", "n", "d", "t", "s"};
-        int[] dIc = {IconView.NOTE, IconView.PHONE, IconView.CARD, IconView.BOLT, IconView.BELL, IconView.DOWNLOAD, IconView.TIMER, IconView.HEADSET};
+        String[] dNm = {"Music", "Call", "Payment", "Charging", "Message", "Download", "Timer", "Headset", "Bluetooth", "Navigation", "Ride", "Ringer"};
+        String[] dCd = {"m", "c", "p", "g", "n", "d", "t", "s", "b", "v", "r", "k"};
+        int[] dIc = {IconView.NOTE, IconView.PHONE, IconView.CARD, IconView.BOLT, IconView.BELL, IconView.DOWNLOAD, IconView.TIMER, IconView.HEADSET, IconView.BT, IconView.NAV, IconView.CAR, IconView.BELL_OFF};
         LinearLayout row = null;
         for (int i = 0; i < dNm.length; i++) {
             if (i % 2 == 0) {
@@ -862,177 +862,34 @@ public final class MainActivity extends Activity {
             @Override public void run() {
                 Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain")
                     .putExtra(Intent.EXTRA_TITLE, "voidisland-backup.txt");
-                try { startActivityForResult(i, REQ_BACKUP); } catch (ActivityNotFoundException e) { Toast.makeText(MainActivity.this, "No file picker found on this phone", Toast.LENGTH_LONG).show(); }
+                try { startActivityForResult(i, BackupFlow.REQ_BACKUP); } catch (ActivityNotFoundException e) { Toast.makeText(MainActivity.this, Str.t(MainActivity.this, "no_file_picker", "No file picker found on this phone"), Toast.LENGTH_LONG).show(); }
             }
         }));
         bk.addView(m.item(IconView.TUNE, "Restore settings", "Load a backup file. This replaces your current settings", null, new Runnable() {
             @Override public void run() {
                 Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
-                try { startActivityForResult(i, REQ_RESTORE); } catch (ActivityNotFoundException e) { Toast.makeText(MainActivity.this, "No file picker found on this phone", Toast.LENGTH_LONG).show(); }
+                try { startActivityForResult(i, BackupFlow.REQ_RESTORE); } catch (ActivityNotFoundException e) { Toast.makeText(MainActivity.this, Str.t(MainActivity.this, "no_file_picker", "No file picker found on this phone"), Toast.LENGTH_LONG).show(); }
             }
         }));
 
         LinearLayout hp = m.card(p, "Help");
         hp.addView(m.item(IconView.BELL, "Recent banners", "Missed one? The last 20 banners the island showed. Kept in memory only", null, new Runnable() {
-            @Override public void run() { showRecent(); }
+            @Override public void run() { HelpDialogs.recent(MainActivity.this); }
         }));
         hp.addView(m.item(IconView.BELL, "Why didn't it show?", "Banners the island kept off the screen lately, and why. App names only, no message text", null, new Runnable() {
-            @Override public void run() { showTrace(); }
+            @Override public void run() { HelpDialogs.trace(MainActivity.this); }
         }));
         if (Build.VERSION.SDK_INT >= 30) hp.addView(m.item(IconView.TUNE, "Why did the island stop?", "How Android ended VoidIsland the last few times: low memory, battery limits, a crash, you closing it", null, new Runnable() {
-            @Override public void run() { showExits(); }
+            @Override public void run() { HelpDialogs.exits(MainActivity.this); }
         }));
         hp.addView(m.item(IconView.TUNE, "Diagnostic log", "What went wrong lately, to copy into a bug report. It holds no message text", null, new Runnable() {
-            @Override public void run() { showLog(); }
+            @Override public void run() { HelpDialogs.log(MainActivity.this); }
         }));
     }
 
-    private void showRecent() {
-        final Recent.Item[] all = Recent.all();
-        if (all.length == 0) { Toast.makeText(this, "No banners yet", Toast.LENGTH_SHORT).show(); return; }
-        String[] rows = new String[all.length];
-        java.text.DateFormat tf = android.text.format.DateFormat.getTimeFormat(this);
-        for (int i = 0; i < all.length; i++) {
-            Recent.Item it = all[i];
-            rows[i] = tf.format(new java.util.Date(it.at)) + "  " + (it.app.length() > 0 ? it.app + " · " : "") + it.title
-                + (it.text.length() > 0 ? "\n" + it.text : "");
-        }
-        new android.app.AlertDialog.Builder(this).setTitle("Recent banners")
-            .setItems(rows, new android.content.DialogInterface.OnClickListener() {
-                @Override public void onClick(android.content.DialogInterface d, int which) { Cards.open(MainActivity.this, all[which].open, all[which].pkg); }
-            })
-            .setNeutralButton("Clear", new android.content.DialogInterface.OnClickListener() {
-                @Override public void onClick(android.content.DialogInterface d, int w) { Recent.clear(); }
-            })
-            .setPositiveButton("Close", null).show();
-    }
-
-    private void showTrace() {
-        Trace.Item[] all = Trace.all();
-        if (all.length == 0) { Toast.makeText(this, "Nothing has been kept off the island lately", Toast.LENGTH_SHORT).show(); return; }
-        String[] rows = new String[all.length];
-        java.text.DateFormat tf = android.text.format.DateFormat.getTimeFormat(this);
-        for (int i = 0; i < all.length; i++) {
-            Trace.Item it = all[i];
-            rows[i] = tf.format(new java.util.Date(it.at)) + "  " + Img.appLabel(this, it.pkg) + " · " + Trace.text(it.reason)
-                + (it.count > 1 ? "  ×" + it.count : "") + "\n" + Trace.hint(it.reason);
-        }
-        new android.app.AlertDialog.Builder(this).setTitle("Why didn't it show?")
-            .setItems(rows, null)
-            .setNeutralButton("Clear", new android.content.DialogInterface.OnClickListener() {
-                @Override public void onClick(android.content.DialogInterface d, int w) { Trace.clear(); }
-            })
-            .setPositiveButton("Close", null).show();
-    }
-
-    @android.annotation.TargetApi(30)
-    private void showExits() {
-        java.util.List<android.app.ApplicationExitInfo> list;
-        try {
-            list = ((android.app.ActivityManager) getSystemService(ACTIVITY_SERVICE)).getHistoricalProcessExitReasons(getPackageName(), 0, 10);
-        } catch (Throwable t) { list = null; }
-        if (list == null || list.isEmpty()) { Toast.makeText(this, "Android has not recorded any stops yet", Toast.LENGTH_SHORT).show(); return; }
-        String[] rows = new String[list.size()];
-        java.text.DateFormat df = android.text.format.DateFormat.getMediumDateFormat(this), tf = android.text.format.DateFormat.getTimeFormat(this);
-        boolean system = false;
-        for (int i = 0; i < rows.length; i++) {
-            int r = list.get(i).getReason();
-            java.util.Date when = new java.util.Date(list.get(i).getTimestamp());
-            String hint = ExitReason.hint(r);
-            rows[i] = df.format(when) + " " + tf.format(when) + "  " + ExitReason.text(r) + (hint.length() > 0 ? "\n" + hint : "");
-            system |= ExitReason.systemStopped(r);
-        }
-        new android.app.AlertDialog.Builder(this).setTitle(system ? "Android has been stopping the island" : "Recent stops")
-            .setItems(rows, null)
-            .setPositiveButton("Close", null).show();
-    }
-
-    private void showLog() {
-        final String text = Dbg.dump();
-        new android.app.AlertDialog.Builder(this).setTitle("Diagnostic log").setMessage(text)
-            .setPositiveButton("Copy", new android.content.DialogInterface.OnClickListener() {
-                @Override public void onClick(android.content.DialogInterface d, int w) {
-                    try {
-                        android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                        cm.setPrimaryClip(android.content.ClipData.newPlainText("VoidIsland log", "VoidIsland " + Cards.appVersion + ", Android " + Build.VERSION.SDK_INT + ", " + Build.MANUFACTURER + " " + Build.MODEL + "\n" + text));
-                        Toast.makeText(MainActivity.this, "Copied", Toast.LENGTH_SHORT).show();
-                    } catch (Throwable t) { /* no clipboard */ }
-                }
-            })
-            .setNeutralButton("Clear", new android.content.DialogInterface.OnClickListener() {
-                @Override public void onClick(android.content.DialogInterface d, int w) { Dbg.clear(); }
-            })
-            .setNegativeButton("Close", null).show();
-    }
-
-    private static final int REQ_BACKUP = 41, REQ_RESTORE = 42;
-
-    @Override protected void onActivityResult(int req, int res, final Intent data) {
+    @Override protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
-        if ((req != REQ_BACKUP && req != REQ_RESTORE) || res != RESULT_OK || data == null || data.getData() == null) return;
-        final Uri uri = data.getData();
-        final boolean save = req == REQ_BACKUP;
-        new Thread(new Runnable() {
-            @Override public void run() {
-                String msg;
-                try {
-                    if (save) {
-                        java.io.OutputStream os = getContentResolver().openOutputStream(uri, "wt");
-                        try { os.write(Backup.write(Prefs.sp(MainActivity.this).getAll()).getBytes("UTF-8")); } finally { os.close(); }
-                        msg = "Settings saved";
-                    } else {
-                        java.io.InputStream is = getContentResolver().openInputStream(uri);
-                        java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
-                        try {
-                            byte[] buf = new byte[8192];
-                            for (int n; (n = is.read(buf)) > 0;) { bo.write(buf, 0, n); if (bo.size() > 1000000) break; }
-                        } finally { is.close(); }
-                        final java.util.Map<String, Object> all = bo.size() > 1000000 ? null : Backup.read(bo.toString("UTF-8"));
-                        if (all == null) msg = "That file is not a VoidIsland backup";
-                        else {
-                            all.remove(Prefs.K_ABSORB);   // removing banners from the shade is only ever switched on through its own confirmation
-                            all.remove(Prefs.K_LYRICS_NOTICE);   // a file is not the person's answer to the lyrics notice
-                            final java.util.Map<String, Object> vals = Backup.onlyKnown(all, Prefs.knownKeys());   // foreign or stale keys never reach the settings
-                            final int ignored = all.size() - vals.size();
-                            if (vals.isEmpty()) msg = "That file has no settings this version knows, so nothing was changed";
-                            else {
-                                msg = null;   // the person confirms first: a restore replaces everything
-                                final boolean noticeSeen = Prefs.b(MainActivity.this, Prefs.K_LYRICS_NOTICE, false);
-                                runOnUiThread(new Runnable() {
-                                    @Override public void run() {
-                                        if (isFinishing()) return;
-                                        m.confirmDialog(MainActivity.this, "Restore settings?",
-                                            "This replaces all your current settings with the " + vals.size() + " in the file."
-                                                + (ignored > 0 ? " " + ignored + " entries this version does not know are ignored." : "")
-                                                + "\n\n\"Only on the island\" stays off until you turn it on again.",
-                                            "Restore", new Runnable() {
-                                                @Override public void run() {
-                                                    new Thread(new Runnable() {
-                                                        @Override public void run() {
-                                                            if (noticeSeen) vals.put(Prefs.K_LYRICS_NOTICE, Boolean.TRUE);   // this phone already saw the notice
-                                                            Backup.apply(Prefs.sp(MainActivity.this), vals);
-                                                            runOnUiThread(new Runnable() {
-                                                                @Override public void run() {
-                                                                    if (isFinishing()) return;
-                                                                    Toast.makeText(MainActivity.this, "Settings restored", Toast.LENGTH_LONG).show();
-                                                                    recreate();
-                                                                }
-                                                            });
-                                                        }
-                                                    }, "vi-restore").start();
-                                                }
-                                            },
-                                            "Cancel", null);
-                                    }
-                                });
-                            }
-                        }
-                    }
-                } catch (Throwable t) { msg = save ? "Could not save the file" : "Could not read the file"; }
-                final String shown = msg;
-                if (shown != null) runOnUiThread(new Runnable() { @Override public void run() { Toast.makeText(MainActivity.this, shown, Toast.LENGTH_LONG).show(); } });
-            }
-        }, "vi-backup").start();
+        BackupFlow.onResult(this, m, req, res, data);   // the backup / restore file pickers
     }
 
     private void updateDiag() {
@@ -1048,7 +905,7 @@ public final class MainActivity extends Activity {
 
     private boolean ready() {
         if (Bus.active()) return true;
-        Toast.makeText(this, "Turn on the Accessibility service first (step 1)", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, Str.t(this, "a11y_first", "Turn on the Accessibility service first (step 1)"), Toast.LENGTH_LONG).show();
         return false;
     }
 
@@ -1134,7 +991,8 @@ public final class MainActivity extends Activity {
             Bus.post(e);
         } else if ("g".equals(code)) {
             IslandEvent e = ev("charge", IslandEvent.CHARGE);
-            e.level = 78; e.charging = true; e.title = "Charging"; e.accent = Cards.GREEN; e.durationMs = 3600;
+            e.level = 78; e.charging = true; e.title = "Charging"; e.accent = Cards.GREEN; e.durationMs = 4200;
+            e.plug = android.os.BatteryManager.BATTERY_PLUGGED_AC; e.temp = 318; e.etaMs = 78 * 60000L;
             Bus.post(e);
         } else if ("n".equals(code)) {
             IslandEvent e = ev("n:test", IslandEvent.NOTIF);
@@ -1143,39 +1001,88 @@ public final class MainActivity extends Activity {
             e.durationMs = Prefs.i(this, Prefs.K_DUR, 5000);
             Bus.post(e);
         } else if ("d".equals(code)) {
+            dlCancel = false;
             download(0);
         } else if ("t".equals(code)) {
-            IslandEvent e = ev("t:demo", IslandEvent.TIMER);
-            e.live = true; e.priority = 80; e.title = "Timer"; e.countDown = true; e.when = System.currentTimeMillis() + 5 * 60 * 1000L;
-            e.actLabels = new String[]{"Stop"};
-            e.actIntents = new PendingIntent[1];
-            e.actRuns = new Runnable[]{new Runnable() { @Override public void run() { Bus.remove("t:demo"); } }};
-            Bus.post(e);
+            timerDemo(System.currentTimeMillis() + 5 * 60 * 1000L);
         } else if ("s".equals(code)) {
             IslandEvent e = new IslandEvent("sys:demo", IslandEvent.SYSTEM);
-            e.title = "Headphones connected"; e.iconType = IconView.HEADSET; e.accent = Cards.GREEN; e.durationMs = 2400;
+            e.title = "Wired headset"; e.sub = "With microphone"; e.iconType = IconView.HEADSET; e.accent = Cards.GREEN; e.durationMs = 2400;
+            e.state = 1; e.tag = "Connected";
             Bus.post(e);
+        } else if ("b".equals(code)) {
+            IslandEvent e = new IslandEvent("sys:demo", IslandEvent.SYSTEM);
+            e.title = "Void Buds Pro"; e.sub = "Headphones"; e.iconType = IconView.HEADSET; e.accent = Cards.BLUE; e.durationMs = 2600;
+            e.state = 1; e.tag = "Connected";
+            Bus.post(e);
+        } else if ("k".equals(code)) {
+            IslandEvent e = new IslandEvent("sys:demo", IslandEvent.SYSTEM);
+            e.title = "Vibrate"; e.sub = "Ringer on vibrate"; e.iconType = IconView.VIBRATE; e.accent = Cards.ORANGE; e.durationMs = 2600;
+            e.slot = 1;
+            Bus.post(e);
+        } else if ("v".equals(code)) {
+            IslandEvent e = ev("nav:demo", IslandEvent.NAV);
+            e.appName = "Maps"; e.live = true; e.priority = 70; e.title = "In 300 m"; e.text = "Turn left onto Void Street \u00b7 12 min to go";
+            Bus.post(e);
+            Bus.expand("nav:demo");
+        } else if ("r".equals(code)) {
+            IslandEvent e = ev("l:demo", IslandEvent.LIVE);
+            e.appName = "Rides"; e.live = true; e.priority = 70; e.liveKind = Live.RIDE; e.accent = Live.accent(Live.RIDE);
+            e.title = "Arriving in 4 min"; e.text = "Budi \u00b7 Toyota Avanza \u00b7 B 1234 VX"; e.progress = 70;
+            e.actLabels = new String[]{"Cancel ride"};
+            e.actIntents = new PendingIntent[1];
+            e.actRuns = new Runnable[]{new Runnable() { @Override public void run() { Bus.remove("l:demo"); } }};
+            Bus.post(e);
+            Bus.expand("l:demo");
         }
     }
 
+    private boolean dlCancel;
+    private long demoCallAt;
+
+    /** The demo timer; "+1 min" restarts it one minute later, which shows the ring and the "ends" time following. */
+    private void timerDemo(final long end) {
+        IslandEvent e = ev("t:demo", IslandEvent.TIMER);
+        e.live = true; e.priority = 80; e.title = "Timer"; e.countDown = true; e.when = end;
+        e.actLabels = new String[]{"+1 min", "Stop"};
+        e.actIntents = new PendingIntent[2];
+        e.actRuns = new Runnable[]{
+            new Runnable() { @Override public void run() { timerDemo(end + 60000L); } },
+            new Runnable() { @Override public void run() { Bus.remove("t:demo"); } }};
+        Bus.post(e);
+    }
+
     private void ongoingCall() {
+        demoCallAt = System.currentTimeMillis();
+        ongoingCall(false, false);
+    }
+
+    /** The demo call in progress: Speaker and Mute flip their own labels, Hang up ends it. */
+    private void ongoingCall(final boolean speaker, final boolean mute) {
         IslandEvent e = ev("call", IslandEvent.CALL);
-        e.live = true; e.priority = 100; e.incoming = false; e.chrono = true; e.when = System.currentTimeMillis();
+        e.live = true; e.priority = 100; e.incoming = false; e.chrono = true; e.when = demoCallAt;
         e.title = "Void Dev"; e.text = "On call";
-        e.actLabels = new String[]{"Hang up"};
-        e.actIntents = new PendingIntent[1];
-        e.actRuns = new Runnable[]{new Runnable() { @Override public void run() { Bus.remove("call"); } }};
+        e.actLabels = new String[]{speaker ? "Speaker on" : "Speaker", mute ? "Unmute" : "Mute", "Hang up"};
+        e.actIntents = new PendingIntent[3];
+        e.actRuns = new Runnable[]{
+            new Runnable() { @Override public void run() { ongoingCall(!speaker, mute); } },
+            new Runnable() { @Override public void run() { ongoingCall(speaker, !mute); } },
+            new Runnable() { @Override public void run() { Bus.remove("call"); } }};
         Bus.post(e);
     }
 
     private void download(final int pct) {
         IslandEvent e = ev("p:demo", IslandEvent.PROGRESS);
         e.live = true; e.priority = 50; e.title = "void-island-v2.apk"; e.text = "Downloading"; e.progress = pct; e.accent = Cards.GREEN;
+        e.appName = "Files";
+        e.actLabels = new String[]{"Cancel"};
+        e.actIntents = new PendingIntent[1];
+        e.actRuns = new Runnable[]{new Runnable() { @Override public void run() { dlCancel = true; Bus.remove("p:demo"); } }};
         Bus.post(e);
         if (pct >= 100) {
             dh.postDelayed(new Runnable() { @Override public void run() { Bus.remove("p:demo"); } }, 900);
         } else {
-            dh.postDelayed(new Runnable() { @Override public void run() { if (Bus.active()) download(Math.min(100, pct + 5)); } }, 280);
+            dh.postDelayed(new Runnable() { @Override public void run() { if (Bus.active() && !dlCancel) download(Math.min(100, pct + 3)); } }, 350);
         }
     }
 
@@ -1183,6 +1090,6 @@ public final class MainActivity extends Activity {
         // 1) stop the demos' own pending steps first, or e.g. the download loop would put its card straight back
         dh.removeCallbacksAndMessages(null);
         // 2) take every demo away in ONE step; the island rebuilds itself to a clean idle state (see IslandController.clear)
-        try { Bus.clear(DEMO_KEYS); } catch (Throwable t) { /* never take the app (and the island) down */ }
+        try { Bus.clear(DEMO_KEYS); } catch (Throwable t) { Dbg.e("clearDemos", t); /* never take the app (and the island) down */ }
     }
 }

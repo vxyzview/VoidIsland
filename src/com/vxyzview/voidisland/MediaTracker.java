@@ -189,7 +189,7 @@ final class MediaTracker {
                 @Override public void onMetadataChanged(MediaMetadata md) { x.md = md; x.mdKnown = true; soon(); }
                 @Override public void onSessionDestroyed() { x.psKnown = false; x.mdKnown = false; soon(); }
             };
-            try { m.registerCallback(x.cb, h); holders.add(x); } catch (Throwable t) { /* ignore */ }
+            try { m.registerCallback(x.cb, h); holders.add(x); } catch (Throwable t) { Dbg.e("media.register", t); }
         }
         soon();
     }

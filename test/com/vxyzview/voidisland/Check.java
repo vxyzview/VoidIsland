@@ -27,6 +27,7 @@ public class Check {
         ExitReasonCheck.run();
         LiveCheck.run();
         SnoozeCheck.run();
+        ActivityCheck.run();
         System.out.println(fails == 0 ? "ALL CHECKS PASSED" : (fails + " FAILED"));
         System.exit(fails == 0 ? 0 : 1);
     }
